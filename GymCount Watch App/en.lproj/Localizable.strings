@@ -1,0 +1,35 @@
+/* App Name */
+"app_name" = "GymCount";
+
+/* Main Features */
+"bench_press" = "Bench Press";
+"squat" = "Squat";
+"counter" = "Counter";
+"start" = "Start";
+"stop" = "Stop";
+"reset" = "Reset";
+"reps" = "Reps";
+"weight" = "Weight";
+"kg" = "kg";
+
+/* History */
+"history" = "History";
+"workout_history" = "Workout History";
+"date" = "Date";
+"total_reps" = "Total Reps";
+"max_weight" = "Max Weight";
+"no_history" = "No workout history";
+
+/* Settings */
+"settings" = "Settings";
+"auto_detection" = "Auto Detection";
+"auto_start" = "Auto Start";
+"auto_stop" = "Auto Stop";
+
+/* General */
+"save" = "Save";
+"cancel" = "Cancel";
+"done" = "Done";
+"edit" = "Edit";
+"delete" = "Delete";
+"confirm" = "Confirm";

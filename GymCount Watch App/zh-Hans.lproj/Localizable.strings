@@ -1,0 +1,35 @@
+/* 应用名称 */
+"app_name" = "健身计数器";
+
+/* 主要功能 */
+"bench_press" = "卧推";
+"squat" = "深蹲";
+"counter" = "计数器";
+"start" = "开始";
+"stop" = "停止";
+"reset" = "重置";
+"reps" = "次数";
+"weight" = "重量";
+"kg" = "公斤";
+
+/* 历史记录 */
+"history" = "历史";
+"workout_history" = "锻炼历史";
+"date" = "日期";
+"total_reps" = "总次数";
+"max_weight" = "最大重量";
+"no_history" = "暂无锻炼记录";
+
+/* 设置 */
+"settings" = "设置";
+"auto_detection" = "自动检测";
+"auto_start" = "自动开始";
+"auto_stop" = "自动停止";
+
+/* 通用 */
+"save" = "保存";
+"cancel" = "取消";
+"done" = "完成";
+"edit" = "编辑";
+"delete" = "删除";
+"confirm" = "确认";
