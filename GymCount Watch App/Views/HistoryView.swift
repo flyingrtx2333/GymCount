@@ -27,7 +27,9 @@ struct HistoryView: View {
             VStack(spacing: 0) {
                 
                 // 中间主区域：周数据图表
-                VStack(spacing: 8) {
+                VStack(spacing: 0) {
+                    Spacer()
+                    
                     // 周标题
                     Text(getWeekTitle())
                         .font(.caption)
@@ -41,7 +43,8 @@ struct HistoryView: View {
                             weekDate: currentWeekDate,
                             dataManager: dataManager
                         )
-                        .frame(maxHeight: 60)
+                        .frame(maxHeight: 100)
+                        .layoutPriority(1)  // 更愿意让图表占据空间
                         .gesture(
                             DragGesture()
                                 .onEnded { value in
@@ -73,11 +76,11 @@ struct HistoryView: View {
                         }
                         .padding(.trailing, 4)
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 2)
+
+                    Spacer()
                 }
                 .padding(.vertical, 8)
-                
-                Spacer()
                 
                 // 底部统计信息
                 HStack {
@@ -85,19 +88,33 @@ struct HistoryView: View {
                         Text("\(getCurrentWeekTotal())")
                             .font(.title3)
                             .fontWeight(.semibold)
-                        Text("次")
+                        Text(NSLocalizedString("times", comment: "次"))
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
-                    
+
                     Spacer()
+                    
+                    HStack(spacing: 2) {
+                        Text("\(Int(getCurrentWeekTotalWeight()))")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                        Text(NSLocalizedString("kg", comment: "公斤"))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        // Text(NSLocalizedString("total_weight", comment: "总重量"))
+                        //     .font(.caption2)
+                        //     .foregroundColor(.secondary)
+                    }
+                    
+                    
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .padding(.bottom, 4)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle("历史记录")
+        .navigationTitle(selectedExercise.displayName)
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -152,19 +169,20 @@ struct HistoryView: View {
         return dataManager.getWeeklyTotalForExercise(selectedExercise, for: currentWeekDate)
     }
     
+    private func getCurrentWeekTotalWeight() -> Double {
+        return dataManager.getWeeklyTotalWeightForExercise(selectedExercise, for: currentWeekDate)
+    }
+    
     private func switchToNextWeek() {
         let calendar = Calendar.current
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         
-        print("📅 切换前当前周日期: \(formatter.string(from: currentWeekDate))")
-        
         if let nextWeek = calendar.date(byAdding: .weekOfYear, value: 1, to: currentWeekDate) {
-            print("📅 切换到下一周: \(formatter.string(from: nextWeek))")
             withAnimation(.easeInOut(duration: 0.3)) {
                 currentWeekDate = nextWeek
             }
-            print("📅 切换后当前周日期: \(formatter.string(from: currentWeekDate))")
+            print("📅 \(NSLocalizedString("debug_switch_to_next_week", comment: "切换到下一周 切换后当前周日期")): \(formatter.string(from: currentWeekDate))")
         }
     }
     
@@ -173,14 +191,11 @@ struct HistoryView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         
-        print("📅 切换前当前周日期: \(formatter.string(from: currentWeekDate))")
-        
         if let previousWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: currentWeekDate) {
-            print("📅 切换到上一周: \(formatter.string(from: previousWeek))")
             withAnimation(.easeInOut(duration: 0.3)) {
                 currentWeekDate = previousWeek
             }
-            print("📅 切换后当前周日期: \(formatter.string(from: currentWeekDate))")
+            print("📅 \(NSLocalizedString("debug_switch_to_previous_week", comment: "切换到上一周，切换后当前周日期")): \(formatter.string(from: currentWeekDate))")
         }
     }
     
@@ -192,9 +207,10 @@ struct WeeklyChartView: View {
     let dataManager: DataManager
     
     @State private var chartData: [ChartDataPoint] = []
+    @State private var weightData: [Double] = []
     
     var body: some View {
-        VStack(spacing: 4) {
+        VStack {
             // 图表
             if chartData.isEmpty {
                 // 空状态
@@ -202,20 +218,27 @@ struct WeeklyChartView: View {
                     Image(systemName: "chart.bar")
                         .font(.title2)
                         .foregroundColor(.secondary)
-                    Text("暂无数据")
+                    Text(NSLocalizedString("noData", comment: "暂无数据"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                // 柱状图
+                // 双柱状图
                 HStack(alignment: .bottom, spacing: 2) {
-                    ForEach(chartData, id: \.day) { dataPoint in
+                    ForEach(Array(chartData.enumerated()), id: \.element.day) { index, dataPoint in
                         VStack(spacing: 2) {
-                            // 柱子
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(Color.blue)
-                                .frame(width: 12, height: max(2, min(40, CGFloat(dataPoint.value) * 1.5)))
+                            HStack(alignment: .bottom, spacing: 1) {
+                                // 次数柱子（蓝色）
+                                RoundedRectangle(cornerRadius: 1)
+                                    .fill(Color.blue)
+                                    .frame(width: 5, height: max(2, min(40, CGFloat(dataPoint.value) * 1.5)))
+                                
+                                // 重量柱子（粉色）
+                                RoundedRectangle(cornerRadius: 1)
+                                    .fill(Color.pink)
+                                    .frame(width: 5, height: max(2, min(40, CGFloat(weightData[index]) * 0.1)))
+                            }
                             
                             // 日期标签
                             Text(dataPoint.dayLabel)
@@ -224,20 +247,20 @@ struct WeeklyChartView: View {
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: 50)
+                .frame(maxWidth: .infinity, maxHeight: 100)
             }
         }
         .onAppear {
             updateChartData()
         }
         .onChange(of: exerciseType) { _, newType in
-            print("📊 exerciseType 变化: \(newType.displayName)")
+            print("📊 \(NSLocalizedString("exerciseType", comment: "运动类型")) 变化: \(newType.displayName)")
             updateChartData(exerciseType: newType, weekDate: weekDate)
         }
         .onChange(of: weekDate) { _, newDate in
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-            print("📊 weekDate 变化: \(formatter.string(from: newDate))")
+            print("📊 \(NSLocalizedString("debug_week_date_changed", comment: "weekDate 变化")): \(formatter.string(from: newDate))")
             updateChartData(exerciseType: exerciseType, weekDate: newDate)
         }
     }
@@ -247,15 +270,17 @@ struct WeeklyChartView: View {
     }
     
     private func updateChartData(exerciseType: ExerciseType, weekDate: Date) {
-        let weekDays = ["一", "二", "三", "四", "五", "六", "日"]
+        let weekDaysString = NSLocalizedString("week_days", comment: "一,二,三,四,五,六,日")
+        let weekDays = weekDaysString.components(separatedBy: ",")
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        print("📊 WeeklyChartView.updateChartData() 被调用")
-        print("   传入 weekDate: \(formatter.string(from: weekDate))")
-        print("   传入 exerciseType: \(exerciseType.displayName)")
+        print("   \(NSLocalizedString("debug_input_week_date", comment: "传入 weekDate")): \(formatter.string(from: weekDate))")
+        print("   \(NSLocalizedString("debug_input_exercise_type", comment: "传入 exerciseType")): \(exerciseType.displayName)")
         
         let weeklyData = dataManager.getWeeklyDataForExercise(exerciseType, for: weekDate)
-        print("📊 更新图表，获取数据：\(weeklyData), \(exerciseType.displayName)")
+        let weeklyWeightData = dataManager.getWeeklyWeightDataForExercise(exerciseType, for: weekDate)
+        print("📊 \(NSLocalizedString("debug_update_chart_data", comment: "更新图表，获取数据"))：\(weeklyData), \(exerciseType.displayName)")
+        print("📊 重量数据：\(weeklyWeightData)")
         var data: [ChartDataPoint] = []
         
         for i in 0..<7 {
@@ -267,6 +292,7 @@ struct WeeklyChartView: View {
         }
         
         chartData = data
+        weightData = weeklyWeightData
     }
 }
 

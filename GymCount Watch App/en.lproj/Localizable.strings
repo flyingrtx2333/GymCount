@@ -19,6 +19,8 @@
 "total_reps" = "Total Reps";
 "max_weight" = "Max Weight";
 "no_history" = "No workout history";
+"noData" = "No Data";
+"exerciseType" = "Exercise Type";
 
 /* Settings */
 "settings" = "Settings";
@@ -33,3 +35,19 @@
 "edit" = "Edit";
 "delete" = "Delete";
 "confirm" = "Confirm";
+"times" = "times";
+
+/* Settings */
+"default_weight" = "Default Weight";
+"week_days" = "Mon,Tue,Wed,Thu,Fri,Sat,Sun";
+
+/* Debug */
+"debug_switch_to_next_week" = "Switch to next week, current week date after switch";
+"debug_switch_to_previous_week" = "Switch to previous week, current week date after switch";
+"debug_week_date_changed" = "weekDate changed";
+"debug_update_chart_data" = "Update chart, get data";
+"debug_input_week_date" = "Input weekDate";
+"debug_input_exercise_type" = "Input exerciseType";
+
+/* Weight Statistics */
+"total_weight" = "Total Weight";

@@ -22,7 +22,7 @@ struct SettingsView: View {
                 // 默认重量设置
                 Section(header: Text(NSLocalizedString("weight", comment: "重量"))) {
                     HStack {
-                        Text("默认重量")
+                        Text(NSLocalizedString("default_weight", comment: "默认重量"))
                         Spacer()
                         Text("\(Int(tempSettings.defaultWeight)) \(NSLocalizedString("kg", comment: "公斤"))")
                             .foregroundColor(.secondary)
@@ -46,23 +46,6 @@ struct SettingsView: View {
                             Image(systemName: "plus.circle")
                         }
                         .buttonStyle(PlainButtonStyle())
-                    }
-                }
-                
-                // 应用信息
-                Section(header: Text("应用信息")) {
-                    HStack {
-                        Text("版本")
-                        Spacer()
-                        Text("1.0.0")
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    HStack {
-                        Text("开发者")
-                        Spacer()
-                        Text("向钧升")
-                            .foregroundColor(.secondary)
                     }
                 }
             }

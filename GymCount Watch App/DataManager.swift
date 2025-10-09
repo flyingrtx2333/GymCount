@@ -237,8 +237,43 @@ class DataManager: ObservableObject {
         return weeklyData
     }
     
+    // MARK: - 按具体日期获取周重量数据
+    func getWeeklyWeightDataForExercise(_ exerciseType: ExerciseType, for weekStartDate: Date) -> [Double] {
+        let calendar = Calendar.current
+        
+        // 使用 getWeekInfo 来确保一致性
+        let weekInfo = getWeekInfo(for: weekStartDate)
+        let weekStart = weekInfo.startDate
+        let weekEnd = weekInfo.endDate
+        let weekEndOfDay = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: weekEnd)) ?? weekEnd
+        
+        var weeklyWeightData = Array(repeating: 0.0, count: 7)
+        
+        // 筛选该周的锻炼记录
+        let weekWorkouts = workoutHistory.filter { workout in
+            workout.exerciseType == exerciseType &&
+            workout.date >= weekStart &&
+            workout.date < weekEndOfDay
+        }
+        
+        // 按日期分组统计重量
+        for workout in weekWorkouts {
+            let dayOfWeek = calendar.component(.weekday, from: workout.date)
+            let index = (dayOfWeek + 5) % 7 // 转换为周一到周日的索引 (0-6)
+            if index >= 0 && index < 7 {
+                weeklyWeightData[index] += workout.maxWeight * Double(workout.totalReps)
+            }
+        }
+        
+        return weeklyWeightData
+    }
+    
     func getWeeklyTotalForExercise(_ exerciseType: ExerciseType, for weekStartDate: Date) -> Int {
         return getWeeklyDataForExercise(exerciseType, for: weekStartDate).reduce(0, +)
+    }
+    
+    func getWeeklyTotalWeightForExercise(_ exerciseType: ExerciseType, for weekStartDate: Date) -> Double {
+        return getWeeklyWeightDataForExercise(exerciseType, for: weekStartDate).reduce(0, +)
     }
     
     // MARK: - 获取指定周的日期信息

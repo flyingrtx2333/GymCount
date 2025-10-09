@@ -49,32 +49,7 @@ struct CounterView: View {
                 Text("\(currentSession?.totalReps ?? 0)")
                     .font(.system(size: 48, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
-                
-                // Text(NSLocalizedString("reps", comment: "次数"))
-                //     .font(.caption)
-                //     .foregroundColor(.secondary)
             }
-            
-            // 计时器和自动检测状态
-            // VStack(spacing: 4) {
-            //     if let session = currentSession {
-            //         Text(formatDuration(session.startTime.timeIntervalSinceNow))
-            //             .font(.caption)
-            //             .foregroundColor(.secondary)
-            //     }
-                
-            //     // 自动检测状态指示器
-            //     if dataManager.settings.autoDetectionEnabled {
-            //         HStack {
-            //             Circle()
-            //                 .fill(dataManager.motionDetector.isDetecting ? Color.green : Color.gray)
-            //                 .frame(width: 8, height: 8)
-            //             Text("自动检测")
-            //                 .font(.caption2)
-            //                 .foregroundColor(.secondary)
-            //         }
-            //     }
-            // }
             
             // 主要操作按钮
             HStack(spacing: 20) {

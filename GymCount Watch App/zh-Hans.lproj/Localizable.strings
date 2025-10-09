@@ -19,6 +19,8 @@
 "total_reps" = "总次数";
 "max_weight" = "最大重量";
 "no_history" = "暂无锻炼记录";
+"noData" = "暂无数据";
+"exerciseType" = "锻炼类型";
 
 /* 设置 */
 "settings" = "设置";
@@ -33,3 +35,19 @@
 "edit" = "编辑";
 "delete" = "删除";
 "confirm" = "确认";
+"times" = "次";
+
+/* 设置 */
+"default_weight" = "默认重量";
+"week_days" = "一,二,三,四,五,六,日";
+
+/* 调试 */
+"debug_switch_to_next_week" = "切换到下一周 切换后当前周日期";
+"debug_switch_to_previous_week" = "切换到上一周，切换后当前周日期";
+"debug_week_date_changed" = "weekDate 变化";
+"debug_update_chart_data" = "更新图表，获取数据";
+"debug_input_week_date" = "传入 weekDate";
+"debug_input_exercise_type" = "传入 exerciseType";
+
+/* 重量统计 */
+"total_weight" = "总重量";

@@ -96,7 +96,7 @@ struct WorkoutHistory: Codable, Identifiable {
 // MARK: - 应用设置
 struct AppSettings: Codable {
     var autoDetectionEnabled: Bool = true
-    var defaultWeight: Double = 0.0
+    var defaultWeight: Double = 50.0
     
     static let shared = AppSettings()
 }
