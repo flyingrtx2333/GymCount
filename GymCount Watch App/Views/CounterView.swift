@@ -19,30 +19,14 @@ struct CounterView: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            // 锻炼类型和重量显示
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(currentSession?.exerciseType.displayName ?? "")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    HStack {
-                        Text(NSLocalizedString("weight", comment: "重量"))
-                        Text("\(Int(currentSession?.weight ?? 0))")
-                        Text(NSLocalizedString("kg", comment: "公斤"))
-                    }
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                Button(action: { showingWeightInput = true }) {
-                    Image(systemName: "pencil")
-                        .font(.title3)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
+            // // 重量显示
+            // HStack {
+            //     Text(NSLocalizedString("weight", comment: "重量"))
+            //     Text("\(Int(currentSession?.weight ?? 0))")
+            //     Text(NSLocalizedString("kg", comment: "公斤"))
+            // }
+            // .font(.caption)
+            // .foregroundColor(.secondary)
             
             // 次数显示
             VStack {
@@ -53,51 +37,89 @@ struct CounterView: View {
             
             // 主要操作按钮
             HStack(spacing: 20) {
-                // 计数按钮
+                // 减号按钮
+                Button(action: {
+                    if let session = dataManager.currentSession, session.totalReps > 0 {
+                        dataManager.removeRep()
+                        WKInterfaceDevice.current().play(.click)
+                    }
+                }) {
+                    VStack {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.title)
+                        Text(NSLocalizedString("minus", comment: "减"))
+                            .font(.caption)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                .foregroundColor(.orange)
+                .disabled(currentSession?.totalReps == 0)
+                
+                // 开始/停止按钮
+                Button(action: {
+                    if dataManager.currentSession != nil {
+                        dataManager.endWorkout()
+                        WKInterfaceDevice.current().play(.success)
+                    } else {
+                        dataManager.startWorkout(exerciseType: .benchPress, weight: dataManager.settings.defaultWeight)
+                        WKInterfaceDevice.current().play(.click)
+                    }
+                }) {
+                    VStack {
+                        Image(systemName: dataManager.currentSession != nil ? "stop.circle.fill" : "play.circle.fill")
+                            .font(.title)
+                        Text(dataManager.currentSession != nil ? NSLocalizedString("stop", comment: "停止") : NSLocalizedString("start", comment: "开始"))
+                            .font(.caption)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                .foregroundColor(dataManager.currentSession != nil ? .red : .green)
+                
+                // 加号按钮
                 Button(action: {
                     dataManager.addRep()
-                    // 触觉反馈
                     WKInterfaceDevice.current().play(.click)
                 }) {
                     VStack {
                         Image(systemName: "plus.circle.fill")
                             .font(.title)
-                        Text(NSLocalizedString("reps", comment: "次数"))
+                        Text(NSLocalizedString("plus", comment: "加"))
                             .font(.caption)
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
                 .foregroundColor(.blue)
-                .scaleEffect(1.0)
-                .animation(.easeInOut(duration: 0.1), value: currentSession?.totalReps)
-                
-                // 停止按钮
-                Button(action: {
-                    dataManager.endWorkout()
-                    WKInterfaceDevice.current().play(.success)
-                }) {
-                    VStack {
-                        Image(systemName: "stop.circle.fill")
-                            .font(.title)
-                        Text(NSLocalizedString("stop", comment: "停止"))
-                            .font(.caption)
-                    }
-                }
-                .buttonStyle(PlainButtonStyle())
-                .foregroundColor(.red)
             }
-            
-            // 重置按钮
-            Button(action: {
-                dataManager.resetCurrentWorkout()
-            }) {
-                Text(NSLocalizedString("reset", comment: "重置"))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .buttonStyle(PlainButtonStyle())
         }
         .padding()
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(currentSession?.exerciseType.displayName ?? "")
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(action: {
+                    if dataManager.currentSession != nil {
+                        // 如果已经开始锻炼，则停止并返回主页
+                        dataManager.endWorkout()
+                        WKInterfaceDevice.current().play(.success)
+                    }
+                    // 如果未开始锻炼，直接返回主页（通过endWorkout()清空会话）
+                }) {
+                    Image(systemName: "xmark")
+                        .font(.title3)
+                        .foregroundColor(.primary)
+                }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(action: { 
+                    showingWeightInput = true 
+                }) {
+                    Image(systemName: "pencil")
+                        .font(.title3)
+                        .foregroundColor(.primary)
+                }
+            }
+        }
         .sheet(isPresented: $showingWeightInput) {
             WeightInputView(weight: $tempWeight) { newWeight in
                 if var session = dataManager.currentSession {

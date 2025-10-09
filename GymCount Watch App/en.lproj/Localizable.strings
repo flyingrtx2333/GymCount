@@ -11,6 +11,8 @@
 "reps" = "Reps";
 "weight" = "Weight";
 "kg" = "kg";
+"minus" = "Minus";
+"plus" = "Plus";
 
 /* History */
 "history" = "History";

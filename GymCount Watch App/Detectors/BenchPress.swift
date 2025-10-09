@@ -23,6 +23,8 @@ class BenchPressDetector: ObservableObject {
     private var cycleStartTime: Date?
     private var stabilityChanges = 0 // 稳定性变化次数
     private var lastStabilityState = true // 上次的稳定性状态
+    private var stateStartTime: Date? // 当前状态开始时间
+    private var lastStateChangeTime: Date? // 上次状态变化时间
     
     @Published var repCount = 0
     @Published var lastRepTime: Date?
@@ -31,9 +33,9 @@ class BenchPressDetector: ObservableObject {
     private let stabilityWindowSize = 10 // 稳定性检测窗口大小
     private let minRepInterval = 1.0 // 最小重复间隔（秒）
     private let minCycleDuration = 0.5 // 最小周期持续时间（秒）
-    private let maxCycleDuration = 6.0 // 最大周期持续时间（秒）
     private let stabilityThreshold = 0.1 // X轴稳定性阈值
     private let gravityThreshold = 0.3 // 允许偏离重力加速度(-1)的最大距离
+    private let minStateDuration = 0.5 // 最小状态持续时间（秒）
     
     var onRepDetected: (() -> Void)?
     
@@ -60,40 +62,61 @@ class BenchPressDetector: ObservableObject {
         let currentStability = calculateXAxisStability()
         let now = Date()
         
+        // 初始化状态开始时间
+        if stateStartTime == nil {
+            stateStartTime = now
+        }
+        
         // 检测稳定性变化
         if currentStability != lastStabilityState {
-            stabilityChanges += 1
-            lastStabilityState = currentStability
-            
-            if stabilityChanges == 1 {
-                // 第一次变化，开始新的周期
-                cycleStartTime = now
-                print("🔄 开始卧推周期 - 稳定性变化: \(currentStability ? "稳定" : "不稳定")")
-            } else if stabilityChanges == 5 {
-                // 完成一个完整周期：稳定-不稳定-稳定-不稳定-稳定
-                if let startTime = cycleStartTime {
-                    let cycleDuration = now.timeIntervalSince(startTime)
-                    
-                    // 检查周期时长是否合理
-                    if cycleDuration >= minCycleDuration && cycleDuration <= maxCycleDuration {
-                        // 检查时间间隔
-                        if let lastTime = lastRepTime {
-                            let timeSinceLastRep = now.timeIntervalSince(lastTime)
-                            if timeSinceLastRep >= minRepInterval {
-                                recordRep(at: now)
-                                print("✅ 检测到卧推动作 - 周期时长: \(String(format: "%.2f", cycleDuration))秒")
-                            }
-                        } else {
-                            recordRep(at: now)
-                            print("✅ 检测到卧推动作 - 周期时长: \(String(format: "%.2f", cycleDuration))秒")
-                        }
-                    } else {
-                        print("❌ 周期时长不合理: \(String(format: "%.2f", cycleDuration))秒")
-                    }
-                }
+            // 检查当前状态是否持续了足够的时间
+            if let stateStart = stateStartTime {
+                let stateDuration = now.timeIntervalSince(stateStart)
                 
-                // 重置状态
-                resetCycleState()
+                if stateDuration >= minStateDuration {
+                    // 状态持续时间足够，允许状态切换
+                    let xAxisAverage = calculateXAxisAverage()
+                    stabilityChanges += 1
+                    lastStabilityState = currentStability
+                    stateStartTime = now
+                    lastStateChangeTime = now
+                    
+                    if stabilityChanges == 1 {
+                        // 第一次变化，开始新的周期
+                        cycleStartTime = now
+                        print("🔄 开始卧推周期 - 稳定性变化: \(currentStability ? "稳定" : "不稳定"), 状态持续: \(String(format: "%.2f", stateDuration))秒, X轴平均值: \(String(format: "%.3f", xAxisAverage))")
+                    } else if stabilityChanges == 5 {
+                        // 完成一个完整周期：稳定-不稳定-稳定-不稳定-稳定
+                        if let startTime = cycleStartTime {
+                            let cycleDuration = now.timeIntervalSince(startTime)
+                            
+                            // 检查周期时长是否合理
+                            if cycleDuration >= minCycleDuration{
+                                // 检查时间间隔
+                                if let lastTime = lastRepTime {
+                                    let timeSinceLastRep = now.timeIntervalSince(lastTime)
+                                    if timeSinceLastRep >= minRepInterval {
+                                        recordRep(at: now)
+                                        print("✅ 检测到卧推动作 - 周期时长: \(String(format: "%.2f", cycleDuration))秒, X轴平均值: \(String(format: "%.3f", xAxisAverage))")
+                                    }
+                                } else {
+                                    recordRep(at: now)
+                                    print("✅ 检测到卧推动作 - 周期时长: \(String(format: "%.2f", cycleDuration))秒, X轴平均值: \(String(format: "%.3f", xAxisAverage))")
+                                }
+                            } else {
+                                print("❌ 周期时长不合理: \(String(format: "%.2f", cycleDuration))秒, X轴平均值: \(String(format: "%.3f", xAxisAverage))")
+                            }
+                        }
+                        
+                        // 重置状态
+                        resetCycleState()
+                    } else {
+                        print("🔄 状态变化 \(stabilityChanges) - 稳定性: \(currentStability ? "稳定" : "不稳定"), 状态持续: \(String(format: "%.2f", stateDuration))秒, X轴平均值: \(String(format: "%.3f", xAxisAverage))")
+                    }
+                } else {
+                    // 状态持续时间不够，忽略这次变化
+                    // print("⏳ 状态持续时间不足，忽略变化 - 当前: \(currentStability ? "稳定" : "不稳定"), 需要: \(String(format: "%.2f", minStateDuration))秒, 实际: \(String(format: "%.2f", stateDuration))秒")
+                }
             }
         }
     }
@@ -116,6 +139,14 @@ class BenchPressDetector: ObservableObject {
         let isStableByGravity = distanceFromGravity < gravityThreshold
         
         return isStableByDeviation && isStableByGravity
+    }
+    
+    // 计算X轴平均值
+    private func calculateXAxisAverage() -> Double {
+        guard xAxisData.count >= stabilityWindowSize else { return 0.0 }
+        
+        let recentData = Array(xAxisData.suffix(stabilityWindowSize))
+        return recentData.reduce(0, +) / Double(recentData.count)
     }
     
     private func recordRep(at time: Date) {
@@ -141,6 +172,8 @@ class BenchPressDetector: ObservableObject {
         cycleStartTime = nil
         stabilityChanges = 0
         lastStabilityState = true
+        stateStartTime = nil
+        lastStateChangeTime = nil
         xAxisData.removeAll()
     }
     
@@ -148,5 +181,7 @@ class BenchPressDetector: ObservableObject {
         stabilityChanges = 0
         cycleStartTime = nil
         lastStabilityState = true
+        stateStartTime = nil
+        lastStateChangeTime = nil
     }
 }

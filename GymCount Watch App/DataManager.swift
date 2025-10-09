@@ -78,6 +78,12 @@ class DataManager: ObservableObject {
         currentSession = session
     }
     
+    func removeRep() {
+        guard var session = currentSession else { return }
+        session.removeRep()
+        currentSession = session
+    }
+    
     func endWorkout() {
         guard var session = currentSession else { return }
         session.endSession()

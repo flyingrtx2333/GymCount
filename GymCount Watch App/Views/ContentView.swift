@@ -17,7 +17,7 @@ struct ContentView: View {
     var body: some View {
         NavigationView {
             if dataManager.currentSession != nil {
-                CounterDebugView()
+                CounterView()
             } else {
                 MainMenuView(
                     selectedExercise: $selectedExercise,

@@ -70,6 +70,12 @@ struct WorkoutSession: Codable, Identifiable {
         repRecords.append(RepRecord(weight: repWeight))
     }
     
+    mutating func removeRep() {
+        if !repRecords.isEmpty {
+            repRecords.removeLast()
+        }
+    }
+    
     mutating func endSession() {
         endTime = Date()
     }
