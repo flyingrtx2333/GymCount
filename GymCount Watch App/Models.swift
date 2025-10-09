@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import HealthKit
 
 // MARK: - 锻炼类型枚举
 enum ExerciseType: String, CaseIterable, Codable {
@@ -27,6 +28,23 @@ enum ExerciseType: String, CaseIterable, Codable {
             return "figure.strengthtraining.traditional"
         case .squat:
             return "figure.strengthtraining.functional"
+        }
+    }
+    
+    // MARK: - HealthKit 映射
+    var hkWorkoutType: HKWorkoutActivityType {
+        switch self {
+        case .benchPress, .squat:
+            return .traditionalStrengthTraining
+        }
+    }
+    
+    var hkWorkoutTypeName: String {
+        switch self {
+        case .benchPress:
+            return "传统力量训练 - 卧推"
+        case .squat:
+            return "传统力量训练 - 深蹲"
         }
     }
 }
@@ -103,6 +121,8 @@ struct WorkoutHistory: Codable, Identifiable {
 struct AppSettings: Codable {
     var autoDetectionEnabled: Bool = true
     var defaultWeight: Double = 50.0
+    var healthKitSyncEnabled: Bool = true
+    var autoSyncToHealthKit: Bool = true
     
     static let shared = AppSettings()
 }

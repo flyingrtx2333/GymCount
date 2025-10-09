@@ -6,14 +6,57 @@
 //
 
 import SwiftUI
+import HealthKit
 
 struct SettingsView: View {
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.presentationMode) var presentationMode
     @State private var tempSettings: AppSettings
+    @State private var showingHealthKitAlert = false
+    @State private var healthKitStatus: HKAuthorizationStatus = .notDetermined
     
     init() {
         _tempSettings = State(initialValue: DataManager.shared.settings)
+    }
+    
+    // MARK: - HealthKit 状态计算属性
+    private var healthKitStatusIcon: String {
+        switch healthKitStatus.rawValue {
+        case 2:
+            return "checkmark.circle.fill"
+        case 1:
+            return "xmark.circle.fill"
+        case 0:
+            return "questionmark.circle.fill"
+        default:
+            return "questionmark.circle.fill"
+        }
+    }
+    
+    private var healthKitStatusColor: Color {
+        switch healthKitStatus.rawValue {
+        case 2:
+            return .green
+        case 1:
+            return .red
+        case 0:
+            return .orange
+        default:
+            return .orange
+        }
+    }
+    
+    private var healthKitStatusText: String {
+        switch healthKitStatus.rawValue {
+        case 2:
+            return "已授权"
+        case 1:
+            return "已拒绝"
+        case 0:
+            return "未确定"
+        default:
+            return "未知(\(healthKitStatus.rawValue))"
+        }
     }
     
     var body: some View {
@@ -48,6 +91,83 @@ struct SettingsView: View {
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
+                
+                // HealthKit 设置
+                Section(header: Text("Apple Watch 运动圆环")) {
+                    // HealthKit 同步开关
+                    HStack {
+                        Image(systemName: "heart.fill")
+                            .foregroundColor(.red)
+                        Text("同步到运动圆环")
+                        Spacer()
+                        Toggle("", isOn: $tempSettings.healthKitSyncEnabled)
+                    }
+                    
+                    if tempSettings.healthKitSyncEnabled {
+                        // 自动同步开关
+                        HStack {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .foregroundColor(.blue)
+                            Text("自动同步")
+                            Spacer()
+                            Toggle("", isOn: $tempSettings.autoSyncToHealthKit)
+                        }
+                        
+                        // 权限状态
+                        HStack {
+                            Image(systemName: healthKitStatusIcon)
+                                .foregroundColor(healthKitStatusColor)
+                            Text("权限状态")
+                            Spacer()
+                            Text(healthKitStatusText)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        // 手动同步按钮
+                        Button(action: {
+                            Task {
+                                await dataManager.syncAllWorkoutsToHealthKit()
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "icloud.and.arrow.up")
+                                    .foregroundColor(.blue)
+                                Text("立即同步所有记录")
+                                Spacer()
+                            }
+                        }
+                        .disabled(!tempSettings.healthKitSyncEnabled)
+                        
+                        // 请求权限按钮
+                        if healthKitStatus.rawValue != 2 {
+                            Button(action: {
+                                Task {
+                                    await dataManager.requestHealthKitPermission()
+                                    healthKitStatus = dataManager.getHealthKitAuthorizationStatus()
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "lock.open")
+                                        .foregroundColor(.orange)
+                                    Text("请求 HealthKit 权限")
+                                    Spacer()
+                                }
+                            }
+                        }
+                        
+                        // 调试按钮
+                        Button(action: {
+                            dataManager.debugHealthKitStatus()
+                        }) {
+                            HStack {
+                                Image(systemName: "bug")
+                                    .foregroundColor(.gray)
+                                Text("调试授权状态")
+                                Spacer()
+                            }
+                        }
+                    }
+                }
             }
             .navigationTitle(NSLocalizedString("settings", comment: "设置"))
             .navigationBarTitleDisplayMode(.inline)
@@ -65,6 +185,9 @@ struct SettingsView: View {
                     }
                 }
             }
+        }
+        .onAppear {
+            healthKitStatus = dataManager.getHealthKitAuthorizationStatus()
         }
     }
 }

@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import HealthKit
 
 class DataManager: ObservableObject {
     static let shared = DataManager()
@@ -16,6 +17,7 @@ class DataManager: ObservableObject {
     @Published var settings = AppSettings.shared
     
     let motionDetector = MotionDetector()
+    let healthKitManager = HealthKitManager.shared
     
     private let userDefaults = UserDefaults.standard
     private let historyKey = "workout_history"
@@ -24,11 +26,21 @@ class DataManager: ObservableObject {
     private init() {
         loadData()
         setupMotionDetector()
+        setupHealthKit()
     }
     
     private func setupMotionDetector() {
         motionDetector.onRepDetected = { [weak self] in
             self?.addRep()
+        }
+    }
+    
+    private func setupHealthKit() {
+        // 如果启用了 HealthKit 同步，请求权限
+        if settings.healthKitSyncEnabled {
+            Task {
+                await healthKitManager.requestAuthorization()
+            }
         }
     }
     
@@ -98,6 +110,13 @@ class DataManager: ObservableObject {
         // 保存数据
         saveData()
         
+        // 同步到 HealthKit
+        if settings.healthKitSyncEnabled && settings.autoSyncToHealthKit {
+            Task {
+                await syncWorkoutToHealthKit(history)
+            }
+        }
+        
         // 清除当前会话
         currentSession = nil
     }
@@ -135,6 +154,13 @@ class DataManager: ObservableObject {
     func updateSettings(_ newSettings: AppSettings) {
         settings = newSettings
         saveData()
+        
+        // 如果启用了 HealthKit 同步，请求权限
+        if settings.healthKitSyncEnabled {
+            Task {
+                await healthKitManager.requestAuthorization()
+            }
+        }
     }
     
     // MARK: - 统计数据
@@ -300,5 +326,55 @@ class DataManager: ObservableObject {
         let title = "\(formatter.string(from: weekStart)) - \(formatter.string(from: weekEnd))"
         
         return (startDate: weekStart, endDate: weekEnd, title: title)
+    }
+    
+    // MARK: - HealthKit 集成方法
+    func syncWorkoutToHealthKit(_ workoutHistory: WorkoutHistory) async {
+        guard settings.healthKitSyncEnabled else {
+            print("❌ HealthKit 同步已禁用")
+            return
+        }
+        
+        // 刷新授权状态
+        healthKitManager.refreshAuthorizationStatus()
+        
+        // 检查是否已存在相同的锻炼记录
+        let exists = await healthKitManager.checkWorkoutExists(workoutHistory)
+        if exists {
+            print("⚠️ 锻炼记录已存在于 HealthKit 中，跳过同步")
+            return
+        }
+        
+        await healthKitManager.saveWorkoutToHealthKit(workoutHistory)
+    }
+    
+    func syncAllWorkoutsToHealthKit() async {
+        guard settings.healthKitSyncEnabled else {
+            print("❌ HealthKit 同步已禁用")
+            return
+        }
+        
+        // 刷新授权状态
+        healthKitManager.refreshAuthorizationStatus()
+        
+        print("🔄 开始同步所有锻炼记录到 HealthKit...")
+        await healthKitManager.syncWorkoutHistory(workoutHistory)
+    }
+    
+    func requestHealthKitPermission() async {
+        await healthKitManager.requestAuthorization()
+    }
+    
+    func getHealthKitAuthorizationStatus() -> HKAuthorizationStatus {
+        return healthKitManager.authorizationStatus
+    }
+    
+    func isHealthKitAuthorized() -> Bool {
+        return healthKitManager.isAuthorized
+    }
+    
+    // MARK: - 调试方法
+    func debugHealthKitStatus() {
+        healthKitManager.debugAuthorizationStatus()
     }
 }

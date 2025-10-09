@@ -25,6 +25,7 @@ class BenchPressDetector: ObservableObject {
     private var lastStabilityState = true // 上次的稳定性状态
     private var stateStartTime: Date? // 当前状态开始时间
     private var lastStateChangeTime: Date? // 上次状态变化时间
+    private var lastRepCompletionTime: Date? // 上次动作完成时间
     
     @Published var repCount = 0
     @Published var lastRepTime: Date?
@@ -36,6 +37,7 @@ class BenchPressDetector: ObservableObject {
     private let stabilityThreshold = 0.1 // X轴稳定性阈值
     private let gravityThreshold = 0.3 // 允许偏离重力加速度(-1)的最大距离
     private let minStateDuration = 0.5 // 最小状态持续时间（秒）
+    private let cooldownPeriod = 0.4 // 动作完成后的冷却时间（秒）
     
     var onRepDetected: (() -> Void)?
     
@@ -61,6 +63,15 @@ class BenchPressDetector: ObservableObject {
     private func detectBenchPressCycle() {
         let currentStability = calculateXAxisStability()
         let now = Date()
+        
+        // 检查是否在冷却期内
+        if let lastCompletion = lastRepCompletionTime {
+            let timeSinceCompletion = now.timeIntervalSince(lastCompletion)
+            if timeSinceCompletion < cooldownPeriod {
+                // 在冷却期内，忽略状态变化
+                return
+            }
+        }
         
         // 初始化状态开始时间
         if stateStartTime == nil {
@@ -152,6 +163,7 @@ class BenchPressDetector: ObservableObject {
     private func recordRep(at time: Date) {
         repCount += 1
         lastRepTime = time
+        lastRepCompletionTime = time // 记录动作完成时间
         
         // 触觉反馈 - 使用向上方向的震动，表示计数增加
         WKInterfaceDevice.current().play(.directionUp)
@@ -174,13 +186,15 @@ class BenchPressDetector: ObservableObject {
         lastStabilityState = true
         stateStartTime = nil
         lastStateChangeTime = nil
+        lastRepCompletionTime = nil
         xAxisData.removeAll()
     }
     
     private func resetCycleState() {
         stabilityChanges = 0
         cycleStartTime = nil
-        lastStabilityState = true
+        // 保持当前的稳定性状态，不要重置为true
+        // lastStabilityState 保持当前值
         stateStartTime = nil
         lastStateChangeTime = nil
     }
