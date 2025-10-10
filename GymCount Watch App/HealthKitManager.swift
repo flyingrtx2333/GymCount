@@ -12,7 +12,7 @@ import Combine
 class HealthKitManager: ObservableObject {
     static let shared = HealthKitManager()
     
-    private let healthStore = HKHealthStore()
+    let healthStore = HKHealthStore() // 改为公共访问
     @Published var isAuthorized = false
     @Published var authorizationStatus: HKAuthorizationStatus = .notDetermined
     
@@ -108,6 +108,48 @@ class HealthKitManager: ObservableObject {
         }
     }
     
+    // MARK: - 获取用户体重
+    func getUserBodyWeight() async -> Double {
+        // 首先尝试从 HealthKit 获取最新体重数据
+        let currentStatus = healthStore.authorizationStatus(for: HKObjectType.quantityType(forIdentifier: .bodyMass)!)
+        if currentStatus.rawValue == 2 { // 2 表示已授权
+            guard let bodyMassType = HKQuantityType.quantityType(forIdentifier: .bodyMass) else {
+                print("❌ 无法创建体重类型")
+                return DataManager.shared.settings.userBodyWeight
+            }
+            
+            return await withCheckedContinuation { continuation in
+                let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+                let query = HKSampleQuery(
+                    sampleType: bodyMassType,
+                    predicate: nil,
+                    limit: 1,
+                    sortDescriptors: [sortDescriptor]
+                ) { _, samples, error in
+                    if let error = error {
+                        print("❌ 读取体重数据失败: \(error)")
+                        continuation.resume(returning: DataManager.shared.settings.userBodyWeight)
+                        return
+                    }
+                    
+                    if let sample = samples?.first as? HKQuantitySample {
+                        let weight = sample.quantity.doubleValue(for: HKUnit.gramUnit(with: .kilo))
+                        print("✅ 从 HealthKit 获取到用户体重: \(weight) kg")
+                        continuation.resume(returning: weight)
+                    } else {
+                        print("⚠️ HealthKit 中未找到体重数据，使用设置中的体重")
+                        continuation.resume(returning: DataManager.shared.settings.userBodyWeight)
+                    }
+                }
+                
+                healthStore.execute(query)
+            }
+        } else {
+            print("⚠️ HealthKit 未授权读取体重数据，使用设置中的体重")
+            return DataManager.shared.settings.userBodyWeight
+        }
+    }
+    
     // MARK: - 保存锻炼数据到 HealthKit
     func saveWorkoutToHealthKit(_ workoutHistory: WorkoutHistory) async {
         // 实时检查授权状态
@@ -123,42 +165,45 @@ class HealthKitManager: ObservableObject {
         // 计算锻炼结束时间
         let endDate = workoutHistory.date.addingTimeInterval(workoutHistory.duration)
         
+        // 获取用户体重
+        let userBodyWeight = await getUserBodyWeight()
+        
         // 先计算卡路里消耗
         let estimatedCalories = calculateEstimatedCalories(
             reps: workoutHistory.totalReps,
             weight: workoutHistory.maxWeight,
+            bodyWeight: userBodyWeight,
             duration: workoutHistory.duration
         )
         
-        // 使用 HKWorkoutBuilder 创建锻炼会话
-        let configuration = HKWorkoutConfiguration()
-        configuration.activityType = hkWorkoutType
-        configuration.locationType = .indoor
+        print("🔥 卡路里计算详情:")
+        print("   次数: \(workoutHistory.totalReps)")
+        print("   重量: \(workoutHistory.maxWeight) kg")
+        print("   用户体重: \(userBodyWeight) kg")
+        print("   时长: \(workoutHistory.duration) 秒")
+        print("   估算卡路里: \(String(format: "%.2f", estimatedCalories)) kcal")
         
-        let builder = HKWorkoutBuilder(healthStore: healthStore, configuration: configuration, device: nil)
+        // 创建能量消耗数据
+        let energyQuantity = HKQuantity(unit: HKUnit.kilocalorie(), doubleValue: estimatedCalories)
+        
+        // 创建锻炼会话，包含能量消耗数据
+        let workout = HKWorkout(
+            activityType: hkWorkoutType,
+            start: workoutHistory.date,
+            end: endDate,
+            duration: workoutHistory.duration,
+            totalEnergyBurned: energyQuantity,
+            totalDistance: nil,
+            metadata: [
+                "app_name": "GymCount",
+                "exercise_type": workoutHistory.exerciseType.rawValue,
+                "total_reps": workoutHistory.totalReps,
+                "max_weight": workoutHistory.maxWeight
+            ]
+        )
         
         do {
-            // 开始锻炼会话
-            try await builder.beginCollection(at: workoutHistory.date)
-            
-            // 添加能量消耗数据
-            if let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) {
-                let energyQuantity = HKQuantity(unit: HKUnit.kilocalorie(), doubleValue: estimatedCalories)
-                let energySample = HKQuantitySample(
-                    type: energyType,
-                    quantity: energyQuantity,
-                    start: workoutHistory.date,
-                    end: endDate
-                )
-                try await builder.add(energySample)
-            }
-            
-            // 结束锻炼会话
-            try await builder.endCollection(at: endDate)
-            
-            // 完成锻炼会话
-            let workout = try await builder.finishWorkout()
-            
+            try await healthStore.save(workout)
             print("✅ 锻炼数据已保存到 HealthKit: \(workoutHistory.exerciseType.displayName)")
             print("✅ 锻炼总能量消耗: \(estimatedCalories) 卡路里")
             
@@ -174,22 +219,8 @@ class HealthKitManager: ObservableObject {
     private func saveAdditionalHealthData(for workout: HKWorkout, workoutHistory: WorkoutHistory) async {
         let endDate = workout.endDate
         
-        // 使用新的 API 获取能量消耗数据
-        var estimatedCalories: Double = 0
-        if let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) {
-            do {
-                let statistics = try await workout.statistics(for: energyType)
-                estimatedCalories = statistics.sumQuantity()?.doubleValue(for: HKUnit.kilocalorie()) ?? 0
-            } catch {
-                print("❌ 获取锻炼能量统计失败: \(error)")
-                // 如果获取失败，使用计算值作为备选
-                estimatedCalories = calculateEstimatedCalories(
-                    reps: workoutHistory.totalReps,
-                    weight: workoutHistory.maxWeight,
-                    duration: workoutHistory.duration
-                )
-            }
-        }
+        // 使用与锻炼记录相同的卡路里值
+        let estimatedCalories = workout.totalEnergyBurned?.doubleValue(for: HKUnit.kilocalorie()) ?? 0
         
         // 保存活跃能量消耗样本，并关联到锻炼记录
         if let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) {
@@ -227,17 +258,34 @@ class HealthKitManager: ObservableObject {
     }
     
     // MARK: - 卡路里计算
-    private func calculateEstimatedCalories(reps: Int, weight: Double, duration: TimeInterval) -> Double {
-        // 基于重量、次数和时长估算卡路里消耗
-        // 这是一个简化的计算公式，实际应用中可能需要更复杂的算法
-        let baseCaloriesPerMinute = 5.0 // 基础每分钟消耗
-        let weightFactor = weight * 0.1 // 重量因子
-        let repsFactor = Double(reps) * 0.5 // 次数因子
+    /// 基于体重、负重、次数、时长估算卡路里消耗（更科学版本）
+    /// - Parameters:
+    ///   - reps: 卧推动作次数
+    ///   - weight: 杠铃重量（kg）
+    ///   - bodyWeight: 用户体重（kg）
+    ///   - duration: 当前组持续时间（秒）
+    /// - Returns: 估算消耗的卡路里
+    private func calculateEstimatedCalories(reps: Int, weight: Double, bodyWeight: Double, duration: TimeInterval) -> Double {
+        // 基础 MET（中等强度卧推约 6）
+        var met = 5.0
         
-        let durationMinutes = duration / 60.0
-        let estimatedCalories = (baseCaloriesPerMinute + weightFactor + repsFactor) * durationMinutes
+        // 根据负重比例（相对于体重）提升 MET
+        let intensityFactor = (weight / bodyWeight) * 1.5
+        met += intensityFactor
         
-        return max(estimatedCalories, 1.0) // 至少消耗1卡路里
+        // 根据次数增加微调
+        met += Double(reps) / 20.0
+        
+        // 防止异常
+        met = min(max(met, 5.0), 9.0) // 限制在合理区间 [5,9]
+        
+        // 计算时间（小时）
+        let durationHours = duration / 3600.0
+        
+        // 卡路里 = MET × 体重 × 小时
+        let calories = met * bodyWeight * durationHours
+        
+        return max(calories, 0.5) // 至少消耗0.5 kcal
     }
     
     // MARK: - 读取锻炼历史

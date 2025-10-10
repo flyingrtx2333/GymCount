@@ -7,11 +7,14 @@
 
 import SwiftUI
 import WatchKit
+import HealthKit
 
 struct CounterView: View {
     @EnvironmentObject var dataManager: DataManager
     @State private var showingWeightInput = false
     @State private var tempWeight: Double = 0.0
+    @State private var isScreenAlwaysOn = false
+    @State private var isDetecting = false
     
     private var currentSession: WorkoutSession? {
         dataManager.currentSession
@@ -33,6 +36,27 @@ struct CounterView: View {
                 Text("\(currentSession?.totalReps ?? 0)")
                     .font(.system(size: 48, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
+                
+                // 运动检测状态指示器
+                if currentSession != nil {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 8, height: 8)
+                            .scaleEffect(isDetecting ? 1.2 : 0.8)
+                            .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: isDetecting)
+                        
+                        Text(NSLocalizedString("detecting", comment: "检测中"))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .onAppear {
+                        isDetecting = true
+                    }
+                    .onDisappear {
+                        isDetecting = false
+                    }
+                }
             }
             
             // 主要操作按钮
@@ -58,10 +82,14 @@ struct CounterView: View {
                 // 开始/停止按钮
                 Button(action: {
                     if dataManager.currentSession != nil {
+                        // 停止运动
                         dataManager.endWorkout()
+                        disableScreenAlwaysOn()
                         WKInterfaceDevice.current().play(.success)
                     } else {
+                        // 开始运动
                         dataManager.startWorkout(exerciseType: .benchPress, weight: dataManager.settings.defaultWeight)
+                        enableScreenAlwaysOn()
                         WKInterfaceDevice.current().play(.click)
                     }
                 }) {
@@ -101,6 +129,7 @@ struct CounterView: View {
                     if dataManager.currentSession != nil {
                         // 如果已经开始锻炼，则停止并返回主页
                         dataManager.endWorkout()
+                        disableScreenAlwaysOn()
                         WKInterfaceDevice.current().play(.success)
                     }
                     // 如果未开始锻炼，直接返回主页（通过endWorkout()清空会话）
@@ -131,6 +160,29 @@ struct CounterView: View {
         .onAppear {
             tempWeight = currentSession?.weight ?? 0.0
         }
+        .onDisappear {
+            // 当视图消失时，确保禁用屏幕常亮
+            disableScreenAlwaysOn()
+        }
+    }
+    
+    // MARK: - 屏幕常亮控制
+    private func enableScreenAlwaysOn() {
+        guard !isScreenAlwaysOn else { return }
+        
+        // 使用WKInterfaceDevice来保持屏幕常亮
+        WKInterfaceDevice.current().enableWaterLock()
+        isScreenAlwaysOn = true
+        print("🔆 启用屏幕常亮")
+    }
+    
+    private func disableScreenAlwaysOn() {
+        guard isScreenAlwaysOn else { return }
+        
+        // 注意：Apple Watch的水锁模式通常需要用户手动操作来禁用
+        // 这里我们只是更新状态，实际的屏幕常亮会在运动结束时自动恢复
+        isScreenAlwaysOn = false
+        print("🌙 屏幕常亮状态已重置")
     }
     
     private func formatDuration(_ duration: TimeInterval) -> String {

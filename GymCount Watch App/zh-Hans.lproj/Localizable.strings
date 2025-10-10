@@ -13,6 +13,7 @@
 "kg" = "公斤";
 "minus" = "减";
 "plus" = "加";
+"detecting" = "检测中";
 
 /* 历史记录 */
 "history" = "历史";
@@ -53,3 +54,8 @@
 
 /* 重量统计 */
 "total_weight" = "总重量";
+
+/* 用户信息 */
+"user_info" = "用户信息";
+"my_weight" = "我的体重";
+"calorie_calculation_note" = "用于更准确的卡路里计算";

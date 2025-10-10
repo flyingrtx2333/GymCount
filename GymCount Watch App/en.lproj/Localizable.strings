@@ -13,6 +13,7 @@
 "kg" = "kg";
 "minus" = "Minus";
 "plus" = "Plus";
+"detecting" = "Detecting";
 
 /* History */
 "history" = "History";
@@ -53,3 +54,8 @@
 
 /* Weight Statistics */
 "total_weight" = "Total Weight";
+
+/* User Information */
+"user_info" = "User Information";
+"my_weight" = "My Weight";
+"calorie_calculation_note" = "For more accurate calorie calculation";

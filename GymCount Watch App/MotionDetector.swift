@@ -76,7 +76,8 @@ class MotionDetector: ObservableObject {
         // 启动数据更新定时器
         startDataUpdateTimer()
         
-        motionManager.startAccelerometerUpdates(to: .main) { [weak self] data, error in
+        // 使用后台队列来处理加速计数据，确保在屏幕变暗时仍能正常工作
+        motionManager.startAccelerometerUpdates(to: OperationQueue()) { [weak self] data, error in
             guard let self = self, let data = data else { 
                 if let error = error {
                     print("❌ 加速计更新错误: \(error)")
@@ -84,8 +85,11 @@ class MotionDetector: ObservableObject {
                 return 
             }
             
+            // 在后台队列处理数据
             self.processAccelerometerData(data)
         }
+        
+        print("🏃‍♂️ 运动检测已启动（后台模式）")
     }
     
     func stopDetection() {
@@ -132,8 +136,11 @@ class MotionDetector: ObservableObject {
         let z = lastData.acceleration.z
         let magnitude = sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2))
         
-        // 发送数据给调试视图
-        onAccelerationDataReceived?(x, y, z, magnitude)
+        // 确保UI更新在主线程执行
+        DispatchQueue.main.async { [weak self] in
+            // 发送数据给调试视图
+            self?.onAccelerationDataReceived?(x, y, z, magnitude)
+        }
     }
     
     private func handleRepDetected() {
@@ -151,8 +158,13 @@ class MotionDetector: ObservableObject {
             }
         }
         
-        // 触发回调
-        onRepDetected?()
+        // 确保UI更新在主线程执行
+        DispatchQueue.main.async { [weak self] in
+            // 触发回调
+            self?.onRepDetected?()
+        }
+        
+        print("💪 检测到运动次数: \(repCount)")
     }
     
     private func resetCurrentDetector() {

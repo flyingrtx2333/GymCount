@@ -19,6 +19,10 @@ class DataManager: ObservableObject {
     let motionDetector = MotionDetector()
     let healthKitManager = HealthKitManager.shared
     
+    // HealthKit 运动会话
+    private var hkWorkoutSession: HKWorkoutSession?
+    private var hkSessionDelegate: WorkoutSessionDelegate?
+    
     private let userDefaults = UserDefaults.standard
     private let historyKey = "workout_history"
     private let settingsKey = "app_settings"
@@ -79,6 +83,9 @@ class DataManager: ObservableObject {
             weight: weight
         )
         
+        // 创建 HealthKit 运动会话
+        startHKWorkoutSession(exerciseType: exerciseType)
+        
         // 自动开始运动检测
         motionDetector.configureForExercise(exerciseType)
         motionDetector.startDetection()
@@ -102,6 +109,9 @@ class DataManager: ObservableObject {
         
         // 停止运动检测
         motionDetector.stopDetection()
+        
+        // 结束 HealthKit 运动会话
+        endHKWorkoutSession()
         
         // 添加到历史记录
         let history = WorkoutHistory(from: session)
@@ -376,5 +386,66 @@ class DataManager: ObservableObject {
     // MARK: - 调试方法
     func debugHealthKitStatus() {
         healthKitManager.debugAuthorizationStatus()
+    }
+    
+    // MARK: - HealthKit 运动会话管理
+    private func startHKWorkoutSession(exerciseType: ExerciseType) {
+        guard settings.healthKitSyncEnabled else { return }
+        
+        do {
+            let configuration = HKWorkoutConfiguration()
+            configuration.activityType = exerciseType.hkWorkoutType
+            configuration.locationType = .indoor
+            
+            hkSessionDelegate = WorkoutSessionDelegate(dataManager: self)
+            hkWorkoutSession = try HKWorkoutSession(healthStore: healthKitManager.healthStore, configuration: configuration)
+            hkWorkoutSession?.delegate = hkSessionDelegate
+            
+            hkWorkoutSession?.startActivity(with: Date())
+            print("🏃‍♂️ 开始 HealthKit 运动会话")
+        } catch {
+            print("❌ 创建 HealthKit 运动会话失败: \(error)")
+        }
+    }
+    
+    private func endHKWorkoutSession() {
+        guard let session = hkWorkoutSession else { return }
+        
+        session.end()
+        hkWorkoutSession = nil
+        hkSessionDelegate = nil
+        print("🏁 结束 HealthKit 运动会话")
+    }
+}
+
+// MARK: - HKWorkoutSessionDelegate
+class WorkoutSessionDelegate: NSObject, HKWorkoutSessionDelegate {
+    private weak var dataManager: DataManager?
+    
+    init(dataManager: DataManager) {
+        self.dataManager = dataManager
+    }
+    
+    func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState, from fromState: HKWorkoutSessionState, date: Date) {
+        print("🔄 运动会话状态变化: \(fromState) -> \(toState)")
+        
+        switch toState {
+        case .running:
+            print("🏃‍♂️ 运动会话开始运行")
+        case .ended:
+            print("🏁 运动会话结束")
+        case .paused:
+            print("⏸️ 运动会话暂停")
+        case .prepared:
+            print("📋 运动会话准备就绪")
+        case .stopped:
+            print("🛑 运动会话停止")
+        @unknown default:
+            print("❓ 未知的运动会话状态")
+        }
+    }
+    
+    func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        print("❌ 运动会话失败: \(error)")
     }
 }

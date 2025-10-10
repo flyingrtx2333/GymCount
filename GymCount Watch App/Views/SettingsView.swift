@@ -92,6 +92,42 @@ struct SettingsView: View {
                     }
                 }
                 
+                // 用户体重设置
+                Section(header: Text(NSLocalizedString("user_info", comment: "用户信息"))) {
+                    HStack {
+                        Text(NSLocalizedString("my_weight", comment: "我的体重"))
+                        Spacer()
+                        Text("\(Int(tempSettings.userBodyWeight)) \(NSLocalizedString("kg", comment: "公斤"))")
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    HStack {
+                        Button(action: {
+                            if tempSettings.userBodyWeight > 30 {
+                                tempSettings.userBodyWeight -= 1.0
+                            }
+                        }) {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Spacer()
+                        
+                        Button(action: {
+                            if tempSettings.userBodyWeight < 200 {
+                                tempSettings.userBodyWeight += 1.0
+                            }
+                        }) {
+                            Image(systemName: "plus.circle")
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    
+                    Text(NSLocalizedString("calorie_calculation_note", comment: "用于更准确的卡路里计算"))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
                 // HealthKit 设置
                 Section(header: Text("Apple Watch 运动圆环")) {
                     // HealthKit 同步开关
@@ -156,16 +192,16 @@ struct SettingsView: View {
                         }
                         
                         // 调试按钮
-                        Button(action: {
-                            dataManager.debugHealthKitStatus()
-                        }) {
-                            HStack {
-                                Image(systemName: "bug")
-                                    .foregroundColor(.gray)
-                                Text("调试授权状态")
-                                Spacer()
-                            }
-                        }
+                        // Button(action: {
+                        //     dataManager.debugHealthKitStatus()
+                        // }) {
+                        //     HStack {
+                        //         Image(systemName: "bug")
+                        //             .foregroundColor(.gray)
+                        //         Text("调试授权状态")
+                        //         Spacer()
+                        //     }
+                        // }
                     }
                 }
             }
