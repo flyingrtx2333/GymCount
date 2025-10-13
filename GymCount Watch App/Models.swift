@@ -47,11 +47,11 @@ enum ExerciseType: String, CaseIterable, Codable {
     var hkWorkoutTypeName: String {
         switch self {
         case .benchPress:
-            return "传统力量训练 - 卧推"
+            return NSLocalizedString("traditional_strength_training_bench_press", comment: "传统力量训练 - 卧推")
         case .squat:
-            return "传统力量训练 - 深蹲"
+            return NSLocalizedString("traditional_strength_training_squat", comment: "传统力量训练 - 深蹲")
         case .deadlift:
-            return "传统力量训练 - 硬拉"
+            return NSLocalizedString("traditional_strength_training_deadlift", comment: "传统力量训练 - 硬拉")
         }
     }
 }

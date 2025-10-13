@@ -145,17 +145,17 @@ class DeadliftDetector: ObservableObject {
     private func getPhaseDescription(for changeCount: Int, isStable: Bool) -> String {
         switch changeCount {
         case 1:
-            return "向下" // 从顶部开始向下
+            return NSLocalizedString("phase_down", comment: "向下") // 从顶部开始向下
         case 2:
-            return "底部" // 到达底部位置
+            return NSLocalizedString("phase_bottom", comment: "底部") // 到达底部位置
         case 3:
-            return "向上" // 从底部开始向上
+            return NSLocalizedString("phase_up", comment: "向上") // 从底部开始向上
         case 4:
-            return "顶部" // 接近顶部位置
+            return NSLocalizedString("phase_top", comment: "顶部") // 接近顶部位置
         case 5:
-            return "向下" // 完成一个周期，准备下一个
+            return NSLocalizedString("phase_down", comment: "向下") // 完成一个周期，准备下一个
         default:
-            return isStable ? "稳定" : "不稳定"
+            return isStable ? NSLocalizedString("phase_stable", comment: "稳定") : NSLocalizedString("phase_unstable", comment: "不稳定")
         }
     }
     

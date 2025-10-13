@@ -77,3 +77,52 @@
 
 /* 启动页面 */
 "app_slogan" = "让手表数每一次努力";
+
+/* 调试模式 */
+"debug_mode" = "调试模式";
+"count" = "计数";
+"x_axis" = "X轴";
+"y_axis" = "Y轴";
+"z_axis" = "Z轴";
+"time" = "时间";
+"acceleration" = "加速度";
+"magnitude" = "幅度";
+"exit" = "退出";
+
+/* 帮助页面 */
+"help_title" = "使用帮助";
+"help_features_title" = "功能介绍";
+"help_feature_1" = "• 支持卧推和深蹲计数";
+"help_feature_2" = "• 自动运动检测（可选）";
+"help_feature_3" = "• 重量记录和调整";
+"help_feature_4" = "• 锻炼历史统计";
+"help_feature_5" = "• 触觉反馈提醒";
+"help_usage_title" = "使用方法";
+"help_usage_1" = "1. 选择锻炼类型（卧推/深蹲）";
+"help_usage_2" = "2. 点击开始按钮开始锻炼";
+"help_usage_3" = "3. 每次完成动作后点击+按钮计数";
+"help_usage_4" = "4. 锻炼结束后点击停止按钮";
+"help_usage_5" = "5. 查看历史记录了解进步";
+"help_auto_detection_title" = "自动检测";
+"help_auto_1" = "• 在设置中开启自动检测";
+"help_auto_2" = "• 手表会自动识别运动动作";
+"help_auto_3" = "• 绿色指示灯表示检测正常";
+"help_auto_4" = "• 建议在安静环境下使用";
+"help_notes_title" = "注意事项";
+"help_note_1" = "• 确保手表佩戴牢固";
+"help_note_2" = "• 避免剧烈晃动影响检测";
+"help_note_3" = "• 定期查看历史记录";
+"help_note_4" = "• 根据个人情况调整重量";
+
+/* HealthKit 锻炼类型 */
+"traditional_strength_training_bench_press" = "传统力量训练 - 卧推";
+"traditional_strength_training_squat" = "传统力量训练 - 深蹲";
+"traditional_strength_training_deadlift" = "传统力量训练 - 硬拉";
+
+/* 动作阶段 */
+"phase_down" = "向下";
+"phase_bottom" = "底部";
+"phase_up" = "向上";
+"phase_top" = "顶部";
+"phase_stable" = "稳定";
+"phase_unstable" = "不稳定";

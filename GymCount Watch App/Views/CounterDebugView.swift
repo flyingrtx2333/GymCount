@@ -20,10 +20,10 @@ struct CounterDebugView: View {
         VStack(spacing: 8) {
             // 标题和计数
             HStack {
-                Text("调试模式")
+                Text(NSLocalizedString("debug_mode", comment: "调试模式"))
                     .font(.headline)
                 Spacer()
-                Text("计数: \(motionDetector.repCount)")
+                Text("\(NSLocalizedString("count", comment: "计数")): \(motionDetector.repCount)")
                     .font(.title2)
                     .foregroundColor(.green)
             }
@@ -33,15 +33,15 @@ struct CounterDebugView: View {
             VStack(spacing: 4) {
                 // X轴加速度
                 HStack {
-                    Text("X轴")
+                    Text(NSLocalizedString("x_axis", comment: "X轴"))
                         .font(.caption)
                         .foregroundColor(.red)
                         .frame(width: 20)
                     
                     Chart(accelerationData) { point in
                         LineMark(
-                            x: .value("时间", point.timestamp),
-                            y: .value("加速度", point.x)
+                            x: .value(NSLocalizedString("time", comment: "时间"), point.timestamp),
+                            y: .value(NSLocalizedString("acceleration", comment: "加速度"), point.x)
                         )
                         .foregroundStyle(.red)
                     }
@@ -51,15 +51,15 @@ struct CounterDebugView: View {
                 
                 // Y轴加速度
                 HStack {
-                    Text("Y轴")
+                    Text(NSLocalizedString("y_axis", comment: "Y轴"))
                         .font(.caption)
                         .foregroundColor(.green)
                         .frame(width: 20)
                     
                     Chart(accelerationData) { point in
                         LineMark(
-                            x: .value("时间", point.timestamp),
-                            y: .value("加速度", point.y)
+                            x: .value(NSLocalizedString("time", comment: "时间"), point.timestamp),
+                            y: .value(NSLocalizedString("acceleration", comment: "加速度"), point.y)
                         )
                         .foregroundStyle(.green)
                     }
@@ -69,15 +69,15 @@ struct CounterDebugView: View {
                 
                 // Z轴加速度
                 HStack {
-                    Text("Z轴")
+                    Text(NSLocalizedString("z_axis", comment: "Z轴"))
                         .font(.caption)
                         .foregroundColor(.blue)
                         .frame(width: 20)
                     
                     Chart(accelerationData) { point in
                         LineMark(
-                            x: .value("时间", point.timestamp),
-                            y: .value("加速度", point.z)
+                            x: .value(NSLocalizedString("time", comment: "时间"), point.timestamp),
+                            y: .value(NSLocalizedString("acceleration", comment: "加速度"), point.z)
                         )
                         .foregroundStyle(.blue)
                     }
@@ -116,7 +116,7 @@ struct CounterDebugView: View {
                 }) {
                     HStack {
                         Image(systemName: motionDetector.isDetecting ? "stop.fill" : "play.fill")
-                        Text(motionDetector.isDetecting ? "停止" : "开始")
+                        Text(motionDetector.isDetecting ? NSLocalizedString("stop", comment: "停止") : NSLocalizedString("start", comment: "开始"))
                     }
                     .font(.caption)
                     .foregroundColor(.white)
@@ -133,7 +133,7 @@ struct CounterDebugView: View {
                 }) {
                     HStack {
                         Image(systemName: "arrow.clockwise")
-                        Text("重置")
+                        Text(NSLocalizedString("reset", comment: "重置"))
                     }
                     .font(.caption)
                     .foregroundColor(.white)
@@ -149,7 +149,7 @@ struct CounterDebugView: View {
                 }) {
                     HStack {
                         Image(systemName: "xmark")
-                        Text("退出")
+                        Text(NSLocalizedString("exit", comment: "退出"))
                     }
                     .font(.caption)
                     .foregroundColor(.white)
@@ -177,7 +177,7 @@ struct CounterDebugView: View {
                         Text("Z: \(String(format: "%.3f", lastData.z))")
                             .font(.caption2)
                             .foregroundColor(.blue)
-                        Text("幅度: \(String(format: "%.3f", lastData.magnitude))")
+                        Text("\(NSLocalizedString("magnitude", comment: "幅度")): \(String(format: "%.3f", lastData.magnitude))")
                             .font(.caption2)
                             .foregroundColor(.purple)
                     }

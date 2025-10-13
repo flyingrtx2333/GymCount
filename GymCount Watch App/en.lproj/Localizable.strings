@@ -77,3 +77,52 @@
 
 /* Splash Screen */
 "app_slogan" = "Let your watch count every effort";
+
+/* Debug Mode */
+"debug_mode" = "Debug Mode";
+"count" = "Count";
+"x_axis" = "X-Axis";
+"y_axis" = "Y-Axis";
+"z_axis" = "Z-Axis";
+"time" = "Time";
+"acceleration" = "Acceleration";
+"magnitude" = "Magnitude";
+"exit" = "Exit";
+
+/* Help Page */
+"help_title" = "Help";
+"help_features_title" = "Features";
+"help_feature_1" = "• Support bench press and squat counting";
+"help_feature_2" = "• Automatic motion detection (optional)";
+"help_feature_3" = "• Weight recording and adjustment";
+"help_feature_4" = "• Workout history statistics";
+"help_feature_5" = "• Haptic feedback reminders";
+"help_usage_title" = "How to Use";
+"help_usage_1" = "1. Select exercise type (bench press/squat)";
+"help_usage_2" = "2. Tap start button to begin workout";
+"help_usage_3" = "3. Tap + button after each completed rep";
+"help_usage_4" = "4. Tap stop button when workout ends";
+"help_usage_5" = "5. View history to track progress";
+"help_auto_detection_title" = "Auto Detection";
+"help_auto_1" = "• Enable auto detection in settings";
+"help_auto_2" = "• Watch will automatically recognize movements";
+"help_auto_3" = "• Green indicator shows normal detection";
+"help_auto_4" = "• Recommended for quiet environments";
+"help_notes_title" = "Notes";
+"help_note_1" = "• Ensure watch is worn securely";
+"help_note_2" = "• Avoid excessive shaking affecting detection";
+"help_note_3" = "• Regularly check workout history";
+"help_note_4" = "• Adjust weight according to personal needs";
+
+/* HealthKit Workout Types */
+"traditional_strength_training_bench_press" = "Traditional Strength Training - Bench Press";
+"traditional_strength_training_squat" = "Traditional Strength Training - Squat";
+"traditional_strength_training_deadlift" = "Traditional Strength Training - Deadlift";
+
+/* Movement Phases */
+"phase_down" = "Down";
+"phase_bottom" = "Bottom";
+"phase_up" = "Up";
+"phase_top" = "Top";
+"phase_stable" = "Stable";
+"phase_unstable" = "Unstable";
