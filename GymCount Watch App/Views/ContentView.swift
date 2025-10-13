@@ -41,64 +41,88 @@ struct MainMenuView: View {
     @Binding var showingSettings: Bool
     
     var body: some View {
-        VStack(spacing: 16) {
+        ZStack {
+            // 柔和渐变背景
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color.black.opacity(0.8),
+                    Color.blue.opacity(0.1),
+                    Color.purple.opacity(0.1),
+                    Color.black.opacity(0.8)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
             
-            // 锻炼类型选择
-            Picker("", selection: $selectedExercise) {
-                ForEach(ExerciseType.allCases, id: \.self) { exercise in
-                    HStack {
-                        Text(exercise.displayName)
-                        Spacer()
-                        Image(systemName: exercise.icon)
-                        
-                    }
-                    .tag(exercise)
-                }
-            }
-            .pickerStyle(.wheel)
-            .frame(height: 80)
-            
-            // 开始按钮
-            Button(action: {
-                dataManager.startWorkout(exerciseType: selectedExercise, weight: dataManager.settings.defaultWeight)
-            }) {
-                HStack {
-                    Image(systemName: "play.fill")
-                    Text(NSLocalizedString("start", comment: "开始"))
-                }
-                .font(.headline)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.green)
-                .cornerRadius(18)
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            // 底部按钮
-            HStack(spacing: 20) {
-                Button(action: { showingHistory = true }) {
-                    VStack {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.title3)
-                        Text(NSLocalizedString("history", comment: "历史记录"))
-                            .font(.caption2)
-                    }
-                }
-                .buttonStyle(PlainButtonStyle())
+            VStack(spacing: 20) {
                 
-                Button(action: { showingSettings = true }) {
-                    VStack {
-                        Image(systemName: "gearshape")
-                            .font(.title3)
-                        Text(NSLocalizedString("settings", comment: "设置"))
-                            .font(.caption2)
+                
+                // 运动类型选择器
+                Picker("",selection: $selectedExercise) {
+                    ForEach(ExerciseType.allCases, id: \.self) { exercise in
+                        HStack(spacing: 15) {
+                            Image(systemName: exercise.icon)
+                                .font(.system(size: 20))
+                                .foregroundColor(.white)
+                            Spacer()
+                            Text(exercise.displayName)
+                                .font(.caption)
+                                .foregroundColor(.white)
+                        }
+                        .tag(exercise)
                     }
                 }
-                .buttonStyle(PlainButtonStyle())
+                .pickerStyle(.wheel)
+                .frame(height: 100)
+                .background(Color.clear)
+                .clipped()
+                .compositingGroup()
+                .accentColor(.clear)
+                .scrollContentBackground(.hidden)
+                
+                Spacer()
             }
         }
-        .padding()
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("")
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            //左上角
+            ToolbarItem(placement: .cancellationAction) {
+                Button(action: { showingHistory = true }) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.title3)
+                        .foregroundColor(.primary)
+                }
+            }
+            //右上角
+            ToolbarItem(placement: .confirmationAction) {
+                Button(action: { showingSettings = true }) {
+                    Image(systemName: "gearshape")
+                        .font(.title3)
+                        .foregroundColor(.primary)
+                }
+            }
+            // 下方
+            ToolbarItemGroup(placement: .bottomBar) {
+                Button(action: {
+                        dataManager.startWorkout(exerciseType: selectedExercise, weight: dataManager.settings.defaultWeight)
+                    }) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 40, height: 40)
+                                .shadow(color: .green.opacity(0.3), radius: 5, x: 0, y: 2)
+                            
+                            Image(systemName: "play.fill")
+                                .font(.caption)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+            }
+        }
     }
 }
 
@@ -106,3 +130,4 @@ struct MainMenuView: View {
     ContentView()
         .environmentObject(DataManager.shared)
 }
+

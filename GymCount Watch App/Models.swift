@@ -120,7 +120,7 @@ struct WorkoutHistory: Codable, Identifiable {
 // MARK: - 应用设置
 struct AppSettings: Codable {
     var autoDetectionEnabled: Bool = true
-    var defaultWeight: Double = 50.0
+    var defaultWeight: Double = 50.0  // 杠铃重量(kg)
     var userBodyWeight: Double = 70.0 // 用户体重（kg）
     var healthKitSyncEnabled: Bool = true
     var autoSyncToHealthKit: Bool = true

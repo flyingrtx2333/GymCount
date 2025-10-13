@@ -49,13 +49,13 @@ struct SettingsView: View {
     private var healthKitStatusText: String {
         switch healthKitStatus.rawValue {
         case 2:
-            return "已授权"
+            return NSLocalizedString("authorized", comment: "已授权")
         case 1:
-            return "已拒绝"
+            return NSLocalizedString("denied", comment: "已拒绝")
         case 0:
-            return "未确定"
+            return NSLocalizedString("not_determined", comment: "未确定")
         default:
-            return "未知(\(healthKitStatus.rawValue))"
+            return NSLocalizedString("unknown_status", comment: "未知") + "(\(healthKitStatus.rawValue))"
         }
     }
     
@@ -129,12 +129,12 @@ struct SettingsView: View {
                 }
                 
                 // HealthKit 设置
-                Section(header: Text("Apple Watch 运动圆环")) {
+                Section(header: Text(NSLocalizedString("healthkit_section", comment: "Apple Watch 运动圆环"))) {
                     // HealthKit 同步开关
                     HStack {
                         Image(systemName: "heart.fill")
                             .foregroundColor(.red)
-                        Text("同步到运动圆环")
+                        Text(NSLocalizedString("sync_to_activity_rings", comment: "同步到运动圆环"))
                         Spacer()
                         Toggle("", isOn: $tempSettings.healthKitSyncEnabled)
                     }
@@ -144,7 +144,7 @@ struct SettingsView: View {
                         HStack {
                             Image(systemName: "arrow.triangle.2.circlepath")
                                 .foregroundColor(.blue)
-                            Text("自动同步")
+                            Text(NSLocalizedString("auto_sync", comment: "自动同步"))
                             Spacer()
                             Toggle("", isOn: $tempSettings.autoSyncToHealthKit)
                         }
@@ -153,7 +153,7 @@ struct SettingsView: View {
                         HStack {
                             Image(systemName: healthKitStatusIcon)
                                 .foregroundColor(healthKitStatusColor)
-                            Text("权限状态")
+                            Text(NSLocalizedString("permission_status", comment: "权限状态"))
                             Spacer()
                             Text(healthKitStatusText)
                                 .foregroundColor(.secondary)
@@ -168,7 +168,7 @@ struct SettingsView: View {
                             HStack {
                                 Image(systemName: "icloud.and.arrow.up")
                                     .foregroundColor(.blue)
-                                Text("立即同步所有记录")
+                                Text(NSLocalizedString("sync_all_records", comment: "立即同步所有记录"))
                                 Spacer()
                             }
                         }
@@ -185,7 +185,7 @@ struct SettingsView: View {
                                 HStack {
                                     Image(systemName: "lock.open")
                                         .foregroundColor(.orange)
-                                    Text("请求 HealthKit 权限")
+                                    Text(NSLocalizedString("request_healthkit_permission", comment: "请求 HealthKit 权限"))
                                     Spacer()
                                 }
                             }

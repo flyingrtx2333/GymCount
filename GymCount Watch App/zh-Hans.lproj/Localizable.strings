@@ -59,3 +59,17 @@
 "user_info" = "用户信息";
 "my_weight" = "我的体重";
 "calorie_calculation_note" = "用于更准确的卡路里计算";
+
+/* HealthKit 相关 */
+"healthkit_section" = "Apple Watch 运动圆环";
+"sync_to_activity_rings" = "同步到运动圆环";
+"auto_sync" = "自动同步";
+"permission_status" = "权限状态";
+"sync_all_records" = "立即同步所有记录";
+"request_healthkit_permission" = "请求 HealthKit 权限";
+
+/* 权限状态 */
+"authorized" = "已授权";
+"denied" = "已拒绝";
+"not_determined" = "未确定";
+"unknown_status" = "未知";

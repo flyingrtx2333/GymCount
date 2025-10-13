@@ -59,3 +59,17 @@
 "user_info" = "User Information";
 "my_weight" = "My Weight";
 "calorie_calculation_note" = "For more accurate calorie calculation";
+
+/* HealthKit Related */
+"healthkit_section" = "Apple Watch Activity Rings";
+"sync_to_activity_rings" = "Sync to Activity Rings";
+"auto_sync" = "Auto Sync";
+"permission_status" = "Permission Status";
+"sync_all_records" = "Sync All Records Now";
+"request_healthkit_permission" = "Request HealthKit Permission";
+
+/* Permission Status */
+"authorized" = "Authorized";
+"denied" = "Denied";
+"not_determined" = "Not Determined";
+"unknown_status" = "Unknown";
