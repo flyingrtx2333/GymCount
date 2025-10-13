@@ -62,9 +62,10 @@ struct MainMenuView: View {
                 Picker("",selection: $selectedExercise) {
                     ForEach(ExerciseType.allCases, id: \.self) { exercise in
                         HStack(spacing: 15) {
-                            Image(systemName: exercise.icon)
-                                .font(.system(size: 20))
-                                .foregroundColor(.white)
+                            Image(exercise.icon)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 20, height: 20)
                             Spacer()
                             Text(exercise.displayName)
                                 .font(.caption)

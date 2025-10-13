@@ -28,11 +28,11 @@ enum ExerciseType: String, CaseIterable, Codable {
     var icon: String {
         switch self {
         case .benchPress:
-            return "figure.strengthtraining.traditional"
+            return "BenchPress"
         case .squat:
-            return "figure.strengthtraining.functional"
+            return "Squat"
         case .deadlift:
-            return "figure.strengthtraining.traditional"
+            return "DeadLift"
         }
     }
     

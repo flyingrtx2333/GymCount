@@ -106,9 +106,10 @@ struct HistoryView: View {
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Image(systemName: selectedExercise.icon)
-                    .font(.title3)
-                    .foregroundColor(.primary)
+                Image(selectedExercise.icon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 24, height: 24)
             }
             ToolbarItemGroup(placement: .bottomBar) {
                 HStack(spacing: 2) {
