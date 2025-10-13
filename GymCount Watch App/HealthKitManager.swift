@@ -254,19 +254,21 @@ class HealthKitManager: ObservableObject {
             return .traditionalStrengthTraining
         case .squat:
             return .traditionalStrengthTraining
+        case .deadlift:
+            return .traditionalStrengthTraining
         }
     }
     
     // MARK: - 卡路里计算
     /// 基于体重、负重、次数、时长估算卡路里消耗（更科学版本）
     /// - Parameters:
-    ///   - reps: 卧推动作次数
+    ///   - reps: 动作次数
     ///   - weight: 杠铃重量（kg）
     ///   - bodyWeight: 用户体重（kg）
     ///   - duration: 当前组持续时间（秒）
     /// - Returns: 估算消耗的卡路里
     private func calculateEstimatedCalories(reps: Int, weight: Double, bodyWeight: Double, duration: TimeInterval) -> Double {
-        // 基础 MET（中等强度卧推约 6）
+        // 基础 MET（中等强度力量训练约 5-6）
         var met = 5.0
         
         // 根据负重比例（相对于体重）提升 MET

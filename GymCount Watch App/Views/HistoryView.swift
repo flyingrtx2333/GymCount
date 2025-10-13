@@ -83,34 +83,13 @@ struct HistoryView: View {
                 .padding(.vertical, 8)
                 
                 // 底部统计信息
-                HStack {
-                    HStack(spacing: 2) {
-                        Text("\(getCurrentWeekTotal())")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                        Text(NSLocalizedString("times", comment: "次"))
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-
-                    Spacer()
-                    
-                    HStack(spacing: 2) {
-                        Text("\(Int(getCurrentWeekTotalWeight()))")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                        Text(NSLocalizedString("kg", comment: "公斤"))
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        // Text(NSLocalizedString("total_weight", comment: "总重量"))
-                        //     .font(.caption2)
-                        //     .foregroundColor(.secondary)
-                    }
+                // HStack {
                     
                     
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 4)
+                    
+                // }
+                // .padding(.horizontal, 16)
+                // .padding(.bottom, 4)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -130,6 +109,28 @@ struct HistoryView: View {
                 Image(systemName: selectedExercise.icon)
                     .font(.title3)
                     .foregroundColor(.primary)
+            }
+            ToolbarItemGroup(placement: .bottomBar) {
+                HStack(spacing: 2) {
+                    Text("\(getCurrentWeekTotal())")
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                    Text(NSLocalizedString("times", comment: "次"))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                HStack(spacing: 2) {
+                    Text("\(Int(getCurrentWeekTotalWeight()))")
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                    Text(NSLocalizedString("kg", comment: "公斤"))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    // Text(NSLocalizedString("total_weight", comment: "总重量"))
+                    //     .font(.caption2)
+                    //     .foregroundColor(.secondary)
+                }
             }
         }
         .focusable(true)

@@ -13,8 +13,13 @@ struct GymCount_Watch_AppApp: App {
     
     var body: some Scene {
         WindowGroup {
-            SplashView()
-                .environmentObject(dataManager)
+            if dataManager.isFirstLaunch {
+                SplashView()
+                    .environmentObject(dataManager)
+            } else {
+                ContentView()
+                    .environmentObject(dataManager)
+            }
         }
     }
 }

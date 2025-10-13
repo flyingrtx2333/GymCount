@@ -4,6 +4,7 @@
 /* 主要功能 */
 "bench_press" = "卧推";
 "squat" = "深蹲";
+"deadlift" = "硬拉";
 "counter" = "计数器";
 "start" = "开始";
 "stop" = "停止";
@@ -73,3 +74,6 @@
 "denied" = "已拒绝";
 "not_determined" = "未确定";
 "unknown_status" = "未知";
+
+/* 启动页面 */
+"app_slogan" = "让手表数每一次努力";

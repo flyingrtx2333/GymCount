@@ -12,6 +12,7 @@ import HealthKit
 enum ExerciseType: String, CaseIterable, Codable {
     case benchPress = "bench_press"
     case squat = "squat"
+    case deadlift = "deadlift"
     
     var displayName: String {
         switch self {
@@ -19,6 +20,8 @@ enum ExerciseType: String, CaseIterable, Codable {
             return NSLocalizedString("bench_press", comment: "卧推")
         case .squat:
             return NSLocalizedString("squat", comment: "深蹲")
+        case .deadlift:
+            return NSLocalizedString("deadlift", comment: "硬拉")
         }
     }
     
@@ -28,13 +31,15 @@ enum ExerciseType: String, CaseIterable, Codable {
             return "figure.strengthtraining.traditional"
         case .squat:
             return "figure.strengthtraining.functional"
+        case .deadlift:
+            return "figure.strengthtraining.traditional"
         }
     }
     
     // MARK: - HealthKit 映射
     var hkWorkoutType: HKWorkoutActivityType {
         switch self {
-        case .benchPress, .squat:
+        case .benchPress, .squat, .deadlift:
             return .traditionalStrengthTraining
         }
     }
@@ -45,6 +50,8 @@ enum ExerciseType: String, CaseIterable, Codable {
             return "传统力量训练 - 卧推"
         case .squat:
             return "传统力量训练 - 深蹲"
+        case .deadlift:
+            return "传统力量训练 - 硬拉"
         }
     }
 }

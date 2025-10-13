@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct SplashView: View {
+    @EnvironmentObject var dataManager: DataManager
     @State private var isActive = false
     @State private var scale: CGFloat = 0.5
     @State private var opacity: Double = 0.0
@@ -31,7 +32,7 @@ struct SplashView: View {
                     .opacity(opacity)
                 
                 // 标语
-                Text("让手表数每一次努力")
+                Text(NSLocalizedString("app_slogan", comment: "应用标语"))
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .opacity(opacity)
@@ -45,6 +46,8 @@ struct SplashView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                     withAnimation(.easeInOut(duration: 0.5)) {
                         isActive = true
+                        // 标记首次启动完成
+                        dataManager.completeFirstLaunch()
                     }
                 }
             }

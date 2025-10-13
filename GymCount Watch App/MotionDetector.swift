@@ -19,6 +19,7 @@ class MotionDetector: ObservableObject {
     // 运动检测器
     private var benchPressDetector: BenchPressDetector?
     private var squatDetector: SquatDetector?
+    private var deadliftDetector: DeadliftDetector?
     private var currentExerciseType: ExerciseType = .benchPress
     
     @Published var isDetecting = false
@@ -55,6 +56,12 @@ class MotionDetector: ObservableObject {
         // 初始化深蹲检测器
         squatDetector = SquatDetector()
         squatDetector?.onRepDetected = { [weak self] in
+            self?.handleRepDetected()
+        }
+        
+        // 初始化硬拉检测器
+        deadliftDetector = DeadliftDetector()
+        deadliftDetector?.onRepDetected = { [weak self] in
             self?.handleRepDetected()
         }
     }
@@ -114,6 +121,8 @@ class MotionDetector: ObservableObject {
             benchPressDetector?.processAccelerometerData(data)
         case .squat:
             squatDetector?.processAccelerometerData(data)
+        case .deadlift:
+            deadliftDetector?.processAccelerometerData(data)
         }
     }
     
@@ -156,6 +165,11 @@ class MotionDetector: ObservableObject {
                 repCount = detector.repCount
                 lastRepTime = detector.lastRepTime
             }
+        case .deadlift:
+            if let detector = deadliftDetector {
+                repCount = detector.repCount
+                lastRepTime = detector.lastRepTime
+            }
         }
         
         // 确保UI更新在主线程执行
@@ -173,6 +187,8 @@ class MotionDetector: ObservableObject {
             benchPressDetector?.resetCount()
         case .squat:
             squatDetector?.resetCount()
+        case .deadlift:
+            deadliftDetector?.resetCount()
         }
     }
     

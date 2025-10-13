@@ -15,6 +15,7 @@ class DataManager: ObservableObject {
     @Published var currentSession: WorkoutSession?
     @Published var workoutHistory: [WorkoutHistory] = []
     @Published var settings = AppSettings.shared
+    @Published var isFirstLaunch = true
     
     let motionDetector = MotionDetector()
     let healthKitManager = HealthKitManager.shared
@@ -26,8 +27,10 @@ class DataManager: ObservableObject {
     private let userDefaults = UserDefaults.standard
     private let historyKey = "workout_history"
     private let settingsKey = "app_settings"
+    private let firstLaunchKey = "is_first_launch"
     
     private init() {
+        checkFirstLaunch()
         loadData()
         setupMotionDetector()
         setupHealthKit()
@@ -46,6 +49,18 @@ class DataManager: ObservableObject {
                 await healthKitManager.requestAuthorization()
             }
         }
+    }
+    
+    // MARK: - 首次启动检测
+    private func checkFirstLaunch() {
+        isFirstLaunch = userDefaults.object(forKey: firstLaunchKey) == nil
+        if isFirstLaunch {
+            userDefaults.set(false, forKey: firstLaunchKey)
+        }
+    }
+    
+    func completeFirstLaunch() {
+        isFirstLaunch = false
     }
     
     // MARK: - 数据持久化

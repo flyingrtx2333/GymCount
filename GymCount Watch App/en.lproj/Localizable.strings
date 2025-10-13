@@ -4,6 +4,7 @@
 /* Main Features */
 "bench_press" = "Bench Press";
 "squat" = "Squat";
+"deadlift" = "Deadlift";
 "counter" = "Counter";
 "start" = "Start";
 "stop" = "Stop";
@@ -73,3 +74,6 @@
 "denied" = "Denied";
 "not_determined" = "Not Determined";
 "unknown_status" = "Unknown";
+
+/* Splash Screen */
+"app_slogan" = "Let your watch count every effort";
