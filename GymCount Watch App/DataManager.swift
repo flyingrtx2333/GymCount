@@ -346,7 +346,12 @@ class DataManager: ObservableObject {
         let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
         
         let formatter = DateFormatter()
-        formatter.dateFormat = "M月d日"
+        // 根据系统语言设置日期格式
+        if Locale.current.language.languageCode?.identifier == "zh" {
+            formatter.dateFormat = "M月d日"
+        } else {
+            formatter.dateFormat = "M/d"
+        }
         
         let title = "\(formatter.string(from: weekStart)) - \(formatter.string(from: weekEnd))"
         

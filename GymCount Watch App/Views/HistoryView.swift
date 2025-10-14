@@ -64,15 +64,6 @@ struct HistoryView: View {
                     }
                 }
                 .tabViewStyle(.verticalPage)
-                
-                // 底部统计信息
-                // HStack {
-                    
-                    
-                    
-                // }
-                // .padding(.horizontal, 16)
-                // .padding(.bottom, 4)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -111,9 +102,6 @@ struct HistoryView: View {
                     Text(NSLocalizedString("kg", comment: "公斤"))
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                    // Text(NSLocalizedString("total_weight", comment: "总重量"))
-                    //     .font(.caption2)
-                    //     .foregroundColor(.secondary)
                 }
             }
         }
@@ -164,15 +152,12 @@ struct WeeklyChartView: View {
     let exerciseType: ExerciseType
     let weekDate: Date
     let dataManager: DataManager
-    
-    @State private var chartData: [ChartDataPoint] = []
-    @State private var weightData: [Double] = []
-    
+
+    @State private var chartData: [WeeklyChartData] = []
+
     var body: some View {
         VStack {
-            // 图表
             if chartData.isEmpty {
-                // 空状态
                 VStack {
                     Image(systemName: "chart.bar")
                         .font(.title2)
@@ -183,83 +168,121 @@ struct WeeklyChartView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                // 双柱状图
-                HStack(alignment: .bottom, spacing: 2) {
-                    ForEach(Array(chartData.enumerated()), id: \.element.day) { index, dataPoint in
-                        VStack(spacing: 2) {
-                            HStack(alignment: .bottom, spacing: 1) {
-                                // 次数柱子（蓝色）
-                                RoundedRectangle(cornerRadius: 1)
-                                    .fill(Color.blue)
-                                    .frame(width: 5, height: max(2, min(40, CGFloat(dataPoint.value) * 1.5)))
-                                
-                                // 重量柱子（粉色）
-                                RoundedRectangle(cornerRadius: 1)
-                                    .fill(Color.pink)
-                                    .frame(width: 5, height: max(2, min(40, CGFloat(weightData[index]) * 0.1)))
+                Chart {
+                    ForEach(chartData) { d in
+                        // 先绘制折线图（在底层）
+                        LineMark(
+                            x: .value("Day", d.dayLabel),
+                            y: .value("WeightScaled", d.weightScaled)
+                        )
+                        .foregroundStyle(.pink)
+                        .lineStyle(StrokeStyle(lineWidth: 3)) // 增加线宽确保可见性
+                        
+                        // 再绘制数据点（在折线上）
+                        PointMark(
+                            x: .value("Day", d.dayLabel),
+                            y: .value("WeightScaled", d.weightScaled)
+                        )
+                        .foregroundStyle(.pink)
+                        .symbolSize(40) // 增加点的大小
+                        
+                        // 最后绘制柱状图（在顶层，但设置透明度）
+                        BarMark(
+                            x: .value("Day", d.dayLabel),
+                            y: .value("Count", d.count)
+                        )
+                        .foregroundStyle(.blue.opacity(0.7)) // 设置透明度让折线图可见
+                    }
+                }
+                // 双Y轴设置
+                .chartYAxis {
+                    // 左侧Y轴（次数）
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                        AxisValueLabel()
+                    }
+                    // 右侧Y轴（重量）
+                    AxisMarks(position: .trailing) { value in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let scaled = value.as(Double.self) {
+                                // 反算回来显示真实重量
+                                let real = scaled / weightScaleFactor
+                                Text(String(format: "%.0f", real))
                             }
-                            
-                            // 日期标签
-                            Text(dataPoint.dayLabel)
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: 100)
+                // 自定义 Y 轴的 domain（用次数最大值 + 缩放后重量最大值做范围）
+                .chartYScale(domain: yDomain)
+                .chartXAxis {
+                    AxisMarks { _ in
+                        AxisValueLabel()
+                    }
+                }
+                .frame(height: 100)
+                .chartLegend(.hidden)  // 隐藏默认图例
+                // 你可以在这里自己放 legend
             }
         }
-        .onAppear {
-            updateChartData()
-        }
-        .onChange(of: exerciseType) { _, newType in
-            print("📊 \(NSLocalizedString("exerciseType", comment: "运动类型")) 变化: \(newType.displayName)")
-            updateChartData(exerciseType: newType, weekDate: weekDate)
-        }
-        .onChange(of: weekDate) { _, newDate in
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-            print("📊 \(NSLocalizedString("debug_week_date_changed", comment: "weekDate 变化")): \(formatter.string(from: newDate))")
-            updateChartData(exerciseType: exerciseType, weekDate: newDate)
-        }
+        .onAppear { updateChartData() }
+        .onChange(of: exerciseType) { _, _ in updateChartData() }
+        .onChange(of: weekDate) { _, _ in updateChartData() }
     }
-    
+
+    // 缩放因子，用于把重量映射到可与次数共用的尺度上
+    var weightScaleFactor: Double {
+        let maxCount = chartData.map { $0.count }.max() ?? 0
+        let maxWeight = chartData.map { $0.weight }.max() ?? 1
+        if maxWeight == 0 { return 1 }
+        return Double(maxCount) / maxWeight
+    }
+
+    // 计算 y 轴 domain，包括次数和缩放后重量的范围
+    var yDomain: ClosedRange<Double> {
+        let maxCount = Double(chartData.map { $0.count }.max() ?? 0)
+        let maxWeightScaled = chartData.map { $0.weightScaled }.max() ?? 0
+        let maxValue = max(maxCount, maxWeightScaled)
+        return 0 ... (maxValue * 1.1) // 给一点上方余量
+    }
+
     private func updateChartData() {
-        updateChartData(exerciseType: exerciseType, weekDate: weekDate)
-    }
-    
-    private func updateChartData(exerciseType: ExerciseType, weekDate: Date) {
         let weekDaysString = NSLocalizedString("week_days", comment: "一,二,三,四,五,六,日")
         let weekDays = weekDaysString.components(separatedBy: ",")
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        print("   \(NSLocalizedString("debug_input_week_date", comment: "传入 weekDate")): \(formatter.string(from: weekDate))")
-        print("   \(NSLocalizedString("debug_input_exercise_type", comment: "传入 exerciseType")): \(exerciseType.displayName)")
+        let weeklyCounts = dataManager.getWeeklyDataForExercise(exerciseType, for: weekDate)
+        let weeklyWeights = dataManager.getWeeklyWeightDataForExercise(exerciseType, for: weekDate)
         
-        let weeklyData = dataManager.getWeeklyDataForExercise(exerciseType, for: weekDate)
-        let weeklyWeightData = dataManager.getWeeklyWeightDataForExercise(exerciseType, for: weekDate)
-        print("📊 \(NSLocalizedString("debug_update_chart_data", comment: "更新图表，获取数据"))：\(weeklyData), \(exerciseType.displayName)")
-        print("📊 重量数据：\(weeklyWeightData)")
-        var data: [ChartDataPoint] = []
+        // 先计算缩放因子
+        let maxCount = weeklyCounts.max() ?? 0
+        let maxWeight = weeklyWeights.max() ?? 1
+        let scaleFactor = maxWeight > 0 ? Double(maxCount) / maxWeight : 1.0
         
+        var arr: [WeeklyChartData] = []
         for i in 0..<7 {
-            data.append(ChartDataPoint(
+            let wt = weeklyWeights[i]
+            let wtScaled = wt * scaleFactor
+            arr.append(WeeklyChartData(
                 day: i,
-                value: weeklyData[i],
-                dayLabel: weekDays[i]
+                dayLabel: weekDays[i],
+                count: weeklyCounts[i],
+                weight: wt,
+                weightScaled: wtScaled
             ))
         }
-        
-        chartData = data
-        weightData = weeklyWeightData
+        chartData = arr
     }
 }
 
-struct ChartDataPoint {
+struct WeeklyChartData: Identifiable {
+    let id = UUID()
     let day: Int
-    let value: Int
     let dayLabel: String
+    let count: Int
+    let weight: Double
+    let weightScaled: Double
 }
+
+
 
 #Preview {
     HistoryView(showingHistory: .constant(true))

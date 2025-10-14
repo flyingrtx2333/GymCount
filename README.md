@@ -283,7 +283,7 @@ GymCount Watch App/
 - ✅ HealthKit集成测试通过
 
 ## 10. 开发者信息
-- **开发者**：向钧升
+- **开发者**：flyingrtx
 - **开发时间**：2025年9月
 - **联系方式**：通过GitHub Issues联系
 - **开源协议**：MIT License

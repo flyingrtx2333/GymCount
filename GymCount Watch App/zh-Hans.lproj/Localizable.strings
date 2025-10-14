@@ -126,3 +126,7 @@
 "phase_top" = "顶部";
 "phase_stable" = "稳定";
 "phase_unstable" = "不稳定";
+
+/* 应用信息 */
+"app_info" = "应用信息";
+"version" = "版本";

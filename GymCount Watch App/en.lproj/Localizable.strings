@@ -126,3 +126,7 @@
 "phase_top" = "Top";
 "phase_stable" = "Stable";
 "phase_unstable" = "Unstable";
+
+/* App Information */
+"app_info" = "App Information";
+"version" = "Version";

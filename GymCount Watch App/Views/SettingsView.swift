@@ -14,6 +14,14 @@ struct SettingsView: View {
     @State private var tempSettings: AppSettings
     @State private var showingHealthKitAlert = false
     @State private var healthKitStatus: HKAuthorizationStatus = .notDetermined
+
+    var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+    }
+    
+    var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
+    }
     
     init() {
         _tempSettings = State(initialValue: DataManager.shared.settings)
@@ -204,13 +212,27 @@ struct SettingsView: View {
                         // }
                     }
                 }
+                
+                // 应用版本信息
+                Section(header: Text(NSLocalizedString("app_info", comment: "应用信息"))) {
+                    HStack {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(.blue)
+                        Text(NSLocalizedString("version", comment: "版本"))
+                        Spacer()
+                        Text("\(appVersion) (\(buildNumber))")
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
             .navigationTitle(NSLocalizedString("settings", comment: "设置"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(NSLocalizedString("cancel", comment: "取消")) {
-                        presentationMode.wrappedValue.dismiss()
+                    Button(action: {presentationMode.wrappedValue.dismiss()}){
+                        Image(systemName: "xmark")
+                            .font(.title3)
+                            .foregroundColor(.primary)
                     }
                 }
                 
