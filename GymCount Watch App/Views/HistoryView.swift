@@ -14,7 +14,6 @@ struct HistoryView: View {
     @Binding var showingHistory: Bool
     @State private var selectedExercise: ExerciseType = .benchPress
     @State private var currentWeekDate: Date = Date() // 当前显示的周日期
-    @State private var crownRotation: Double = 0.0
     
     init(showingHistory: Binding<Bool>) {
         self._showingHistory = showingHistory
@@ -26,61 +25,45 @@ struct HistoryView: View {
             
             VStack(spacing: 0) {
                 
-                // 中间主区域：周数据图表
-                VStack(spacing: 0) {
-                    Spacer()
-                    
-                    // 周标题
-                    Text(getWeekTitle())
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    // 图表和圆点指示器区域
-                    HStack(alignment: .center, spacing: 0) {
-                        // 图表区域
-                        WeeklyChartView(
-                            exerciseType: selectedExercise,
-                            weekDate: currentWeekDate,
-                            dataManager: dataManager
-                        )
-                        .frame(maxHeight: 100)
-                        .layoutPriority(1)  // 更愿意让图表占据空间
-                        .gesture(
-                            DragGesture()
-                                .onEnded { value in
-                                    // 左右滑动切换周
-                                    if value.translation.width > 30 {
-                                        // 向右滑动，显示上一周
-                                        switchToPreviousWeek()
-                                    } else if value.translation.width < -30 {
-                                        // 向左滑动，显示下一周
-                                        switchToNextWeek()
-                                    }
-                                }
-                        )
-                        
-                        Spacer()
-                        
-                        // 圆点指示器 - 贴右侧
-                        VStack(spacing: 4) {
-                            ForEach(ExerciseType.allCases, id: \.self) { exercise in
-                                Circle()
-                                    .fill(exercise == selectedExercise ? Color.white : Color.gray)
-                                    .frame(width: 6, height: 6)
-                                    .onTapGesture {
-                                        withAnimation(.easeInOut(duration: 0.3)) {
-                                            selectedExercise = exercise
+                // 中间主区域：使用TabView显示不同运动类型
+                TabView(selection: $selectedExercise) {
+                    ForEach(ExerciseType.allCases, id: \.self) { exercise in
+                        VStack(spacing: 0) {
+                            Spacer()
+                            
+                            // 周标题
+                            Text(getWeekTitle())
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            // 图表区域
+                            WeeklyChartView(
+                                exerciseType: exercise,
+                                weekDate: currentWeekDate,
+                                dataManager: dataManager
+                            )
+                            .frame(maxHeight: 100)
+                            .gesture(
+                                DragGesture()
+                                    .onEnded { value in
+                                        // 左右滑动切换周
+                                        if value.translation.width > 30 {
+                                            // 向右滑动，显示上一周
+                                            switchToPreviousWeek()
+                                        } else if value.translation.width < -30 {
+                                            // 向左滑动，显示下一周
+                                            switchToNextWeek()
                                         }
                                     }
-                            }
+                            )
+                            
+                            Spacer()
                         }
-                        .padding(.trailing, 4)
+                        .padding(.vertical, 8)
+                        .tag(exercise)
                     }
-                    .padding(.horizontal, 2)
-
-                    Spacer()
                 }
-                .padding(.vertical, 8)
+                .tabViewStyle(.verticalPage)
                 
                 // 底部统计信息
                 // HStack {
@@ -132,32 +115,6 @@ struct HistoryView: View {
                     //     .font(.caption2)
                     //     .foregroundColor(.secondary)
                 }
-            }
-        }
-        .focusable(true)
-        .digitalCrownRotation(
-            $crownRotation,
-            from: 0,
-            through: Double(ExerciseType.allCases.count - 1),
-            by: 1,
-            sensitivity: .medium,
-            isContinuous: false
-        )
-        .onChange(of: crownRotation) { _, newValue in
-            let exerciseIndex = Int(newValue.rounded())
-            if exerciseIndex >= 0 && exerciseIndex < ExerciseType.allCases.count {
-                let newExercise = ExerciseType.allCases[exerciseIndex]
-                if newExercise != selectedExercise {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        selectedExercise = newExercise
-                    }
-                }
-            }
-        }
-        .onAppear {
-            // 初始化数字表冠位置
-            if let currentIndex = ExerciseType.allCases.firstIndex(of: selectedExercise) {
-                crownRotation = Double(currentIndex)
             }
         }
     }

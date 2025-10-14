@@ -1,3 +1,3 @@
 CFBundleDisplayName = "健身计数器";
-NSHealthShareUsageDescription = "GymCount 需要访问您的健康数据来同步锻炼记录到 Apple Watch 运动圆环，帮助您更好地跟踪健身进度。";
-NSHealthUpdateUsageDescription="GymCount 需要写入健康数据来将您的锻炼记录同步到 Apple Watch 运动圆环，包括锻炼时长、消耗的卡路里等信息。";
+NSHealthShareUsageDescription = "需要访问您的健康数据来同步锻炼记录到 Apple Watch 运动圆环，帮助您更好地跟踪健身进度。";
+NSHealthUpdateUsageDescription="需要写入健康数据来将您的锻炼记录同步到 Apple Watch 运动圆环，包括锻炼时长、消耗的卡路里等信息。";
