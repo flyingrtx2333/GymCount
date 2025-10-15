@@ -200,7 +200,7 @@ struct WeightInputView: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            Text(NSLocalizedString("weight", comment: "重量"))
+            Text(NSLocalizedString("equipment weight", comment: "器械重量"))
                 .font(.headline)
             
             Text("\(Int(weight)) \(NSLocalizedString("kg", comment: "公斤"))")

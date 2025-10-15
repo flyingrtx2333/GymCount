@@ -1,5 +1,5 @@
 /* App Name */
-"app_name" = "GymCount";
+"app_name" = "PowerReps";
 
 /* Main Features */
 "bench_press" = "Bench Press";
@@ -10,7 +10,7 @@
 "stop" = "Stop";
 "reset" = "Reset";
 "reps" = "Reps";
-"weight" = "Weight";
+"equipment weight" = "Equipment Weight";
 "kg" = "kg";
 "minus" = "Minus";
 "plus" = "Plus";

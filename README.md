@@ -4,7 +4,19 @@
 
 ### 1.1 应用描述
 "GymCount"是一款专为健身爱好者打造的Apple Watch智能计数应用。通过先进的运动检测技术和直观的用户界面，帮助用户精确记录卧推、深蹲、硬拉等力量训练动作，让每一次努力都被准确计数。
+中文：
+加速度计自动识别你的健身运动动作，无需手动输入，开始即用
+精准记录和灵活调整锻炼体重，追踪每一次进步
+完整的锻炼历史记录和周统计图表，直观了解训练成果
+与 Apple 健康应用无缝同步，轻松合上运动圆环
+Accelerometer automatically detects your workout movements. Start exercising.
+Precisely record and flexibly adjust your exercise weights to track every bit of your progress.
+Complete workout history and weekly statistical charts to see your training results at a glance.
+Seamlessly sync with Apple Health and close your activity rings effortlessly.
 
+副标题
+智能计数健身助手
+Your Smart Fitness Counter.
 ### 1.2 编写目的
 本文档为使用说明文档，为产品的使用与维护提供信息基础。
 

@@ -1,3 +1,3 @@
-CFBundleDisplayName = "GymCount";
-NSHealthShareUsageDescription = "GymCount needs access to your health data to sync workout records to Apple Watch activity rings, helping you better track your fitness progress.";
-NSHealthUpdateUsageDescription="GymCount needs to write health data to sync your workout records to Apple Watch activity rings, including workout duration, calories burned, and other information.";
+CFBundleDisplayName = "PowerReps";
+NSHealthShareUsageDescription = "PowerReps needs access to your health data to sync workout records to Apple Watch activity rings, helping you better track your fitness progress.";
+NSHealthUpdateUsageDescription="PowerReps needs to write health data to sync your workout records to Apple Watch activity rings, including workout duration, calories burned, and other information.";
