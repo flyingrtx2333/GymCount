@@ -16,7 +16,6 @@ struct SettingsView: View {
     @State private var showingHealthKitAlert = false
     @State private var healthKitStatus: HKAuthorizationStatus = .notDetermined
     @State private var siriStatus: INSiriAuthorizationStatus = .notDetermined
-    @StateObject private var siriKitManager = SiriKitManager.shared
 
     var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
@@ -262,49 +261,6 @@ struct SettingsView: View {
                     }
                 }
                 
-                // Siri 设置
-                Section(header: Text(NSLocalizedString("siri_section", comment: "Siri 与语音控制"))) {
-                    // Siri 集成状态
-                    HStack {
-                        Image(systemName: "mic.fill")
-                            .foregroundColor(.purple)
-                        Text(NSLocalizedString("siri_integration", comment: "Siri 集成"))
-                        Spacer()
-                    }
-                    
-                    // 权限状态
-                    HStack {
-                        Image(systemName: siriStatusIcon)
-                            .foregroundColor(siriStatusColor)
-                        Text(NSLocalizedString("siri_permission_status", comment: "Siri 权限状态"))
-                        Spacer()
-                        Text(siriStatusText)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    // 请求权限按钮
-                    if siriStatus != .authorized {
-                        Button(action: {
-                            Task {
-                                await siriKitManager.requestAuthorization()
-                                siriStatus = siriKitManager.authorizationStatus
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: "lock.open")
-                                    .foregroundColor(.orange)
-                                Text(NSLocalizedString("request_siri_permission", comment: "请求 Siri 权限"))
-                                Spacer()
-                            }
-                        }
-                    }
-                    
-                    // 说明文字
-                    Text(NSLocalizedString("siri_description", comment: "通过 Siri 语音控制开始、停止锻炼和添加次数"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
                 // 应用版本信息
                 Section(header: Text(NSLocalizedString("app_info", comment: "应用信息"))) {
                     HStack {
@@ -338,7 +294,6 @@ struct SettingsView: View {
         }
         .onAppear {
             healthKitStatus = dataManager.getHealthKitAuthorizationStatus()
-            siriStatus = siriKitManager.authorizationStatus
         }
     }
 }

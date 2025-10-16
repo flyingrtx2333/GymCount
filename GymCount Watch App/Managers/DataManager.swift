@@ -19,7 +19,6 @@ class DataManager: ObservableObject {
     
     let motionDetector = MotionDetector()
     let healthKitManager = HealthKitManager.shared
-    let siriKitManager = SiriKitManager.shared
     
     // HealthKit 运动会话
     private var hkWorkoutSession: HKWorkoutSession?
@@ -105,18 +104,12 @@ class DataManager: ObservableObject {
         // 自动开始运动检测
         motionDetector.configureForExercise(exerciseType)
         motionDetector.startDetection()
-        
-        // 捐赠 Siri Intent
-        siriKitManager.donateStartWorkoutIntent(exerciseType: exerciseType)
     }
     
     func addRep() {
         guard var session = currentSession else { return }
         session.addRep()
         currentSession = session
-        
-        // 捐赠 Siri Intent
-        siriKitManager.donateAddRepIntent()
     }
     
     func removeRep() {
@@ -148,9 +141,6 @@ class DataManager: ObservableObject {
                 await syncWorkoutToHealthKit(history)
             }
         }
-        
-        // 捐赠 Siri Intent
-        siriKitManager.donateStopWorkoutIntent()
         
         // 清除当前会话
         currentSession = nil

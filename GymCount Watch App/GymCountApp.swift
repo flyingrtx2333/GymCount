@@ -11,6 +11,11 @@ import SwiftUI
 struct GymCount_Watch_AppApp: App {
     @StateObject private var dataManager = DataManager.shared
     
+    init() {
+        // 注册快捷指令
+        GymCountShortcutsProvider.updateAppShortcutParameters()
+    }
+    
     var body: some Scene {
         WindowGroup {
             if dataManager.isFirstLaunch {

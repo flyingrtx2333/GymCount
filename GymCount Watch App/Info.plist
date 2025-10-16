@@ -51,17 +51,14 @@
 	<string>此应用需要访问Siri以支持语音控制开始锻炼</string>
 	<key>NSSupportsAutomaticAppearanceMode</key>
 	<true/>
-	<key>NSUserActivityTypes</key>
+	<key>NSSupportsAppIntents</key>
+	<true/>
+	<key>AppIntents</key>
 	<array>
 		<string>StartWorkoutIntent</string>
 		<string>StopWorkoutIntent</string>
 		<string>AddRepIntent</string>
-	</array>
-	<key>IntentsSupported</key>
-	<array>
-		<string>StartWorkoutIntent</string>
-		<string>StopWorkoutIntent</string>
-		<string>AddRepIntent</string>
+		<string>GetWorkoutStatusIntent</string>
 	</array>
 </dict>
 </plist>
