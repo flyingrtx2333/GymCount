@@ -19,6 +19,7 @@ class DataManager: ObservableObject {
     
     let motionDetector = MotionDetector()
     let healthKitManager = HealthKitManager.shared
+    let siriKitManager = SiriKitManager.shared
     
     // HealthKit 运动会话
     private var hkWorkoutSession: HKWorkoutSession?
@@ -104,12 +105,18 @@ class DataManager: ObservableObject {
         // 自动开始运动检测
         motionDetector.configureForExercise(exerciseType)
         motionDetector.startDetection()
+        
+        // 捐赠 Siri Intent
+        siriKitManager.donateStartWorkoutIntent(exerciseType: exerciseType)
     }
     
     func addRep() {
         guard var session = currentSession else { return }
         session.addRep()
         currentSession = session
+        
+        // 捐赠 Siri Intent
+        siriKitManager.donateAddRepIntent()
     }
     
     func removeRep() {
@@ -141,6 +148,9 @@ class DataManager: ObservableObject {
                 await syncWorkoutToHealthKit(history)
             }
         }
+        
+        // 捐赠 Siri Intent
+        siriKitManager.donateStopWorkoutIntent()
         
         // 清除当前会话
         currentSession = nil
@@ -406,6 +416,26 @@ class DataManager: ObservableObject {
     // MARK: - 调试方法
     func debugHealthKitStatus() {
         healthKitManager.debugAuthorizationStatus()
+    }
+    
+    // MARK: - Siri Intent 支持
+    func canStartWorkout() -> Bool {
+        return currentSession == nil
+    }
+    
+    func getCurrentWorkoutStatus() -> String {
+        guard let session = currentSession else {
+            return NSLocalizedString("no_active_workout", comment: "没有活跃的锻炼")
+        }
+        
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        let timeString = formatter.string(from: session.startTime)
+        
+        return String(format: NSLocalizedString("active_workout_status", comment: "正在记录 %@，已做 %d 次，开始时间 %@"), 
+                     session.exerciseType.displayName, 
+                     session.totalReps, 
+                     timeString)
     }
     
     // MARK: - HealthKit 运动会话管理

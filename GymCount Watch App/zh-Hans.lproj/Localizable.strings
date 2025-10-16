@@ -130,3 +130,21 @@
 /* 应用信息 */
 "app_info" = "应用信息";
 "version" = "版本";
+
+/* Siri 相关 */
+"no_active_workout" = "没有活跃的锻炼";
+"active_workout_status" = "正在记录 %@，已做 %d 次，开始时间 %@";
+"siri_workout_already_active" = "已有活跃的锻炼会话，请先结束当前锻炼";
+"siri_invalid_exercise_type" = "无效的运动类型";
+"siri_workout_started" = "已开始记录 %@ 锻炼";
+"siri_no_active_workout" = "没有活跃的锻炼，请先开始锻炼";
+"siri_workout_stopped" = "已完成 %@ 锻炼，共 %d 次";
+"siri_rep_added" = "已添加一次，当前 %@ 共 %d 次";
+
+/* Siri 设置 */
+"siri_section" = "Siri 与语音控制";
+"siri_integration" = "Siri 集成";
+"siri_permission_status" = "Siri 权限状态";
+"request_siri_permission" = "请求 Siri 权限";
+"siri_restricted" = "受限";
+"siri_description" = "通过 Siri 语音控制开始、停止锻炼和添加次数";

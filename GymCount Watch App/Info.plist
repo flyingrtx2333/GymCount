@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>健身计数器</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+	</array>
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>$(WK_COMPANION_APP_BUNDLE_IDENTIFIER)</string>
+	<key>WKWatchOnly</key>
+	<true/>
+	<key>WKApplication</key>
+	<true/>
+	<key>WKAppBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>NSSupportsAutomaticTermination</key>
+	<true/>
+	<key>NSSupportsSuddenTermination</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>workout-processing</string>
+	</array>
+	<key>NSHealthShareUsageDescription</key>
+	<string>此应用需要访问健康数据以同步您的锻炼记录到Apple Watch运动圆环</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>此应用需要更新健康数据以保存您的锻炼记录到Apple Watch运动圆环</string>
+	<key>NSSiriUsageDescription</key>
+	<string>此应用需要访问Siri以支持语音控制开始锻炼</string>
+	<key>NSSupportsAutomaticAppearanceMode</key>
+	<true/>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>StartWorkoutIntent</string>
+		<string>StopWorkoutIntent</string>
+		<string>AddRepIntent</string>
+	</array>
+	<key>IntentsSupported</key>
+	<array>
+		<string>StartWorkoutIntent</string>
+		<string>StopWorkoutIntent</string>
+		<string>AddRepIntent</string>
+	</array>
+</dict>
+</plist>

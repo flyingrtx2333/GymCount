@@ -130,3 +130,21 @@
 /* App Information */
 "app_info" = "App Information";
 "version" = "Version";
+
+/* Siri Related */
+"no_active_workout" = "No active workout";
+"active_workout_status" = "Recording %@, %d reps completed, started at %@";
+"siri_workout_already_active" = "There's already an active workout session, please end the current workout first";
+"siri_invalid_exercise_type" = "Invalid exercise type";
+"siri_workout_started" = "Started recording %@ workout";
+"siri_no_active_workout" = "No active workout, please start a workout first";
+"siri_workout_stopped" = "Completed %@ workout with %d reps";
+"siri_rep_added" = "Added 1 rep, current %@ total: %d reps";
+
+/* Siri Settings */
+"siri_section" = "Siri & Voice Control";
+"siri_integration" = "Siri Integration";
+"siri_permission_status" = "Siri Permission Status";
+"request_siri_permission" = "Request Siri Permission";
+"siri_restricted" = "Restricted";
+"siri_description" = "Control workouts with Siri voice commands: start, stop, and add reps";
