@@ -148,3 +148,8 @@
 "request_siri_permission" = "请求 Siri 权限";
 "siri_restricted" = "受限";
 "siri_description" = "通过 Siri 语音控制开始、停止锻炼和添加次数";
+
+/* 快捷指令 */
+"shortcut_phrase_start_workout_1" = "开始记录$(.applicationName)锻炼";
+"shortcut_phrase_start_workout_2" = "用$(.applicationName)开始锻炼";
+"shortcut_title_start_workout" = "开始锻炼";

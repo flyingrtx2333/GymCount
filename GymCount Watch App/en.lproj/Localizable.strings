@@ -148,3 +148,8 @@
 "request_siri_permission" = "Request Siri Permission";
 "siri_restricted" = "Restricted";
 "siri_description" = "Control workouts with Siri voice commands: start, stop, and add reps";
+
+/* App Shortcuts */
+"shortcut_phrase_start_workout_1" = "Start recording workout with $(.applicationName)";
+"shortcut_phrase_start_workout_2" = "Begin workout using $(.applicationName)";
+"shortcut_title_start_workout" = "Start Workout";

@@ -58,11 +58,12 @@ enum ExerciseType: String, CaseIterable, Codable {
 
 // MARK: - 单次锻炼记录
 struct RepRecord: Codable, Identifiable {
-    let id = UUID()
+    let id: UUID
     let timestamp: Date
     let weight: Double // 重量（公斤）
     
     init(weight: Double = 0.0) {
+        self.id = UUID()
         self.timestamp = Date()
         self.weight = weight
     }
@@ -70,12 +71,19 @@ struct RepRecord: Codable, Identifiable {
 
 // MARK: - 锻炼会话
 struct WorkoutSession: Codable, Identifiable {
-    let id = UUID()
+    let id: UUID
     let exerciseType: ExerciseType
     let startTime: Date
     var endTime: Date?
     var repRecords: [RepRecord] = []
     var weight: Double = 0.0 // 当前重量设置
+    
+    init(exerciseType: ExerciseType, startTime: Date, weight: Double = 0.0) {
+        self.id = UUID()
+        self.exerciseType = exerciseType
+        self.startTime = startTime
+        self.weight = weight
+    }
     
     var isActive: Bool {
         return endTime == nil
@@ -108,7 +116,7 @@ struct WorkoutSession: Codable, Identifiable {
 
 // MARK: - 锻炼历史记录
 struct WorkoutHistory: Codable, Identifiable {
-    let id = UUID()
+    let id: UUID
     let date: Date
     let exerciseType: ExerciseType
     let totalReps: Int
@@ -116,6 +124,7 @@ struct WorkoutHistory: Codable, Identifiable {
     let duration: TimeInterval
     
     init(from session: WorkoutSession) {
+        self.id = UUID()
         self.date = session.startTime
         self.exerciseType = session.exerciseType
         self.totalReps = session.totalReps

@@ -470,6 +470,8 @@ class WorkoutSessionDelegate: NSObject, HKWorkoutSessionDelegate {
         print("🔄 运动会话状态变化: \(fromState) -> \(toState)")
         
         switch toState {
+        case .notStarted:
+            print("📋 运动会话未开始")
         case .running:
             print("🏃‍♂️ 运动会话开始运行")
         case .ended:
@@ -481,7 +483,7 @@ class WorkoutSessionDelegate: NSObject, HKWorkoutSessionDelegate {
         case .stopped:
             print("🛑 运动会话停止")
         @unknown default:
-            print("❓ 未知的运动会话状态")
+            print("❓ 未知的运动会话状态: \(toState)")
         }
     }
     

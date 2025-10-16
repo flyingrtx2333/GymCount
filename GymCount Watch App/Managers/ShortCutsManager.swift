@@ -242,10 +242,12 @@ struct GymCountShortcutsProvider: AppShortcutsProvider {
         AppShortcut(
             intent: StartWorkoutIntent(),
             phrases: [
+                "Start recording workout with \(.applicationName)",
+                "Begin workout using \(.applicationName)",
                 "开始记录\(.applicationName)锻炼",
                 "用\(.applicationName)开始锻炼"
             ],
-            shortTitle: "开始锻炼",
+            shortTitle: LocalizedStringResource("shortcut_title_start_workout"),
             systemImageName: "figure.strengthtraining.traditional"
         )
     }

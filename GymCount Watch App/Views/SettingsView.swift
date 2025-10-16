@@ -119,9 +119,9 @@ struct SettingsView: View {
         NavigationView {
             List {
                 // 默认重量设置
-                Section(header: Text(NSLocalizedString("equipment weight", comment: "器械重量"))) {
+                Section() {
                     HStack {
-                        Text(NSLocalizedString("default_weight", comment: "默认重量"))
+                        Text(NSLocalizedString("equipment weight", comment: "器械重量"))
                         Spacer()
                         Text("\(Int(tempSettings.defaultWeight)) \(NSLocalizedString("kg", comment: "公斤"))")
                             .foregroundColor(.secondary)
@@ -149,7 +149,7 @@ struct SettingsView: View {
                 }
                 
                 // 用户体重设置
-                Section(header: Text(NSLocalizedString("user_info", comment: "用户信息"))) {
+                Section() {
                     HStack {
                         Text(NSLocalizedString("my_weight", comment: "我的体重"))
                         Spacer()
@@ -178,10 +178,6 @@ struct SettingsView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
-                    
-                    Text(NSLocalizedString("calorie_calculation_note", comment: "用于更准确的卡路里计算"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                 }
                 
                 // HealthKit 设置
