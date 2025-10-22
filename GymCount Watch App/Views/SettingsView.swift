@@ -327,6 +327,21 @@ struct SettingsView: View {
                     }
                 }
                 
+                // #if DEBUG
+                // Section(header: Text("调试功能")) {
+                //     Button(action: {
+                //         dataManager.generateRandomBenchPressData()
+                //     }) {
+                //         HStack {
+                //             Image(systemName: "dice")
+                //                 .foregroundColor(.purple)
+                //             Text("生成随机卧推数据")
+                //             Spacer()
+                //         }
+                //     }
+                // }
+                // #endif
+                
                 // 应用版本信息
                 Section(header: Text(NSLocalizedString("app_info", comment: "应用信息"))) {
                     HStack {

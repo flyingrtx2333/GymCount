@@ -175,6 +175,87 @@ class DataManager: ObservableObject {
         print("---")
     }
     
+    // MARK: - 调试数据生成
+    func generateRandomBenchPressData() {
+        let calendar = Calendar.current
+        let today = Date()
+        
+        // 生成当前周的数据（周一到周日）
+        let currentWeekStart = getWeekInfo(for: today).startDate
+        for dayOffset in 0..<7 {
+            if let workoutDate = calendar.date(byAdding: .day, value: dayOffset, to: currentWeekStart) {
+                let randomReps = Int.random(in: 0...50) // 0-50次随机
+                let randomWeight = Double.random(in: 20...100) // 20-100kg随机重量
+                
+                if randomReps > 0 {
+                    // 创建模拟的WorkoutSession
+                    var session = WorkoutSession(
+                        exerciseType: .benchPress,
+                        startTime: workoutDate,
+                        weight: randomWeight
+                    )
+                    
+                    // 添加随机次数
+                    for _ in 0..<randomReps {
+                        session.addRep(weight: randomWeight)
+                    }
+                    
+                    // 设置结束时间
+                    let duration = TimeInterval.random(in: 300...1800) // 5-30分钟
+                    let endTime = workoutDate.addingTimeInterval(duration)
+                    session.endTime = endTime
+                    
+                    // 从session创建WorkoutHistory
+                    let workout = WorkoutHistory(from: session)
+                    workoutHistory.append(workout)
+                }
+            }
+        }
+        
+        // 生成上周的数据（周一到周日）
+        let lastWeekStart = calendar.date(byAdding: .weekOfYear, value: -1, to: currentWeekStart) ?? currentWeekStart
+        for dayOffset in 0..<7 {
+            if let workoutDate = calendar.date(byAdding: .day, value: dayOffset, to: lastWeekStart) {
+                let randomReps = Int.random(in: 0...45) // 0-45次随机（比当前周略少）
+                let randomWeight = Double.random(in: 15...95) // 15-95kg随机重量
+                
+                if randomReps > 0 {
+                    // 创建模拟的WorkoutSession
+                    var session = WorkoutSession(
+                        exerciseType: .benchPress,
+                        startTime: workoutDate,
+                        weight: randomWeight
+                    )
+                    
+                    // 添加随机次数
+                    for _ in 0..<randomReps {
+                        session.addRep(weight: randomWeight)
+                    }
+                    
+                    // 设置结束时间
+                    let duration = TimeInterval.random(in: 300...1800) // 5-30分钟
+                    let endTime = workoutDate.addingTimeInterval(duration)
+                    session.endTime = endTime
+                    
+                    // 从session创建WorkoutHistory
+                    let workout = WorkoutHistory(from: session)
+                    workoutHistory.append(workout)
+                }
+            }
+        }
+        
+        // 按日期排序（最新的在前面）
+        workoutHistory.sort { $0.date > $1.date }
+        
+        // 保存数据
+        saveData()
+        
+        print("🎲 已生成随机卧推数据:")
+        print("   当前周: 7天随机数据")
+        print("   上周: 7天随机数据")
+        print("   总记录数: \(workoutHistory.count)")
+    }
+    
     // MARK: - 设置管理
     func updateSettings(_ newSettings: AppSettings) {
         settings = newSettings
@@ -331,6 +412,17 @@ class DataManager: ObservableObject {
     
     func getWeeklyTotalWeightForExercise(_ exerciseType: ExerciseType, for weekStartDate: Date) -> Double {
         return getWeeklyWeightDataForExercise(exerciseType, for: weekStartDate).reduce(0, +)
+    }
+    
+    // MARK: - 获取上周数据对比
+    func getPreviousWeekDataForExercise(_ exerciseType: ExerciseType, for currentWeekDate: Date) -> (totalReps: Int, totalWeight: Double) {
+        let calendar = Calendar.current
+        let previousWeekDate = calendar.date(byAdding: .weekOfYear, value: -1, to: currentWeekDate) ?? currentWeekDate
+        
+        let totalReps = getWeeklyTotalForExercise(exerciseType, for: previousWeekDate)
+        let totalWeight = getWeeklyTotalWeightForExercise(exerciseType, for: previousWeekDate)
+        
+        return (totalReps: totalReps, totalWeight: totalWeight)
     }
     
     // MARK: - 获取指定周的日期信息

@@ -33,7 +33,7 @@ struct HistoryView: View {
                             
                             // 周标题
                             Text(getWeekTitle())
-                                .font(.caption)
+                                .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                             
                             // 图表区域
@@ -86,22 +86,46 @@ struct HistoryView: View {
                     .frame(width: 24, height: 24)
             }
             ToolbarItemGroup(placement: .bottomBar) {
-                HStack(spacing: 2) {
-                    Text("\(getCurrentWeekTotal())")
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                    Text(NSLocalizedString("times", comment: "次"))
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                VStack(spacing: 2) {
+                    HStack(spacing: 2) {
+                        Text("\(getCurrentWeekTotal())")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                        Text(NSLocalizedString("times", comment: "次"))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    // 相对上周次数变化
+                    HStack(spacing: 2) {
+                        let repChange = getRepChangeFromLastWeek()
+                        Image(systemName: repChange >= 0 ? "arrow.up" : "arrow.down")
+                            .font(.system(size: 9))
+                            .foregroundColor(repChange >= 0 ? .green : .red)
+                        Text("\(abs(repChange))")
+                            .font(.system(size: 9))
+                            .foregroundColor(repChange >= 0 ? .green : .red)
+                    }
                 }
                 Spacer()
-                HStack(spacing: 2) {
-                    Text("\(Int(getCurrentWeekTotalWeight()))")
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                    Text(NSLocalizedString("kg", comment: "公斤"))
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                VStack(spacing: 2) {
+                    HStack(spacing: 2) {
+                        Text("\(Int(getCurrentWeekTotalWeight()))")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                        Text(NSLocalizedString("kg", comment: "公斤"))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    // 相对上周重量变化
+                    HStack(spacing: 2) {
+                        let weightChange = getWeightChangeFromLastWeek()
+                        Image(systemName: weightChange >= 0 ? "arrow.up" : "arrow.down")
+                            .font(.system(size: 9))
+                            .foregroundColor(weightChange >= 0 ? .green : .red)
+                        Text("\(Int(abs(weightChange)))")
+                            .font(.system(size: 9))
+                            .foregroundColor(weightChange >= 0 ? .green : .red)
+                    }
                 }
             }
         }
@@ -118,6 +142,18 @@ struct HistoryView: View {
     
     private func getCurrentWeekTotalWeight() -> Double {
         return dataManager.getWeeklyTotalWeightForExercise(selectedExercise, for: currentWeekDate)
+    }
+    
+    private func getRepChangeFromLastWeek() -> Int {
+        let currentTotal = getCurrentWeekTotal()
+        let previousWeekData = dataManager.getPreviousWeekDataForExercise(selectedExercise, for: currentWeekDate)
+        return currentTotal - previousWeekData.totalReps
+    }
+    
+    private func getWeightChangeFromLastWeek() -> Double {
+        let currentWeight = getCurrentWeekTotalWeight()
+        let previousWeekData = dataManager.getPreviousWeekDataForExercise(selectedExercise, for: currentWeekDate)
+        return currentWeight - previousWeekData.totalWeight
     }
     
     private func switchToNextWeek() {
