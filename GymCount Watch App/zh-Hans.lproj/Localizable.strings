@@ -73,6 +73,8 @@
 "authorized" = "已授权";
 "denied" = "已拒绝";
 "not_determined" = "未确定";
+"provisional" = "临时授权";
+"ephemeral" = "临时授权";
 "unknown_status" = "未知";
 
 /* 启动页面 */
@@ -148,6 +150,24 @@
 "request_siri_permission" = "请求 Siri 权限";
 "siri_restricted" = "受限";
 "siri_description" = "通过 Siri 语音控制开始、停止锻炼和添加次数";
+
+/* 通知相关 */
+"notification_section" = "通知设置";
+"notification_permission" = "通知权限";
+"request_notification_permission" = "请求通知权限";
+"test_notification" = "发送测试通知";
+"daily_reminder_title" = "每日提醒";
+"reminder" = "提醒";
+
+/* 每日鼓励消息 */
+"great_progress" = "很棒！";
+"progress_message" = "今天完成了%d次%@，比昨天进步了%d个，继续努力！";
+"keep_going" = "继续加油！";
+"slight_decrease_message" = "今天完成了%d次%@，比昨天略低%d个，继续加油！";
+"consistent_effort" = "坚持得很好！";
+"consistent_message" = "今天完成了%d次%@，和昨天一样，坚持得很好！";
+"time_to_move" = "该运动了！";
+"no_workout_today" = "今天还没运动，快来开始你的锻炼吧！";
 
 /* 快捷指令 */
 "shortcut_phrase_start_workout_1" = "开始记录$(.applicationName)锻炼";

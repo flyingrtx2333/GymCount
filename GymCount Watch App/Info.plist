@@ -49,6 +49,8 @@
 	<string>此应用需要更新健康数据以保存您的锻炼记录到Apple Watch运动圆环</string>
 	<key>NSSiriUsageDescription</key>
 	<string>此应用需要访问Siri以支持语音控制开始锻炼</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>此应用需要发送通知以提醒您锻炼进度和完成情况</string>
 	<key>NSSupportsAutomaticAppearanceMode</key>
 	<true/>
 	<key>NSSupportsAppIntents</key>

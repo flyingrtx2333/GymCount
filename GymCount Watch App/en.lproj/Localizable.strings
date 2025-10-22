@@ -73,6 +73,8 @@
 "authorized" = "Authorized";
 "denied" = "Denied";
 "not_determined" = "Not Determined";
+"provisional" = "Provisional";
+"ephemeral" = "Ephemeral";
 "unknown_status" = "Unknown";
 
 /* Splash Screen */
@@ -148,6 +150,24 @@
 "request_siri_permission" = "Request Siri Permission";
 "siri_restricted" = "Restricted";
 "siri_description" = "Control workouts with Siri voice commands: start, stop, and add reps";
+
+/* Notification Related */
+"notification_section" = "Notification Settings";
+"notification_permission" = "Notification Permission";
+"request_notification_permission" = "Request Notification Permission";
+"test_notification" = "Send Test Notification";
+"daily_reminder_title" = "Daily Reminder";
+"reminder" = "Reminder";
+
+/* Daily Encouragement Messages */
+"great_progress" = "Great Job!";
+"progress_message" = "Today you completed %d %@ reps, %d more than yesterday, keep it up!";
+"keep_going" = "Keep Going!";
+"slight_decrease_message" = "Today you completed %d %@ reps, %d less than yesterday, keep pushing!";
+"consistent_effort" = "Great Consistency!";
+"consistent_message" = "Today you completed %d %@ reps, same as yesterday, great consistency!";
+"time_to_move" = "Time to Move!";
+"no_workout_today" = "No workout today, let's start your exercise!";
 
 /* App Shortcuts */
 "shortcut_phrase_start_workout_1" = "Start recording workout with $(.applicationName)";

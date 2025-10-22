@@ -403,6 +403,64 @@ class DataManager: ObservableObject {
         return healthKitManager.isAuthorized
     }
     
+    // MARK: - 每日鼓励消息生成
+    func generateDailyEncouragementMessage() -> (title: String, message: String) {
+        let calendar = Calendar.current
+        let today = Date()
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today) ?? today
+        
+        // 获取今日和昨日的运动数据
+        let todayWorkouts = getWorkoutsForDate(today)
+        let yesterdayWorkouts = getWorkoutsForDate(yesterday)
+        
+        let todayTotalReps = todayWorkouts.reduce(0) { $0 + $1.totalReps }
+        let yesterdayTotalReps = yesterdayWorkouts.reduce(0) { $0 + $1.totalReps }
+        
+        if todayTotalReps > 0 {
+            // 今天有运动
+            let exerciseTypes = Set(todayWorkouts.map { $0.exerciseType.displayName })
+            let exerciseTypeString = Array(exerciseTypes).joined(separator: "、")
+            
+            let difference = todayTotalReps - yesterdayTotalReps
+            
+            if difference > 0 {
+                // 比昨天进步
+                let title = NSLocalizedString("great_progress", comment: "很棒！")
+                let message = String(format: NSLocalizedString("progress_message", comment: "今天完成了%d次%@，比昨天进步了%d个，继续努力！"), 
+                                   todayTotalReps, exerciseTypeString, difference)
+                return (title, message)
+            } else if difference < 0 {
+                // 比昨天略低
+                let title = NSLocalizedString("keep_going", comment: "继续加油！")
+                let message = String(format: NSLocalizedString("slight_decrease_message", comment: "今天完成了%d次%@，比昨天略低%d个，继续加油！"), 
+                                   todayTotalReps, exerciseTypeString, abs(difference))
+                return (title, message)
+            } else {
+                // 和昨天一样
+                let title = NSLocalizedString("consistent_effort", comment: "坚持得很好！")
+                let message = String(format: NSLocalizedString("consistent_message", comment: "今天完成了%d次%@，和昨天一样，坚持得很好！"), 
+                                   todayTotalReps, exerciseTypeString)
+                return (title, message)
+            }
+        } else {
+            // 今天没有运动
+            let title = NSLocalizedString("time_to_move", comment: "该运动了！")
+            let message = NSLocalizedString("no_workout_today", comment: "今天还没运动，快来开始你的锻炼吧！")
+            return (title, message)
+        }
+    }
+    
+    // MARK: - 获取指定日期的运动数据
+    private func getWorkoutsForDate(_ date: Date) -> [WorkoutHistory] {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: date)
+        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? date
+        
+        return workoutHistory.filter { workout in
+            workout.date >= startOfDay && workout.date < endOfDay
+        }
+    }
+    
     // MARK: - 调试方法
     func debugHealthKitStatus() {
         healthKitManager.debugAuthorizationStatus()

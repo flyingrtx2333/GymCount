@@ -11,6 +11,7 @@ import Intents
 
 struct SettingsView: View {
     @EnvironmentObject var dataManager: DataManager
+    @EnvironmentObject var notificationManager: NotificationManager
     @Environment(\.presentationMode) var presentationMode
     @State private var tempSettings: AppSettings
     @State private var showingHealthKitAlert = false
@@ -110,6 +111,58 @@ struct SettingsView: View {
             return NSLocalizedString("not_determined", comment: "未确定")
         case .restricted:
             return NSLocalizedString("siri_restricted", comment: "受限")
+        @unknown default:
+            return NSLocalizedString("unknown_status", comment: "未知")
+        }
+    }
+    
+    // MARK: - 通知状态计算属性
+    private var notificationStatusIcon: String {
+        switch notificationManager.authorizationStatus {
+        case .authorized:
+            return "checkmark.circle.fill"
+        case .denied:
+            return "xmark.circle.fill"
+        case .notDetermined:
+            return "questionmark.circle.fill"
+        case .provisional:
+            return "exclamationmark.circle.fill"
+        case .ephemeral:
+            return "exclamationmark.circle.fill"
+        @unknown default:
+            return "questionmark.circle.fill"
+        }
+    }
+    
+    private var notificationStatusColor: Color {
+        switch notificationManager.authorizationStatus {
+        case .authorized:
+            return .green
+        case .denied:
+            return .red
+        case .notDetermined:
+            return .orange
+        case .provisional:
+            return .yellow
+        case .ephemeral:
+            return .yellow
+        @unknown default:
+            return .orange
+        }
+    }
+    
+    private var notificationStatusText: String {
+        switch notificationManager.authorizationStatus {
+        case .authorized:
+            return NSLocalizedString("authorized", comment: "已授权")
+        case .denied:
+            return NSLocalizedString("denied", comment: "已拒绝")
+        case .notDetermined:
+            return NSLocalizedString("not_determined", comment: "未确定")
+        case .provisional:
+            return NSLocalizedString("provisional", comment: "临时授权")
+        case .ephemeral:
+            return NSLocalizedString("ephemeral", comment: "临时授权")
         @unknown default:
             return NSLocalizedString("unknown_status", comment: "未知")
         }
@@ -242,18 +295,35 @@ struct SettingsView: View {
                                 }
                             }
                         }
-                        
-                        // 调试按钮
-                        // Button(action: {
-                        //     dataManager.debugHealthKitStatus()
-                        // }) {
-                        //     HStack {
-                        //         Image(systemName: "bug")
-                        //             .foregroundColor(.gray)
-                        //         Text("调试授权状态")
-                        //         Spacer()
-                        //     }
-                        // }
+                    }
+                }
+                
+                // 通知设置
+                Section(header: Text(NSLocalizedString("notification_section", comment: "通知设置"))) {
+                    // 通知权限状态
+                    HStack {
+                        Image(systemName: notificationStatusIcon)
+                            .foregroundColor(notificationStatusColor)
+                        Text(NSLocalizedString("notification_permission", comment: "通知权限"))
+                        Spacer()
+                        Text(notificationStatusText)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    // 请求通知权限按钮
+                    if notificationManager.authorizationStatus != .authorized {
+                        Button(action: {
+                            Task {
+                                await notificationManager.requestNotificationPermission()
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "bell.badge")
+                                    .foregroundColor(.blue)
+                                Text(NSLocalizedString("request_notification_permission", comment: "请求通知权限"))
+                                Spacer()
+                            }
+                        }
                     }
                 }
                 
@@ -290,6 +360,7 @@ struct SettingsView: View {
         }
         .onAppear {
             healthKitStatus = dataManager.getHealthKitAuthorizationStatus()
+            notificationManager.checkAuthorizationStatus()
         }
     }
 }
@@ -297,4 +368,5 @@ struct SettingsView: View {
 #Preview {
     SettingsView()
         .environmentObject(DataManager.shared)
+        .environmentObject(NotificationManager.shared)
 }
