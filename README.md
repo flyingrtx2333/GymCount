@@ -1,302 +1,208 @@
 # GymCount - 健身计数器
 
+基于 Apple Watch 的智能力量训练计数应用，用加速度计自动识别卧推、深蹲、硬拉等动作，让手表数每一次努力。
 
-## 1. 简介
+---
 
-### 1.1 应用描述
-"GymCount"是一款专为健身爱好者打造的Apple Watch智能计数应用。通过先进的运动检测技术和直观的用户界面，帮助用户精确记录卧推、深蹲、硬拉等力量训练动作，让每一次努力都被准确计数。
-中文：
-加速度计自动识别你的健身运动动作，无需手动输入，开始即用
-精准记录和灵活调整锻炼体重，追踪每一次进步
-完整的锻炼历史记录和周统计图表，直观了解训练成果
-与 Apple 健康应用无缝同步，轻松合上运动圆环
-Accelerometer automatically detects your workout movements. Start exercising.
-Precisely record and flexibly adjust your exercise weights to track every bit of your progress.
-Complete workout history and weekly statistical charts to see your training results at a glance.
-Seamlessly sync with Apple Health and close your activity rings effortlessly.
+# 项目简介
 
-副标题
-智能计数健身助手
-Your Smart Fitness Counter.
-### 1.2 编写目的
-本文档为使用说明文档，为产品的使用与维护提供信息基础。
+GymCount（健身计数器）是一款专为健身与力量训练用户打造的 **WatchOS 原生应用**。通过设备内置的 CoreMotion 加速度计实时分析运动轨迹，在无需手动点击的情况下自动完成重复次数统计，并与 Apple 健康应用（HealthKit）同步，帮助用户闭环运动圆环、追踪长期训练数据。
 
-### 1.3 使用对象
-本文档的使用对象主要为产品测试与使用人员。
+- **项目目标**：在手腕上提供「开始即用」的自动计数体验，减少锻炼时的操作负担，并形成可追溯的锻炼历史与周统计。
+- **使用场景**：健身房或居家进行卧推、深蹲、硬拉等力量训练时，佩戴 Apple Watch 即可自动计数、记录重量与时长，并在结束后查看历史与图表。
+- **核心能力**：基于加速度计的动作识别、多运动类型支持、重量与体重配置、本地历史与周统计图表、HealthKit 同步、Siri/快捷指令集成、中英文本地化。
 
-### 1.4 核心价值
-- **智能计数**：基于加速度计自动识别运动动作，精确计数每一次重复
-- **多运动支持**：支持卧推、深蹲、硬拉等主流力量训练动作
-- **数据统计**：完整的锻炼历史记录和统计分析
-- **健康集成**：与Apple HealthKit无缝同步，完善运动圆环
-- **个性化设置**：可调节重量、用户体重等参数，提供个性化体验
+---
 
-### 1.5 目标用户
-- **健身初学者**：准确记录训练次数，建立良好的运动习惯
-- **力量训练爱好者**：精确跟踪训练进度，优化训练计划
-- **专业运动员**：详细记录训练数据，分析运动表现
-- **健康意识用户**：通过数据化训练提升健康水平
+# 项目截图
 
-### 1.6 应用商店关键词
-健身、力量训练、卧推、深蹲、硬拉、运动计数、健身记录、Apple Watch、健康追踪、运动统计、健身数据、力量训练、运动检测、健身助手、训练记录
+（可从 App Store 或实际运行截图中补充）
 
-### 1.7 技术优势
-- **原生WatchOS开发**：专为Apple Watch优化，性能卓越
-- **CoreMotion运动检测**：基于加速度计的高精度动作识别
-- **SwiftUI现代化界面**：响应式设计，用户体验流畅
-- **HealthKit深度集成**：与Apple健康生态无缝连接
-- **多语言本地化**：完整支持中英文双语界面
-- **数据持久化**：UserDefaults + JSON编码，数据安全可靠
+![GymCount Screenshot](docs/1.png)
+![GymCount Screenshot](docs/3.png)
+![GymCount Screenshot](docs/4.png)
 
-## 2. 项目信息
-- **项目名**：GymCount
-- **平台**：WatchOS
-- **中文名**：健身计数器
-- **英文名**：GymCount
+---
 
-## 3. 标语
-- **中文**：让手表数每一次努力
-- **英文**：Let your watch count every effort
+# 技术栈
 
-## 4. 核心功能 ✅
+| 层级 | 技术 |
+|------|------|
+| 应用层 | Swift 5.9、SwiftUI（声明式 UI） |
+| 框架与库 | CoreMotion（运动检测）、HealthKit（健康数据）、Combine（响应式）、WatchKit |
+| 系统服务 | UserDefaults（持久化）、App Intents（Siri/快捷指令）、UserNotifications |
+| 数据与存储 | 本地 JSON 编码 + UserDefaults，无后端数据库 |
+| AI / 机器学习 | 无；运动识别基于规则与信号处理（加速度计波形分析） |
 
-### 4.1 已实现功能：
-- ✅ **卧推计数** - 支持卧推动作计数，精确识别推举动作
-- ✅ **深蹲计数** - 支持深蹲动作计数，检测蹲起循环
-- ✅ **硬拉计数** - 支持硬拉动作计数，识别提拉动作
-- ✅ **自动运动检测** - 基于CoreMotion加速度计自动识别运动动作
-- ✅ **重量记录** - 记录和调整锻炼重量，支持实时修改
-- ✅ **锻炼历史** - 完整的锻炼历史记录和周统计图表
-- ✅ **数据持久化** - 使用UserDefaults + JSON编码保存数据
-- ✅ **中英文本地化** - 完整的多语言支持，界面完全本地化
-- ✅ **触觉反馈** - 计数和完成时的触觉提醒，提升用户体验
-- ✅ **用户界面** - 现代化的WatchOS界面设计，符合Apple设计规范
-- ✅ **HealthKit集成** - 与Apple健康应用同步，完善运动圆环
-- ✅ **个性化设置** - 用户体重、默认重量等个性化配置
+---
 
-## 5. 技术特性
+# 系统架构
 
-### 5.1 架构设计：
-- **MVVM架构** - 使用SwiftUI + ObservableObject，数据与视图分离
-- **数据管理** - DataManager单例模式管理应用状态，统一数据流
-- **运动检测** - CoreMotion框架实现高精度自动计数
-- **本地化** - NSLocalizedString完整支持中英文，界面完全本地化
-- **响应式编程** - Combine框架处理数据流和状态变化
+应用采用 **MVVM** 与单例数据管理，整体分为展示层、业务层、数据层与检测层，数据自下而上流动，用户操作与运动检测事件驱动界面更新。
 
-### 5.2 核心技术栈：
-- **SwiftUI** - 现代化声明式UI框架
-- **CoreMotion** - 运动传感器数据处理
-- **HealthKit** - Apple健康数据集成
-- **UserDefaults** - 轻量级数据持久化
-- **Combine** - 响应式编程框架
-- **WatchKit** - Apple Watch专用框架
+- **整体架构**：SwiftUI 视图订阅 `DataManager` 与各 Manager 的 `@Published` 状态；`DataManager` 统一持有 `MotionDetector`、`HealthKitManager`、`AppSettings` 与锻炼历史，负责会话生命周期、持久化与 HealthKit 写入。
+- **数据流**：开始锻炼 → 选择运动类型 → `MotionDetector` 按类型切换对应检测器（卧推/深蹲/硬拉）→ 加速度计数据进入检测器 → 识别到一次有效重复 → 回调 `DataManager.addRep()` → 更新 `currentSession` 与 UI；结束锻炼 → 会话写入 `workoutHistory` 并持久化，可选同步至 HealthKit。
+- **服务关系**：`DataManager` 为中枢；`MotionDetector` 依赖 CoreMotion；`HealthKitManager` 独立与 HealthKit 交互；各 View 通过 `@EnvironmentObject` 使用 `DataManager` 与 `NotificationManager`。
 
-### 5.3 总体架构图：
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    GymCount Watch App 架构图                    │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │              Presentation Layer (SwiftUI Views)         │   │
-│  ├─────────────────────────────────────────────────────────┤   │
-│  │ • ContentView          • CounterView                    │   │
-│  │ • HistoryView          • SettingsView                   │   │
-│  │ • HelpView             • SplashView                     │   │
-│  │ • CounterDebugView     • WeightInputView                │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                │                               │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │         Business Logic Layer (Managers & Services)     │   │
-│  ├─────────────────────────────────────────────────────────┤   │
-│  │ • DataManager          • MotionDetector                 │   │
-│  │ • HealthKitManager     • WorkoutSessionDelegate         │   │
-│  │ • AppSettings          • LocalizationManager            │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                │                               │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │              Data Layer (Models & Persistence)         │   │
-│  ├─────────────────────────────────────────────────────────┤   │
-│  │ • ExerciseType         • WorkoutSession                 │   │
-│  │ • RepRecord            • WorkoutHistory                 │   │
-│  │ • AppSettings          • UserDefaults Storage           │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                │                               │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │              Detection Layer (Motion Detectors)        │   │
-│  ├─────────────────────────────────────────────────────────┤   │
-│  │ • BenchPressDetector   • SquatDetector                  │   │
-│  │ • DeadliftDetector     • Motion Analysis Engine         │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                │                               │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │            System Layer (WatchOS Frameworks)           │   │
-│  ├─────────────────────────────────────────────────────────┤   │
-│  │ • SwiftUI              • CoreMotion                     │   │
-│  │ • HealthKit            • WatchKit                       │   │
-│  │ • UserDefaults         • Combine                        │   │
-│  │ • Foundation           • AVFoundation                   │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Presentation["展示层 SwiftUI"]
+        ContentView
+        CounterView
+        HistoryView
+        SettingsView
+        SplashView
+    end
+
+    subgraph Business["业务与状态"]
+        DataManager
+        MotionDetector
+        HealthKitManager
+        NotificationManager
+        ShortCutsManager
+    end
+
+    subgraph Detection["运动检测"]
+        BenchPressDetector
+        SquatDetector
+        DeadliftDetector
+    end
+
+    subgraph Data["数据与持久化"]
+        UserDefaults
+        WorkoutHistory
+        AppSettings
+    end
+
+    subgraph System["系统框架"]
+        CoreMotion
+        HealthKit
+        AppIntents
+    end
+
+    ContentView --> DataManager
+    CounterView --> DataManager
+    HistoryView --> DataManager
+    SettingsView --> DataManager
+    DataManager --> MotionDetector
+    DataManager --> HealthKitManager
+    DataManager --> UserDefaults
+    MotionDetector --> BenchPressDetector
+    MotionDetector --> SquatDetector
+    MotionDetector --> DeadliftDetector
+    BenchPressDetector --> CoreMotion
+    SquatDetector --> CoreMotion
+    DeadliftDetector --> CoreMotion
+    HealthKitManager --> HealthKit
+    ShortCutsManager --> AppIntents
 ```
 
-### 5.4 文件结构：
-```
-GymCount Watch App/
-├── Models.swift              # 数据模型定义
-├── DataManager.swift         # 数据管理和持久化
-├── MotionDetector.swift      # 运动检测功能
-├── HealthKitManager.swift    # HealthKit集成管理
-├── Views/                    # 用户界面
-│   ├── ContentView.swift     # 主界面
-│   ├── CounterView.swift     # 计数器界面
-│   ├── HistoryView.swift     # 历史记录界面
-│   ├── SettingsView.swift    # 设置界面
-│   ├── HelpView.swift        # 帮助界面
-│   ├── SplashView.swift      # 启动画面
-│   └── CounterDebugView.swift # 调试界面
-├── Detectors/                # 运动检测器
-│   ├── BenchPress.swift      # 卧推检测器
-│   ├── Squat.swift           # 深蹲检测器
-│   └── Deadlift.swift        # 硬拉检测器
-├── zh-Hans.lproj/           # 中文本地化
-├── en.lproj/                # 英文本地化
-└── GymCountApp.swift        # 应用入口
-```
+---
 
-### 5.5 数据流架构图：
+# 项目结构
+
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    GymCount 数据流架构图                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  用户操作 → SwiftUI Views → DataManager → 数据持久化              │
-│     │           │              │              │                │
-│     ▼           ▼              ▼              ▼                │
-│  ┌─────┐   ┌─────────┐   ┌──────────┐   ┌─────────────┐        │
-│  │开始 │   │Counter  │   │Workout   │   │UserDefaults │        │
-│  │锻炼 │ → │View     │ → │Session   │ → │+ JSON       │        │
-│  └─────┘   └─────────┘   └──────────┘   └─────────────┘        │
-│     │           │              │              │                │
-│     ▼           ▼              ▼              ▼                │
-│  ┌─────┐   ┌─────────┐   ┌──────────┐   ┌─────────────┐        │
-│  │运动 │   │Motion   │   │Rep       │   │Workout      │        │
-│  │检测 │ → │Detector │ → │Detection │ → │History      │        │
-│  └─────┘   └─────────┘   └──────────┘   └─────────────┘        │
-│     │           │              │              │                │
-│     ▼           ▼              ▼              ▼                │
-│  ┌─────┐   ┌─────────┐   ┌──────────┐   ┌─────────────┐        │
-│  │健康 │   │HealthKit│   │数据同步   │   │Apple Health │        │
-│  │同步 │ → │Manager  │ → │& 卡路里   │ → │App          │        │
-│  └─────┘   └─────────┘   └──────────┘   └─────────────┘        │
-│                                                                 │
-│  实时反馈 ← 触觉提醒 ← 计数更新 ← 运动识别                        │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+GymCount/
+├── GymCount.xcodeproj/          # Xcode 工程与配置
+├── GymCount Watch App/          # Watch 应用主目录
+│   ├── GymCountApp.swift        # 应用入口，根 Scene 与首次启动/权限
+│   ├── Models.swift             # 数据模型：ExerciseType, RepRecord, WorkoutSession, WorkoutHistory, AppSettings
+│   ├── MotionDetector.swift     # 运动检测调度与加速度计数据分发
+│   ├── Views/                   # 界面视图
+│   │   ├── ContentView.swift    # 主入口（运动选择/历史入口）
+│   │   ├── CounterView.swift    # 锻炼计数主界面
+│   │   ├── HistoryView.swift    # 历史记录与周统计图表
+│   │   ├── SettingsView.swift   # 设置（重量、体重、HealthKit、自动检测等）
+│   │   ├── HelpView.swift       # 使用帮助
+│   │   ├── SplashView.swift     # 首次启动引导
+│   │   └── CounterDebugView.swift # 调试用计数界面
+│   ├── Detectors/               # 按运动类型的检测器
+│   │   ├── BenchPress.swift     # 卧推
+│   │   ├── Squat.swift          # 深蹲
+│   │   └── Deadlift.swift       # 硬拉
+│   ├── Managers/                # 业务与系统管理
+│   │   ├── DataManager.swift    # 全局状态、会话、历史、持久化
+│   │   ├── HealthKitManager.swift # HealthKit 授权与写入
+│   │   ├── NotificationManager.swift # 通知与每日提醒
+│   │   └── ShortCutsManager.swift   # App Intents / Siri 快捷指令
+│   ├── Assets.xcassets/         # 图标与资源
+│   ├── zh-Hans.lproj/           # 中文本地化
+│   ├── en.lproj/                # 英文本地化
+│   ├── Intents.intentdefinition # 快捷指令定义
+│   └── Info.plist               # 权限与配置
+├── GymCount Watch AppTests/     # 单元测试
+├── GymCount Watch AppUITests/   # UI 测试
+├── README.md
+└── README_OLD.md                # 旧版说明文档
 ```
 
-### 5.6 核心组件交互图：
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    GymCount 组件交互图                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐         │
-│  │   Content   │    │   Counter   │    │  History    │         │
-│  │    View     │◄──►│    View     │◄──►│    View     │         │
-│  └─────────────┘    └─────────────┘    └─────────────┘         │
-│         │                   │                   │              │
-│         ▼                   ▼                   ▼              │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                DataManager (Singleton)                  │   │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │   │
-│  │  │Workout      │  │Settings     │  │History      │     │   │
-│  │  │Management   │  │Management   │  │Management   │     │   │
-│  │  └─────────────┘  └─────────────┘  └─────────────┘     │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│         │                   │                   │              │
-│         ▼                   ▼                   ▼              │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐         │
-│  │   Motion    │    │  HealthKit  │    │  User       │         │
-│  │  Detector   │    │  Manager    │    │ Defaults    │         │
-│  └─────────────┘    └─────────────┘    └─────────────┘         │
-│         │                   │                   │              │
-│         ▼                   ▼                   ▼              │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐         │
-│  │  CoreMotion │    │  HealthKit  │    │  JSON       │         │
-│  │  Framework  │    │  Framework  │    │  Storage    │         │
-│  └─────────────┘    └─────────────┘    └─────────────┘         │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+- **GymCount Watch App**：应用全部源码与资源，无独立后端或 Web 前端。
+- **Detectors**：每种运动对应一个检测器，接收 MotionDetector 下发的加速度数据并输出「一次有效重复」事件。
+- **Managers**：单例或共享实例，负责数据、健康、通知、快捷指令等跨界面逻辑。
 
-## 6. 使用方法
+---
 
-### 6.1 基本操作流程：
-1. **开始锻炼**：选择锻炼类型（卧推/深蹲/硬拉），点击开始按钮
-2. **计数方式**：
-   - 手动计数：每次完成动作后点击+按钮
-   - 自动计数：开启自动检测，手表自动识别动作
-3. **调整重量**：点击重量区域进行实时修改
-4. **结束锻炼**：点击停止按钮保存记录到历史
-5. **查看历史**：在主界面点击历史记录查看统计图表
+# 核心功能
 
-### 6.2 高级功能：
-- **数字表冠操作**：在历史界面使用数字表冠切换运动类型
-- **触觉反馈**：每次计数和完成时提供触觉提醒
-- **屏幕常亮**：锻炼期间保持屏幕常亮，方便查看
-- **HealthKit同步**：自动同步到Apple健康应用
+### 运动类型与自动计数
 
-## 7. 设置选项
+- 支持 **卧推、深蹲、硬拉** 三种力量训练类型。
+- 基于 **CoreMotion 加速度计** 的波形与规则检测，自动识别一次完整动作并计数，可选开启/关闭自动检测；支持手动点击「+」补计。
+- 锻炼过程中可 **实时修改重量**，支持 2.5 kg 步进；用户体重可在设置中配置，用于卡路里估算。
 
-### 7.1 基础设置：
-- **默认重量** - 设置默认锻炼重量（支持2.5kg步进）
-- **用户体重** - 设置个人体重，用于卡路里计算
-- **自动检测** - 启用/禁用运动自动检测功能
+### 锻炼历史与统计
 
-### 7.2 HealthKit设置：
-- **同步到运动圆环** - 启用/禁用与Apple健康应用同步
-- **自动同步** - 锻炼结束后自动同步数据
-- **权限管理** - 查看和管理HealthKit权限状态
-- **手动同步** - 立即同步所有历史记录
+- 每次锻炼生成 **WorkoutSession**（类型、开始/结束时间、次数、重量），汇总为 **WorkoutHistory** 列表。
+- **周统计图表**：按周展示各类型次数/重量趋势，便于回顾与计划。
+- 数据持久化于 **UserDefaults**，以 JSON 编码存储，无云端依赖。
 
-### 7.3 帮助与支持：
-- **使用帮助** - 详细的功能介绍和使用说明
-- **调试模式** - 开发者调试界面（可选）
+### HealthKit 集成
 
-## 8. 数据统计
+- 可选将锻炼记录同步到 **Apple 健康**，计入运动圆环（传统力量训练）。
+- 支持读写权限请求、授权状态展示、手动同步与自动同步开关。
 
-### 8.1 历史记录：
-- **周统计图表** - 可视化显示每周训练数据
-- **次数统计** - 记录每次锻炼的总次数
-- **重量统计** - 记录最大重量和总重量
-- **时间统计** - 记录每次锻炼的持续时间
+### 用户与系统集成
 
-### 8.2 数据分析：
-- **趋势分析** - 通过图表分析训练趋势
-- **进步跟踪** - 跟踪个人训练进步情况
-- **数据导出** - 通过HealthKit导出到其他健康应用
+- **中英文本地化**：界面与文案完整支持简体中文与英文（NSLocalizedString + .lproj）。
+- **触觉反馈**：每次计数与锻炼完成时的触觉提醒。
+- **Siri 与快捷指令**：通过 App Intents 支持「开始锻炼」「结束锻炼」「加一次」「查询状态」等操作。
+- **通知**：每日锻炼提醒（需用户授权通知权限）；首次启动集中请求通知与 HealthKit 权限。
 
-## 9. 开发状态
+### 设置与帮助
 
-🎉 **项目已完成** - 所有核心功能已实现并测试通过
+- 默认重量、用户体重、是否启用自动检测、HealthKit 同步开关等 **AppSettings** 持久化。
+- 内置 **帮助页** 与可选的 **调试计数界面**，便于排查检测与数据问题。
 
-### 9.1 版本信息：
-- **当前版本**：1.0.0
-- **最低系统要求**：WatchOS 9.0+
-- **开发语言**：Swift 5.9
-- **开发工具**：Xcode 15.0+
+---
 
-### 9.2 测试状态：
-- ✅ 功能测试通过
-- ✅ 性能测试通过  
-- ✅ 兼容性测试通过
-- ✅ 本地化测试通过
-- ✅ HealthKit集成测试通过
+# 功能特点
 
-## 10. 开发者信息
-- **开发者**：flyingrtx
-- **开发时间**：2025年9月
-- **联系方式**：通过GitHub Issues联系
-- **开源协议**：MIT License
+- **Watch 原生**：专为 WatchOS 设计，无伴侣 iPhone 应用也可独立运行（Watch-only）。
+- **自动计数**：加速度计识别动作，减少手动操作，适合训练中不便触屏的场景。
+- **多运动支持**：卧推、深蹲、硬拉三种检测器，统一由 MotionDetector 调度。
+- **数据闭环**：本地历史 + 周统计图表 + 可选 HealthKit，形成可追溯的训练记录。
+- **系统生态**：HealthKit 圆环、Siri/快捷指令、通知提醒，与 Apple 生态一致体验。
+- **国际化**：中英文界面与权限文案完整本地化。
+- **工程结构清晰**：MVVM、单例数据管理、检测层与业务层分离，便于扩展新运动类型或新界面。
+
+---
+
+# Roadmap
+
+- 支持更多力量训练动作（如引体向上、推举等）的检测器。
+- 可选的 iCloud 或私有云端同步，实现多设备历史一致。
+- 训练计划与目标（组数/次数目标、完成度提醒）。
+- 表盘复杂功能（Complication）展示今日或本周简要统计。
+- 可配置的检测灵敏度与防误触策略，适配不同体型与动作习惯。
+
+---
+
+# 贡献
+
+欢迎提交 Issue 与 Pull Request：修复错漏、补充文档、新增运动类型或优化检测算法等。提交前请在本地通过单元测试与真机基本功能验证。
+
+---
+
+# License
+
+MIT License. 详见仓库根目录 [LICENSE](LICENSE) 文件。
