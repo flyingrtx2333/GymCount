@@ -12,6 +12,15 @@ import WatchKit
 
 class MotionDetector: ObservableObject {
     private let motionManager = CMMotionManager()
+    private let motionQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        return queue
+    }()
+    #if DEBUG || GYMCOUNT_CAPTURE
+    var onRawAcceleration: ((CMAccelerometerData) -> Void)?
+    var onRawRepDetected: (() -> Void)?
+    #endif
     private var accelerometerData: [CMAccelerometerData] = []
     private var dataUpdateTimer: Timer?
     private var lastDataUpdateTime: Date = Date()
@@ -84,7 +93,7 @@ class MotionDetector: ObservableObject {
         startDataUpdateTimer()
         
         // 使用后台队列来处理加速计数据，确保在屏幕变暗时仍能正常工作
-        motionManager.startAccelerometerUpdates(to: OperationQueue()) { [weak self] data, error in
+        motionManager.startAccelerometerUpdates(to: motionQueue) { [weak self] data, error in
             guard let self = self, let data = data else { 
                 if let error = error {
                     print("❌ 加速计更新错误: \(error)")
@@ -102,11 +111,17 @@ class MotionDetector: ObservableObject {
     func stopDetection() {
         print("🛑 停止运动检测")
         motionManager.stopAccelerometerUpdates()
+        if OperationQueue.current !== motionQueue {
+            motionQueue.waitUntilAllOperationsAreFinished()
+        }
         isDetecting = false
         stopDataUpdateTimer()
     }
     
     private func processAccelerometerData(_ data: CMAccelerometerData) {
+        #if DEBUG || GYMCOUNT_CAPTURE
+        onRawAcceleration?(data)
+        #endif
         // 添加新数据
         accelerometerData.append(data)
         
@@ -153,6 +168,9 @@ class MotionDetector: ObservableObject {
     }
     
     private func handleRepDetected() {
+        #if DEBUG || GYMCOUNT_CAPTURE
+        onRawRepDetected?()
+        #endif
         // 从当前活动的检测器获取计数信息
         switch currentExerciseType {
         case .benchPress:

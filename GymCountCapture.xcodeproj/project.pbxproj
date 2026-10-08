@@ -131,20 +131,20 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 8BB41D2E2E9D0E9D00EF6076 /* Build configuration list for PBXNativeTarget "GymCount" */;
 			buildPhases = (
-				A10000000000000000000004,
 				8BB41CFC2E9D0E9C00EF6076 /* Resources */,
+				8BB41D2D2E9D0E9D00EF6076 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				8BB41D072E9D0E9C00EF6076 /* PBXTargetDependency */,
 			);
 			name = GymCount;
-			fileSystemSynchronizedGroups = (A10000000000000000000003, );
 			packageProductDependencies = (
 			);
 			productName = GymCount;
 			productReference = 8BB41CFE2E9D0E9C00EF6076 /* GymCount.app */;
-			productType = "com.apple.product-type.application";
+			productType = "com.apple.product-type.application.watchapp2-container";
 		};
 		8BB41D032E9D0E9C00EF6076 /* GymCount Watch App */ = {
 			isa = PBXNativeTarget;

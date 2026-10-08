@@ -2,7 +2,7 @@
 //  GymCount_Watch_AppUITestsLaunchTests.swift
 //  GymCount Watch AppUITests
 //
-//  Created by 向钧升 on 2025/9/26.
+//  Created by 向钧升 on 2025/10/13.
 //
 
 import XCTest

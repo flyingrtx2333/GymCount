@@ -1,0 +1,12 @@
+.DS_Store
+build/
+.build/
+DerivedData/
+*.xcarchive
+*.ipa
+xcuserdata/
+*.xcuserstate
+.vscode/sftp.json
+.env
+.env.*
+!.env.example

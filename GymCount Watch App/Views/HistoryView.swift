@@ -13,178 +13,241 @@ struct HistoryView: View {
     @EnvironmentObject var dataManager: DataManager
     @Binding var showingHistory: Bool
     @State private var selectedExercise: ExerciseType = .benchPress
-    @State private var currentWeekDate: Date = Date() // 当前显示的周日期
-    
-    init(showingHistory: Binding<Bool>) {
-        self._showingHistory = showingHistory
-    }
-    
+    @State private var currentWeekDate: Date = Date()
+
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                
-                // 中间主区域：使用TabView显示不同运动类型
-                TabView(selection: $selectedExercise) {
-                    ForEach(ExerciseType.allCases, id: \.self) { exercise in
-                        VStack(spacing: 0) {
-                            Spacer()
-                            
-                            // 周标题
-                            Text(getWeekTitle())
-                                .font(.system(size: 10))
-                                .foregroundColor(.secondary)
-                            
-                            // 图表区域
-                            WeeklyChartView(
-                                exerciseType: exercise,
-                                weekDate: currentWeekDate,
-                                dataManager: dataManager
-                            )
-                            .frame(maxHeight: 100)
-                            .gesture(
-                                DragGesture()
-                                    .onEnded { value in
-                                        // 左右滑动切换周
-                                        if value.translation.width > 30 {
-                                            // 向右滑动，显示上一周
-                                            switchToPreviousWeek()
-                                        } else if value.translation.width < -30 {
-                                            // 向左滑动，显示下一周
-                                            switchToNextWeek()
-                                        }
-                                    }
-                            )
-                            
-                            Spacer()
-                        }
-                        .padding(.vertical, 8)
-                        .tag(exercise)
-                    }
-                }
-                .tabViewStyle(.verticalPage)
+        ScrollView {
+            VStack(spacing: 10) {
+
+                // MARK: 运动类型选择器
+                ExerciseTypePicker(selected: $selectedExercise)
+
+                // MARK: 周导航 + 标题
+                WeekNavigatorRow(
+                    title: getWeekTitle(),
+                    onPrev: switchToPreviousWeek,
+                    onNext: { if !isCurrentWeek { switchToNextWeek() } },
+                    isCurrentWeek: isCurrentWeek
+                )
+
+                // MARK: 核心数据卡片
+                StatsRow(
+                    reps: getCurrentWeekTotal(),
+                    repChange: getRepChangeFromLastWeek(),
+                    weight: Int(getCurrentWeekTotalWeight()),
+                    weightChange: Int(getWeightChangeFromLastWeek())
+                )
+
+                // MARK: 简洁柱状图
+                SimpleBarChart(
+                    exerciseType: selectedExercise,
+                    weekDate: currentWeekDate,
+                    dataManager: dataManager
+                )
+                .frame(height: 72)
+                .padding(.horizontal, 2)
+
+                Spacer(minLength: 4)
             }
+            .padding(.horizontal, 6)
+            .padding(.top, 4)
         }
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle(selectedExercise.displayName)
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(action: {
-                    showingHistory = false
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.title3)
-                        .foregroundColor(.primary)
-                }
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Image(selectedExercise.icon)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 24, height: 24)
-            }
-            ToolbarItemGroup(placement: .bottomBar) {
-                VStack(spacing: 2) {
-                    HStack(spacing: 2) {
-                        Text("\(getCurrentWeekTotal())")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                        Text(NSLocalizedString("times", comment: "次"))
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    // 相对上周次数变化
-                    HStack(spacing: 2) {
-                        let repChange = getRepChangeFromLastWeek()
-                        Image(systemName: repChange >= 0 ? "arrow.up" : "arrow.down")
-                            .font(.system(size: 9))
-                            .foregroundColor(repChange >= 0 ? .green : .red)
-                        Text("\(abs(repChange))")
-                            .font(.system(size: 9))
-                            .foregroundColor(repChange >= 0 ? .green : .red)
-                    }
-                }
-                Spacer()
-                VStack(spacing: 2) {
-                    HStack(spacing: 2) {
-                        Text("\(Int(getCurrentWeekTotalWeight()))")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                        Text(NSLocalizedString("kg", comment: "公斤"))
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    // 相对上周重量变化
-                    HStack(spacing: 2) {
-                        let weightChange = getWeightChangeFromLastWeek()
-                        Image(systemName: weightChange >= 0 ? "arrow.up" : "arrow.down")
-                            .font(.system(size: 9))
-                            .foregroundColor(weightChange >= 0 ? .green : .red)
-                        Text("\(Int(abs(weightChange)))")
-                            .font(.system(size: 9))
-                            .foregroundColor(weightChange >= 0 ? .green : .red)
-                    }
+                Button(action: { showingHistory = false }) {
+                    Image(systemName: "chevron.left")
+                        .foregroundColor(.secondary)
                 }
             }
         }
     }
-    
+
+    // MARK: - Helpers
+
+    private var isCurrentWeek: Bool {
+        Calendar.current.isDate(currentWeekDate, equalTo: Date(), toGranularity: .weekOfYear)
+    }
+
     private func getWeekTitle() -> String {
-        let weekInfo = dataManager.getWeekInfo(for: currentWeekDate)
-        return weekInfo.title
+        dataManager.getWeekInfo(for: currentWeekDate).title
     }
-    
+
     private func getCurrentWeekTotal() -> Int {
-        return dataManager.getWeeklyTotalForExercise(selectedExercise, for: currentWeekDate)
+        dataManager.getWeeklyTotalForExercise(selectedExercise, for: currentWeekDate)
     }
-    
+
     private func getCurrentWeekTotalWeight() -> Double {
-        return dataManager.getWeeklyTotalWeightForExercise(selectedExercise, for: currentWeekDate)
+        dataManager.getWeeklyTotalWeightForExercise(selectedExercise, for: currentWeekDate)
     }
-    
+
     private func getRepChangeFromLastWeek() -> Int {
-        let currentTotal = getCurrentWeekTotal()
-        let previousWeekData = dataManager.getPreviousWeekDataForExercise(selectedExercise, for: currentWeekDate)
-        return currentTotal - previousWeekData.totalReps
+        let prev = dataManager.getPreviousWeekDataForExercise(selectedExercise, for: currentWeekDate)
+        return getCurrentWeekTotal() - prev.totalReps
     }
-    
+
     private func getWeightChangeFromLastWeek() -> Double {
-        let currentWeight = getCurrentWeekTotalWeight()
-        let previousWeekData = dataManager.getPreviousWeekDataForExercise(selectedExercise, for: currentWeekDate)
-        return currentWeight - previousWeekData.totalWeight
+        let prev = dataManager.getPreviousWeekDataForExercise(selectedExercise, for: currentWeekDate)
+        return getCurrentWeekTotalWeight() - prev.totalWeight
     }
-    
+
     private func switchToNextWeek() {
-        let calendar = Calendar.current
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        
-        if let nextWeek = calendar.date(byAdding: .weekOfYear, value: 1, to: currentWeekDate) {
-            withAnimation(.easeInOut(duration: 0.3)) {
-                currentWeekDate = nextWeek
-            }
-            print("📅 \(NSLocalizedString("debug_switch_to_next_week", comment: "切换到下一周 切换后当前周日期")): \(formatter.string(from: currentWeekDate))")
+        if let next = Calendar.current.date(byAdding: .weekOfYear, value: 1, to: currentWeekDate) {
+            withAnimation(.easeInOut(duration: 0.25)) { currentWeekDate = next }
         }
     }
-    
+
     private func switchToPreviousWeek() {
-        let calendar = Calendar.current
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        
-        if let previousWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: currentWeekDate) {
-            withAnimation(.easeInOut(duration: 0.3)) {
-                currentWeekDate = previousWeek
-            }
-            print("📅 \(NSLocalizedString("debug_switch_to_previous_week", comment: "切换到上一周，切换后当前周日期")): \(formatter.string(from: currentWeekDate))")
+        if let prev = Calendar.current.date(byAdding: .weekOfYear, value: -1, to: currentWeekDate) {
+            withAnimation(.easeInOut(duration: 0.25)) { currentWeekDate = prev }
         }
     }
-    
 }
 
-struct WeeklyChartView: View {
+// MARK: - 运动类型选择器
+
+struct ExerciseTypePicker: View {
+    @Binding var selected: ExerciseType
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(ExerciseType.allCases, id: \.self) { exercise in
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) { selected = exercise }
+                }) {
+                    VStack(spacing: 3) {
+                        Image(exercise.icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 18, height: 18)
+                            .opacity(selected == exercise ? 1.0 : 0.4)
+
+                        Circle()
+                            .fill(selected == exercise ? Color.accentColor : Color.clear)
+                            .frame(width: 4, height: 4)
+                    }
+                    .padding(.vertical, 5)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(selected == exercise
+                                  ? Color.accentColor.opacity(0.15)
+                                  : Color.white.opacity(0.05))
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+// MARK: - 周导航行
+
+struct WeekNavigatorRow: View {
+    let title: String
+    let onPrev: () -> Void
+    let onNext: () -> Void
+    let isCurrentWeek: Bool
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button(action: onPrev) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+
+            Text(title)
+                .font(GymStyle.detail)
+                .foregroundColor(.primary)
+                .frame(maxWidth: .infinity)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Button(action: onNext) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isCurrentWeek ? Color.white.opacity(0.2) : .secondary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .disabled(isCurrentWeek)
+        }
+        .padding(.horizontal, 2)
+    }
+}
+
+// MARK: - 数据统计行
+
+struct StatsRow: View {
+    let reps: Int
+    let repChange: Int
+    let weight: Int
+    let weightChange: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            StatCard(
+                value: "\(reps)",
+                unit: NSLocalizedString("times", comment: "次"),
+                change: repChange,
+                accentColor: .blue
+            )
+            StatCard(
+                value: "\(weight)",
+                unit: NSLocalizedString("kg", comment: "kg"),
+                change: weightChange,
+                accentColor: .orange
+            )
+        }
+    }
+}
+
+struct StatCard: View {
+    let value: String
+    let unit: String
+    let change: Int
+    let accentColor: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .lastTextBaseline, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                Text(unit)
+                    .font(GymStyle.detail)
+                    .foregroundColor(.secondary)
+            }
+
+            Text("上周 \(change >= 0 ? "+" : "−")\(abs(change))")
+                .font(GymStyle.detail)
+                .foregroundColor(change >= 0 ? .green : .red)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(accentColor.opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(accentColor.opacity(0.25), lineWidth: 0.5)
+        )
+    }
+}
+
+// MARK: - 简洁柱状图（仅次数，清晰易读）
+
+struct SimpleBarChart: View {
     let exerciseType: ExerciseType
     let weekDate: Date
     let dataManager: DataManager
@@ -192,73 +255,59 @@ struct WeeklyChartView: View {
     @State private var chartData: [WeeklyChartData] = []
 
     var body: some View {
-        VStack {
-            if chartData.isEmpty {
-                VStack {
+        Group {
+            if chartData.allSatisfy({ $0.count == 0 }) {
+                // 无数据空状态
+                VStack(spacing: 4) {
                     Image(systemName: "chart.bar")
-                        .font(.title2)
-                        .foregroundColor(.secondary)
+                        .font(.title3)
+                        .foregroundColor(Color.white.opacity(0.2))
                     Text(NSLocalizedString("noData", comment: "暂无数据"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(GymStyle.detail)
+                        .foregroundColor(Color.white.opacity(0.3))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.white.opacity(0.04))
+                )
             } else {
                 Chart {
                     ForEach(chartData) { d in
-                        // 先绘制折线图（在底层）
-                        LineMark(
-                            x: .value("Day", d.dayLabel),
-                            y: .value("WeightScaled", d.weightScaled)
-                        )
-                        .foregroundStyle(.pink)
-                        .lineStyle(StrokeStyle(lineWidth: 3)) // 增加线宽确保可见性
-                        
-                        // 再绘制数据点（在折线上）
-                        PointMark(
-                            x: .value("Day", d.dayLabel),
-                            y: .value("WeightScaled", d.weightScaled)
-                        )
-                        .foregroundStyle(.pink)
-                        .symbolSize(40) // 增加点的大小
-                        
-                        // 最后绘制柱状图（在顶层，但设置透明度）
                         BarMark(
                             x: .value("Day", d.dayLabel),
                             y: .value("Count", d.count)
                         )
-                        .foregroundStyle(.blue.opacity(0.7)) // 设置透明度让折线图可见
+                        .foregroundStyle(
+                            d.count > 0
+                                ? LinearGradient(
+                                    colors: [Color.blue, Color.blue.opacity(0.6)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                : LinearGradient(
+                                    colors: [Color.white.opacity(0.08), Color.white.opacity(0.08)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                        )
+                        .cornerRadius(3)
                     }
                 }
-                // 双Y轴设置
-                .chartYAxis {
-                    // 左侧Y轴（次数）
-                    AxisMarks(position: .leading) { value in
-                        AxisGridLine()
-                        AxisValueLabel()
-                    }
-                    // 右侧Y轴（重量）
-                    AxisMarks(position: .trailing) { value in
-                        AxisGridLine()
-                        AxisValueLabel {
-                            if let scaled = value.as(Double.self) {
-                                // 反算回来显示真实重量
-                                let real = scaled / weightScaleFactor
-                                Text(String(format: "%.0f", real))
-                            }
-                        }
-                    }
-                }
-                // 自定义 Y 轴的 domain（用次数最大值 + 缩放后重量最大值做范围）
-                .chartYScale(domain: yDomain)
+                .chartYAxis(.hidden)
                 .chartXAxis {
                     AxisMarks { _ in
                         AxisValueLabel()
+                            .font(GymStyle.detail)
+                            .foregroundStyle(Color.secondary)
                     }
                 }
-                .frame(height: 100)
-                .chartLegend(.hidden)  // 隐藏默认图例
-                // 你可以在这里自己放 legend
+                .padding(.horizontal, 4)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.white.opacity(0.04))
+                )
             }
         }
         .onAppear { updateChartData() }
@@ -266,48 +315,25 @@ struct WeeklyChartView: View {
         .onChange(of: weekDate) { _, _ in updateChartData() }
     }
 
-    // 缩放因子，用于把重量映射到可与次数共用的尺度上
-    var weightScaleFactor: Double {
-        let maxCount = chartData.map { $0.count }.max() ?? 0
-        let maxWeight = chartData.map { $0.weight }.max() ?? 1
-        if maxWeight == 0 { return 1 }
-        return Double(maxCount) / maxWeight
-    }
-
-    // 计算 y 轴 domain，包括次数和缩放后重量的范围
-    var yDomain: ClosedRange<Double> {
-        let maxCount = Double(chartData.map { $0.count }.max() ?? 0)
-        let maxWeightScaled = chartData.map { $0.weightScaled }.max() ?? 0
-        let maxValue = max(maxCount, maxWeightScaled)
-        return 0 ... (maxValue * 1.1) // 给一点上方余量
-    }
-
     private func updateChartData() {
         let weekDaysString = NSLocalizedString("week_days", comment: "一,二,三,四,五,六,日")
         let weekDays = weekDaysString.components(separatedBy: ",")
         let weeklyCounts = dataManager.getWeeklyDataForExercise(exerciseType, for: weekDate)
         let weeklyWeights = dataManager.getWeeklyWeightDataForExercise(exerciseType, for: weekDate)
-        
-        // 先计算缩放因子
-        let maxCount = weeklyCounts.max() ?? 0
-        let maxWeight = weeklyWeights.max() ?? 1
-        let scaleFactor = maxWeight > 0 ? Double(maxCount) / maxWeight : 1.0
-        
-        var arr: [WeeklyChartData] = []
-        for i in 0..<7 {
-            let wt = weeklyWeights[i]
-            let wtScaled = wt * scaleFactor
-            arr.append(WeeklyChartData(
+
+        chartData = (0..<7).map { i in
+            WeeklyChartData(
                 day: i,
                 dayLabel: weekDays[i],
                 count: weeklyCounts[i],
-                weight: wt,
-                weightScaled: wtScaled
-            ))
+                weight: weeklyWeights[i],
+                weightScaled: weeklyWeights[i]
+            )
         }
-        chartData = arr
     }
 }
+
+// MARK: - 数据模型
 
 struct WeeklyChartData: Identifiable {
     let id = UUID()
@@ -318,7 +344,7 @@ struct WeeklyChartData: Identifiable {
     let weightScaled: Double
 }
 
-
+// MARK: - Preview
 
 #Preview {
     HistoryView(showingHistory: .constant(true))

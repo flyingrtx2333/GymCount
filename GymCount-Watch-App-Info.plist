@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AppIntents</key>
+	<array>
+		<string>StartWorkoutIntent</string>
+		<string>StopWorkoutIntent</string>
+		<string>AddRepIntent</string>
+		<string>GetWorkoutStatusIntent</string>
+	</array>
+	<key>CFBundleGetInfoString</key>
+	<string></string>
+	<key>CFBundleSignature</key>
+	<string></string>
+	<key>NSAppTransportSecurity</key>
+	<dict/>
+	<key>NSSupportsAppIntents</key>
+	<true/>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>AddRepIntentIntent</string>
+		<string>StartWorkoutIntentIntent</string>
+		<string>StopWorkoutIntentIntent</string>
+	</array>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>此应用需要发送通知以提醒您锻炼进度和完成情况</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+</dict>
+</plist>

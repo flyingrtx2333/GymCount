@@ -10,43 +10,47 @@ import SwiftUI
 struct SplashView: View {
     @EnvironmentObject var dataManager: DataManager
     @State private var isActive = false
-    @State private var scale: CGFloat = 0.5
-    @State private var opacity: Double = 0.0
-    
+    @State private var iconScale: CGFloat = 0.6
+    @State private var iconOpacity: Double = 0.0
+    @State private var textOpacity: Double = 0.0
+
     var body: some View {
         if isActive {
             ContentView()
         } else {
-            VStack(spacing: 16) {
-                // 应用图标
-                Image(systemName: "figure.strengthtraining.traditional")
-                    .font(.system(size: 48))
-                    .foregroundColor(.blue)
-                    .scaleEffect(scale)
-                    .opacity(opacity)
-                
+            VStack(spacing: 10) {
+                // Logo
+                Image("AppIcon")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 52, height: 52)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .scaleEffect(iconScale)
+                    .opacity(iconOpacity)
+
                 // 应用名称
                 Text(NSLocalizedString("app_name", comment: "健身计数器"))
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .opacity(opacity)
-                
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .opacity(textOpacity)
+
                 // 标语
                 Text(NSLocalizedString("app_slogan", comment: "应用标语"))
-                    .font(.caption)
+                    .font(GymStyle.detail)
                     .foregroundColor(.secondary)
-                    .opacity(opacity)
+                    .opacity(textOpacity)
             }
             .onAppear {
-                withAnimation(.easeInOut(duration: 1.0)) {
-                    scale = 1.0
-                    opacity = 1.0
+                withAnimation(.spring(duration: 0.7, bounce: 0.3)) {
+                    iconScale = 1.0
+                    iconOpacity = 1.0
                 }
-                
+                withAnimation(.easeInOut(duration: 0.5).delay(0.3)) {
+                    textOpacity = 1.0
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                    withAnimation(.easeInOut(duration: 0.5)) {
+                    withAnimation(.easeInOut(duration: 0.4)) {
                         isActive = true
-                        // 标记首次启动完成
                         dataManager.completeFirstLaunch()
                     }
                 }
@@ -57,4 +61,5 @@ struct SplashView: View {
 
 #Preview {
     SplashView()
+        .environmentObject(DataManager.shared)
 }
