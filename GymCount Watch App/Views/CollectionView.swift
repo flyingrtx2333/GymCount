@@ -64,7 +64,7 @@ private struct CaptureRecord: Encodable {
     let watch_model: String
     let os_version: String
     let app_version: String
-    let algorithm_version = "rules-20261007"
+    let algorithm_version: String
     let participant_id: UUID
     var notes: String
     let samples: [CaptureSample]
@@ -220,15 +220,15 @@ private final class CollectionStore: ObservableObject {
     func begin(_ kind: String, pace: String, notes: String) {
         guard !recording && draft == nil else { return }
         let raw = RawCapture(); capture = raw; exercise = kind; self.pace = pace; captureNotes = String(notes.prefix(1000)); start = Date(); detected = 0; message = ""
-        let isTraining = ["squat", "bench_press", "deadlift"].contains(kind)
+        let hasWatchCounter = ["squat", "bench_press", "deadlift"].contains(kind)
         detector.configureForExercise(kind == "squat" ? .squat : kind == "deadlift" ? .deadlift : .benchPress)
         detector.onRawAcceleration = { raw.append($0) }
-        detector.onRawRepDetected = { if isTraining { raw.markRep() } }
+        detector.onRawRepDetected = { if hasWatchCounter { raw.markRep() } }
         detector.onRepDetected = { [weak self] in
-            Task { @MainActor in self?.detected = isTraining ? (self?.detector.repCount ?? 0) : 0 }
+            Task { @MainActor in self?.detected = hasWatchCounter ? (self?.detector.repCount ?? 0) : 0 }
         }
         raw.start()
-        detector.startDetection(); recording = detector.isDetecting
+        detector.startDetection(countRepetitions: hasWatchCounter); recording = detector.isDetecting
         if !recording { raw.stop(); capture = nil; message = "加速度计不可用"; return }
         // A bounded, foreground test session; not a HealthKit workout.
         timeout = Timer.scheduledTimer(withTimeInterval: 180, repeats: false) { [weak self] _ in
@@ -252,6 +252,7 @@ private final class CollectionStore: ObservableObject {
             watch_crown: WKInterfaceDevice.current().crownOrientation == .left ? "left" : "right", pace: pace,
             watch_model: hardwareModel(), os_version: WKInterfaceDevice.current().systemVersion,
             app_version: "\(info["CFBundleShortVersionString"] ?? "unknown") (\(info["CFBundleVersion"] ?? "unknown"))",
+            algorithm_version: ["squat", "bench_press", "deadlift"].contains(exercise) ? "rules-20261007" : "capture-only-20261009",
             participant_id: saved, notes: captureNotes, samples: points, gyroscope_samples: result.gyro,
             motion_samples: result.motion, magnetometer_samples: result.magnetic, sensor_availability: raw.availability, detected_events: events, reference_events_truncated: result.eventsTruncated)
         detected = events.count; capture = nil
@@ -351,6 +352,7 @@ struct CollectionPanel: View {
         switch exercise {
         case "bench_press": return "卧推"
         case "deadlift": return "硬拉"
+        case "bicep_curl": return "弯举"
         case "rest": return "静止"
         case "walking": return "走动"
         case "other": return "其他非训练"
@@ -402,7 +404,7 @@ struct CollectionPanel: View {
                             .disabled(uploading)
                     }
                     VStack(spacing: 2) {
-                        Text(recording ? "正在采集" : "已识别次数")
+                        Text(recording ? "正在采集" : exercise == "bicep_curl" ? "弯举仅采集" : "已识别次数")
                             .font(GymStyle.detail)
                             .foregroundStyle(recording ? Color.green : Color.secondary)
                         Text("\(detected)")
@@ -457,6 +459,7 @@ struct CollectionPanel: View {
                     exerciseOption("深蹲", value: "squat")
                     exerciseOption("卧推", value: "bench_press")
                     exerciseOption("硬拉", value: "deadlift")
+                    exerciseOption("弯举", value: "bicep_curl")
                     exerciseOption("静止", value: "rest")
                     exerciseOption("走动", value: "walking")
                     exerciseOption("其他非训练", value: "other")

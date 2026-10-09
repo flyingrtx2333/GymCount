@@ -30,6 +30,7 @@ class MotionDetector: ObservableObject {
     private var squatDetector: SquatDetector?
     private var deadliftDetector: DeadliftDetector?
     private var currentExerciseType: ExerciseType = .benchPress
+    private var countsRepetitions = true
     
     @Published var isDetecting = false
     @Published var repCount = 0
@@ -75,13 +76,14 @@ class MotionDetector: ObservableObject {
         }
     }
     
-    func startDetection() {
+    func startDetection(countRepetitions: Bool = true) {
         guard motionManager.isAccelerometerAvailable else {
             print("❌ 加速计不可用")
             return
         }
         
         isDetecting = true
+        countsRepetitions = countRepetitions
         accelerometerData.removeAll()
         repCount = 0
         lastDataUpdateTime = Date()
@@ -122,6 +124,7 @@ class MotionDetector: ObservableObject {
         #if DEBUG || GYMCOUNT_CAPTURE
         onRawAcceleration?(data)
         #endif
+        guard countsRepetitions else { return }
         // 添加新数据
         accelerometerData.append(data)
         
@@ -222,4 +225,3 @@ class MotionDetector: ObservableObject {
         print("🔄 切换到 \(exerciseType.displayName) 检测模式")
     }
 }
-

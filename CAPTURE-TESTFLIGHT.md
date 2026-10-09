@@ -1,3 +1,17 @@
+## 2026-10-09：弯举采集，1.1.3 (8) 已发布
+
+新增“弯举”动作（bicep_curl），保留完整运动采样、速度、备注和人工实际次数。弯举不运行旧的三动作 Watch 计数器，对照次数为 0，算法标记 capture-only-20261009；上传后网站显示云端实验算法的次数，支持弯举筛选及人工次数修改。
+
+网站前后端已发布 58a774daae06b121cddf2fd3a7b6441a29d7ed45，两台生产后端均通过 Swift 实际编码的弯举 v2 格式校验，线上筛选已实际核对。后端 14 项、前端 5 项测试及前端生产构建通过，真实采集目标 Release 模拟器构建成功。40mm 布局预览实际选择弯举、开始/结束采集并将人工次数从 10 改为 11，未向生产库写入模拟样本。签名归档包含弯举标识和完整运动采集字段。真实 Watch 弯举采样及算法准确率等待新数据验证。
+
+- 上传版本：1.1.3 (8)，仅内部 TestFlight
+- Delivery UUID / ASC Build ID：`d087004b-e3aa-440a-b6bb-687011da424d`
+- 状态：`BUILD-STATUS: VALID`；App Store Connect 为 `IN_BETA_TESTING`，已在现有内部测试组 `flyingrtx` 中
+- 归档：`/Users/xiangjunsheng/Library/Developer/Xcode/Archives/2026-10-09/GymCount Capture 2026-10-9, 10.37.xcarchive`
+- 发布凭证：`/Users/xiangjunsheng/GymCount/build/TestFlight-1.1.3-8/`
+
+安装后：设置 → 采集测试 → 选择动作 → 弯举。每组前后留静止片段，填写实际次数并上传；网站查看云端次数及误差。
+
 ## 2026-10-09：速度选择布局修复，1.1.3 (7)
 
 修复滚动采集页中默认 Picker 被压成细线的问题。动作速度改为至少 44 pt 高的按钮，点击进入独立列表；选择后关闭列表并回填速度，保留正常、慢速、快速、混合四种值。
