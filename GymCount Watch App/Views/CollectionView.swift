@@ -4,15 +4,48 @@ import CoreMotion
 import WatchKit
 import Darwin
 
-private struct CaptureSample: Codable {
+private struct CaptureSample: Encodable {
     let t: Double
+    let received_t: Double
     let x: Double
     let y: Double
     let z: Double
 }
 
-private struct CaptureRecord: Codable {
-    let schema_version = 1
+private struct CaptureVector: Encodable {
+    let x: Double
+    let y: Double
+    let z: Double
+}
+
+private struct CaptureQuaternion: Encodable {
+    let x: Double
+    let y: Double
+    let z: Double
+    let w: Double
+}
+
+private struct CaptureMotion: Encodable {
+    let t: Double
+    let received_t: Double
+    let gravity: CaptureVector
+    let user_acceleration: CaptureVector
+    let rotation_rate: CaptureVector
+    let attitude: CaptureVector // roll, pitch, yaw in radians
+    let quaternion: CaptureQuaternion
+    let magnetic_field: CaptureVector
+    let magnetic_field_accuracy: Int
+    let heading: Double
+}
+
+private struct CaptureAvailability: Encodable {
+    let gyroscope: Bool
+    let device_motion: Bool
+    let magnetometer: Bool
+}
+
+private struct CaptureRecord: Encodable {
+    let schema_version = 2
     let session_id: UUID
     let started_at: Date
     let exercise: String
@@ -21,38 +54,137 @@ private struct CaptureRecord: Codable {
     let duration_seconds: Double
     let sample_rate_hz = 40.0
     let acceleration_unit = "g"
+    let rotation_unit = "rad/s"
+    let attitude_unit = "rad"
+    let magnetic_field_unit = "uT"
+    let attitude_reference_frame = "xArbitraryZVertical"
     let wrist: String
+    let watch_crown: String
+    let pace: String
     let watch_model: String
     let os_version: String
     let app_version: String
     let algorithm_version = "rules-20261007"
     let participant_id: UUID
-    let notes = "development-foreground-capture"
+    var notes: String
     let samples: [CaptureSample]
+    let gyroscope_samples: [CaptureSample]
+    let motion_samples: [CaptureMotion]
+    let magnetometer_samples: [CaptureSample]
+    let sensor_availability: CaptureAvailability
     let detected_events: [Double]
+    let reference_events_truncated: Bool
 }
 
-// Called directly on the serial motion queue; the UI's chart callback is never used.
+// Independent streams retain sensor timestamps; never align them by callback order.
 private final class RawCapture {
     private let lock = NSLock()
+    private let motion = CMMotionManager()
+    private let queue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        return queue
+    }()
     private var origin: Double?
     private var points: [CaptureSample] = []
+    private var gyro: [CaptureSample] = []
+    private var deviceMotion: [CaptureMotion] = []
+    private var magnetometer: [CaptureSample] = []
     private var events: [Double] = []
-    private(set) var overflow = false
-    func append(_ data: CMAccelerometerData) {
+    private var eventsTruncated = false
+    private var overflow = false
+    private var sensorFailed = false
+    var availability: CaptureAvailability {
+        CaptureAvailability(gyroscope: motion.isGyroAvailable,
+                            device_motion: motion.isDeviceMotionAvailable,
+                            magnetometer: motion.isMagnetometerAvailable)
+    }
+    func start() {
+        motion.gyroUpdateInterval = 1 / 40.0
+        motion.deviceMotionUpdateInterval = 1 / 40.0
+        motion.magnetometerUpdateInterval = 1 / 40.0
+        if motion.isGyroAvailable {
+            motion.startGyroUpdates(to: queue) { [weak self] data, error in
+                guard let self else { return }
+                if let data {
+                    self.appendVector(data.timestamp, x: data.rotationRate.x, y: data.rotationRate.y, z: data.rotationRate.z, gyro: true)
+                } else if error != nil { self.fail() }
+            }
+        }
+        if motion.isDeviceMotionAvailable {
+            motion.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: queue) { [weak self] data, error in
+                guard let self else { return }
+                if let data { self.appendMotion(data) } else if error != nil { self.fail() }
+            }
+        }
+        if motion.isMagnetometerAvailable {
+            motion.startMagnetometerUpdates(to: queue) { [weak self] data, error in
+                guard let self else { return }
+                if let data {
+                    self.appendVector(data.timestamp, x: data.magneticField.x, y: data.magneticField.y, z: data.magneticField.z, gyro: false)
+                } else if error != nil { self.fail() }
+            }
+        }
+    }
+    func stop() {
+        motion.stopGyroUpdates()
+        motion.stopDeviceMotionUpdates()
+        motion.stopMagnetometerUpdates()
+        queue.waitUntilAllOperationsAreFinished()
+    }
+    private func fail() {
         lock.lock(); defer { lock.unlock() }
-        if points.count >= 19200 { overflow = true; return }
+        sensorFailed = true
+    }
+    func append(_ data: CMAccelerometerData) {
+        let received = ProcessInfo.processInfo.systemUptime
+        lock.lock(); defer { lock.unlock() }
         if origin == nil { origin = data.timestamp }
         let t = data.timestamp - origin!
         guard points.last.map({ t > $0.t }) ?? true else { return }
-        points.append(CaptureSample(t: t, x: data.acceleration.x, y: data.acceleration.y, z: data.acceleration.z))
+        guard points.count < 19200 else { overflow = true; return }
+        points.append(CaptureSample(t: t, received_t: max(0, received - origin!),
+                                    x: data.acceleration.x, y: data.acceleration.y, z: data.acceleration.z))
+    }
+    private func appendVector(_ timestamp: Double, x: Double, y: Double, z: Double, gyro isGyro: Bool) {
+        let received = ProcessInfo.processInfo.systemUptime
+        lock.lock(); defer { lock.unlock() }
+        guard let origin, timestamp >= origin else { return }
+        let t = timestamp - origin
+        let last = isGyro ? gyro.last?.t : magnetometer.last?.t
+        guard last.map({ t > $0 }) ?? true else { return }
+        guard (isGyro ? gyro.count : magnetometer.count) < 19200 else { overflow = true; return }
+        let sample = CaptureSample(t: t, received_t: max(0, received - origin), x: x, y: y, z: z)
+        if isGyro { gyro.append(sample) } else { magnetometer.append(sample) }
+    }
+    private func appendMotion(_ data: CMDeviceMotion) {
+        let received = ProcessInfo.processInfo.systemUptime
+        lock.lock(); defer { lock.unlock() }
+        guard let origin, data.timestamp >= origin else { return }
+        let t = data.timestamp - origin
+        guard deviceMotion.last.map({ t > $0.t }) ?? true else { return }
+        guard deviceMotion.count < 19200 else { overflow = true; return }
+        let q = data.attitude.quaternion
+        deviceMotion.append(CaptureMotion(t: t, received_t: max(0, received - origin),
+            gravity: CaptureVector(x: data.gravity.x, y: data.gravity.y, z: data.gravity.z),
+            user_acceleration: CaptureVector(x: data.userAcceleration.x, y: data.userAcceleration.y, z: data.userAcceleration.z),
+            rotation_rate: CaptureVector(x: data.rotationRate.x, y: data.rotationRate.y, z: data.rotationRate.z),
+            attitude: CaptureVector(x: data.attitude.roll, y: data.attitude.pitch, z: data.attitude.yaw),
+            quaternion: CaptureQuaternion(x: q.x, y: q.y, z: q.z, w: q.w),
+            magnetic_field: CaptureVector(x: data.magneticField.field.x, y: data.magneticField.field.y, z: data.magneticField.field.z),
+            magnetic_field_accuracy: Int(data.magneticField.accuracy.rawValue), heading: data.heading))
     }
     func markRep() {
         lock.lock(); defer { lock.unlock() }
-        if let t = points.last?.t { events.append(t) }
+        if let t = points.last?.t {
+            if events.count < 500 { events.append(t) } else { eventsTruncated = true }
+        }
     }
-    func snapshot() -> ([CaptureSample], [Double], Bool) {
-        lock.lock(); defer { lock.unlock() }; return (points, events, overflow)
+    func snapshot() -> (points: [CaptureSample], gyro: [CaptureSample], motion: [CaptureMotion], magnetic: [CaptureSample], events: [Double], invalid: Bool, eventsTruncated: Bool) {
+        lock.lock(); defer { lock.unlock() }
+        let available = availability
+        let incomplete = (available.gyroscope && gyro.count < 2) || (available.device_motion && deviceMotion.count < 2) || (available.magnetometer && magnetometer.count < 2)
+        return (points, gyro, deviceMotion, magnetometer, events, overflow || sensorFailed || incomplete, eventsTruncated)
     }
 }
 
@@ -67,6 +199,8 @@ private final class CollectionStore: ObservableObject {
     private var capture: RawCapture?
     private let detector = MotionDetector()
     private var exercise = "squat"
+    private var pace = "normal"
+    private var captureNotes = ""
     private var start = Date()
     private var timeout: Timer?
     private func hardwareModel() -> String {
@@ -83,47 +217,56 @@ private final class CollectionStore: ObservableObject {
         (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil).filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }) ?? []
     }
     init() { pending = files().count }
-    func begin(_ kind: String) {
+    func begin(_ kind: String, pace: String, notes: String) {
         guard !recording && draft == nil else { return }
-        let raw = RawCapture(); capture = raw; exercise = kind; start = Date(); detected = 0; message = ""
+        let raw = RawCapture(); capture = raw; exercise = kind; self.pace = pace; captureNotes = String(notes.prefix(1000)); start = Date(); detected = 0; message = ""
+        let isTraining = ["squat", "bench_press", "deadlift"].contains(kind)
         detector.configureForExercise(kind == "squat" ? .squat : kind == "deadlift" ? .deadlift : .benchPress)
         detector.onRawAcceleration = { raw.append($0) }
-        detector.onRawRepDetected = { raw.markRep() }
+        detector.onRawRepDetected = { if isTraining { raw.markRep() } }
         detector.onRepDetected = { [weak self] in
-            Task { @MainActor in self?.detected = self?.detector.repCount ?? 0 }
+            Task { @MainActor in self?.detected = isTraining ? (self?.detector.repCount ?? 0) : 0 }
         }
+        raw.start()
         detector.startDetection(); recording = detector.isDetecting
-        if !recording { message = "加速度计不可用"; return }
+        if !recording { raw.stop(); capture = nil; message = "加速度计不可用"; return }
         // A bounded, foreground test session; not a HealthKit workout.
-        timeout = Timer.scheduledTimer(withTimeInterval: 470, repeats: false) { [weak self] _ in
+        timeout = Timer.scheduledTimer(withTimeInterval: 180, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.finish() }
         }
     }
     func finish() {
         guard recording else { return }
-        detector.stopDetection(); timeout?.invalidate(); timeout = nil; recording = false
-        guard let (points, events, overflow) = capture?.snapshot(), points.count >= 2, !overflow, events.count <= 500 else {
+        detector.stopDetection(); capture?.stop(); timeout?.invalidate(); timeout = nil; recording = false
+        guard let raw = capture else { return }
+        let result = raw.snapshot()
+        let points = result.points, events = result.events
+        guard points.count >= 2, !result.invalid, events.count <= 500 else {
             message = "记录不完整或超出采集上限，请重新采集"; return
         }
         let saved = UserDefaults.standard.string(forKey: "captureParticipantID").flatMap(UUID.init(uuidString:)) ?? UUID()
         UserDefaults.standard.set(saved.uuidString, forKey: "captureParticipantID")
         let info = Bundle.main.infoDictionary ?? [:]
         draft = CaptureRecord(session_id: UUID(), started_at: start, exercise: exercise, actual_count: 0,
-            detected_count: events.count, duration_seconds: points.last!.t, wrist: WKInterfaceDevice.current().wristLocation == .left ? "left" : "right",
+            detected_count: events.count, duration_seconds: [points.last!.t, result.gyro.last?.t ?? 0, result.motion.last?.t ?? 0, result.magnetic.last?.t ?? 0].max()!, wrist: WKInterfaceDevice.current().wristLocation == .left ? "left" : "right",
+            watch_crown: WKInterfaceDevice.current().crownOrientation == .left ? "left" : "right", pace: pace,
             watch_model: hardwareModel(), os_version: WKInterfaceDevice.current().systemVersion,
             app_version: "\(info["CFBundleShortVersionString"] ?? "unknown") (\(info["CFBundleVersion"] ?? "unknown"))",
-            participant_id: saved, samples: points, detected_events: events)
+            participant_id: saved, notes: captureNotes, samples: points, gyroscope_samples: result.gyro,
+            motion_samples: result.motion, magnetometer_samples: result.magnetic, sensor_availability: raw.availability, detected_events: events, reference_events_truncated: result.eventsTruncated)
         detected = events.count; capture = nil
     }
     func persist(_ actual: Int) async {
         guard var record = draft, !uploading else { return }
-        record.actual_count = actual
+        record.actual_count = ["rest", "walking", "other"].contains(record.exercise) ? 0 : actual
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             var values = URLResourceValues(); values.isExcludedFromBackup = true
             var directory = folder; try directory.setResourceValues(values)
             let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
-            try encoder.encode(record).write(to: folder.appendingPathComponent(record.session_id.uuidString + ".json"), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            let encoded = try encoder.encode(record)
+            guard encoded.count <= 16 * 1024 * 1024 else { message = "记录过大，请缩短单组采集"; return }
+            try encoded.write(to: folder.appendingPathComponent(record.session_id.uuidString + ".json"), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             draft = nil; pending = files().count
             await retry()
         } catch { message = "无法保存到手表，请保留本页并重试" }
@@ -153,15 +296,17 @@ struct CollectionView: View {
     @StateObject private var store = CollectionStore()
     @State private var exercise = "squat"
     @State private var actual = 10
+    @State private var pace = "normal"
+    @State private var notes = ""
 
     var body: some View {
         CollectionPanel(
-            exercise: $exercise, actual: $actual,
+            exercise: $exercise, actual: $actual, pace: $pace, notes: $notes,
             recording: store.recording, reviewing: store.draft != nil,
             detected: store.detected, uploading: store.uploading,
             pending: store.pending, message: store.message,
             onStartStop: {
-                if store.recording { store.finish() } else { store.begin(exercise) }
+                if store.recording { store.finish() } else { store.begin(exercise, pace: pace, notes: notes) }
             },
             onUpload: { Task { await store.persist(actual) } },
             onDiscard: { store.discard() },
@@ -178,6 +323,8 @@ struct CollectionView: View {
 struct CollectionPanel: View {
     @Binding var exercise: String
     @Binding var actual: Int
+    @Binding var pace: String
+    @Binding var notes: String
     let recording: Bool
     let reviewing: Bool
     let detected: Int
@@ -194,6 +341,9 @@ struct CollectionPanel: View {
         switch exercise {
         case "bench_press": return "卧推"
         case "deadlift": return "硬拉"
+        case "rest": return "静止"
+        case "walking": return "走动"
+        case "other": return "其他非训练"
         default: return "深蹲"
         }
     }
@@ -219,6 +369,17 @@ struct CollectionPanel: View {
                     .disabled(recording || uploading)
                     .accessibilityIdentifier("capture.exercise")
 
+                    if !recording {
+                        Picker("动作速度", selection: $pace) {
+                            Text("正常").tag("normal")
+                            Text("慢速").tag("slow")
+                            Text("快速").tag("fast")
+                            Text("混合").tag("mixed")
+                        }
+                        .disabled(uploading)
+                        TextField("备注：握持方式、负重等", text: $notes)
+                            .disabled(uploading)
+                    }
                     VStack(spacing: 2) {
                         Text(recording ? "正在采集" : "已识别次数")
                             .font(GymStyle.detail)
@@ -275,6 +436,9 @@ struct CollectionPanel: View {
                     exerciseOption("深蹲", value: "squat")
                     exerciseOption("卧推", value: "bench_press")
                     exerciseOption("硬拉", value: "deadlift")
+                    exerciseOption("静止", value: "rest")
+                    exerciseOption("走动", value: "walking")
+                    exerciseOption("其他非训练", value: "other")
                 }
                 .font(GymStyle.body)
                 .navigationTitle("选择动作")
@@ -288,6 +452,9 @@ struct CollectionPanel: View {
                 .font(GymStyle.detail)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if ["rest", "walking", "other"].contains(exercise) {
+                Text("非训练样本 · 实际次数 0").font(GymStyle.body)
+            } else {
             HStack(spacing: 6) {
                 countButton("minus", label: "减少实际次数", disabled: actual == 0) { actual -= 1 }
                 VStack(spacing: 2) {
@@ -302,6 +469,7 @@ struct CollectionPanel: View {
                 }
                 .frame(maxWidth: .infinity)
                 countButton("plus", label: "增加实际次数", disabled: actual == 500) { actual += 1 }
+            }
             }
         }
         .padding(8)
