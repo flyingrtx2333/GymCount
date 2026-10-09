@@ -1,3 +1,15 @@
+## 2026-10-09：速度选择布局修复，1.1.3 (7)
+
+修复滚动采集页中默认 Picker 被压成细线的问题。动作速度改为至少 44 pt 高的按钮，点击进入独立列表；选择后关闭列表并回填速度，保留正常、慢速、快速、混合四种值。
+
+40mm 模拟器复现旧问题，修复后在 40mm / 46mm 屏幕验证按钮正常显示；40mm 实际点选慢速、滚动选择混合并回填成功。布局预览与真实采集目标 Release 模拟器构建均通过，签名归档确认包含新速度入口与完整运动采集。
+
+- 上传版本：1.1.3 (7)，仅内部 TestFlight
+- Delivery UUID：`2636250d-1869-4a92-8126-4c50771a4e74`
+- 状态：`BUILD-STATUS: VALID`；App Store Connect 为 `IN_BETA_TESTING`，已在现有内部测试组 `flyingrtx` 中，可通过 TestFlight 更新
+- 归档：`/Users/xiangjunsheng/Library/Developer/Xcode/Archives/2026-10-09/GymCount Capture 2026-10-9, 09.58.xcarchive`
+- 构建、截图与发布凭证：`/Users/xiangjunsheng/GymCount/build/TestFlight-1.1.3-7/`
+
 ## 2026-10-09：完整运动采集，1.1.3 (6) 已发布
 
 代码已扩展为协议 v2，多路运动信号与非训练样本。单组最多 3 分钟，保留失败上传的本地文件。详情见 [完整运动采集说明](docs/full-motion-capture.md)。

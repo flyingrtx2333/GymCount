@@ -336,6 +336,16 @@ struct CollectionPanel: View {
     let onDiscard: () -> Void
     let onRetry: () -> Void
     @State private var choosingExercise = false
+    @State private var choosingPace = false
+
+    private var paceName: String {
+        switch pace {
+        case "slow": return "慢速"
+        case "fast": return "快速"
+        case "mixed": return "混合"
+        default: return "正常"
+        }
+    }
 
     private var exerciseName: String {
         switch exercise {
@@ -370,13 +380,24 @@ struct CollectionPanel: View {
                     .accessibilityIdentifier("capture.exercise")
 
                     if !recording {
-                        Picker("动作速度", selection: $pace) {
-                            Text("正常").tag("normal")
-                            Text("慢速").tag("slow")
-                            Text("快速").tag("fast")
-                            Text("混合").tag("mixed")
+                        Button { choosingPace = true } label: {
+                            HStack(spacing: 4) {
+                                Text("动作速度")
+                                    .foregroundStyle(.secondary)
+                                Spacer(minLength: 0)
+                                Text(paceName)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(GymStyle.detail)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 8)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(GymStyle.surface, in: RoundedRectangle(cornerRadius: 12))
                         }
+                        .buttonStyle(.plain)
+                        .fixedSize(horizontal: false, vertical: true)
                         .disabled(uploading)
+                        .accessibilityIdentifier("capture.pace")
                         TextField("备注：握持方式、负重等", text: $notes)
                             .disabled(uploading)
                     }
@@ -444,6 +465,18 @@ struct CollectionPanel: View {
                 .navigationTitle("选择动作")
             }
         }
+        .sheet(isPresented: $choosingPace) {
+            NavigationStack {
+                List {
+                    paceOption("正常", value: "normal")
+                    paceOption("慢速", value: "slow")
+                    paceOption("快速", value: "fast")
+                    paceOption("混合", value: "mixed")
+                }
+                .font(GymStyle.body)
+                .navigationTitle("动作速度")
+            }
+        }
     }
 
     private var reviewCard: some View {
@@ -497,6 +530,20 @@ struct CollectionPanel: View {
                 .background(color.opacity(0.18), in: RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
+    }
+
+    private func paceOption(_ name: String, value: String) -> some View {
+        Button {
+            pace = value
+            choosingPace = false
+        } label: {
+            HStack {
+                Text(name)
+                Spacer()
+                if pace == value { Image(systemName: "checkmark").foregroundStyle(.green) }
+            }
+            .frame(minHeight: 36)
+        }
     }
 
     private func exerciseOption(_ name: String, value: String) -> some View {
