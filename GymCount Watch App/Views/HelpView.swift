@@ -76,9 +76,11 @@ struct HelpView: View {
     ]
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
-                VStack(spacing: 10) {
+                VStack(spacing: GymStyle.spacing) {
+                    GymHeader(title: NSLocalizedString("help_title", comment: "使用帮助"),
+                              back: { presentationMode.wrappedValue.dismiss() })
                     ForEach(sections, id: \.key) { section in
                         HelpCard(
                             icon: section.icon,
@@ -88,19 +90,13 @@ struct HelpView: View {
                         )
                     }
                 }
-                .padding(.horizontal, 4)
-                .padding(.vertical, 4)
+                .gymPageContent(fullWidthHeader: true)
             }
             .navigationTitle(NSLocalizedString("help_title", comment: "使用帮助"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                        Image(systemName: "xmark")
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
+            .navigationBarBackButtonHidden(true)
+            .toolbar(.hidden)
+            .gymPage()
         }
     }
 }
@@ -118,10 +114,10 @@ struct HelpCard: View {
             // 标题行
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(iconColor)
+                    .font(GymStyle.detail)
+                    .foregroundStyle(GymStyle.mint)
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(GymStyle.button)
                     .foregroundColor(.white)
             }
 
@@ -129,8 +125,8 @@ struct HelpCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(items, id: \.self) { item in
                     Text(item)
-                        .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.6))
+                        .font(GymStyle.detail)
+                        .foregroundStyle(GymStyle.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -139,10 +135,10 @@ struct HelpCard: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(iconColor.opacity(0.08))
+                .fill(GymStyle.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(iconColor.opacity(0.2), lineWidth: 0.5)
+                        .strokeBorder(Color.clear, lineWidth: 0)
                 )
         )
     }

@@ -1,0 +1,14 @@
+Use case: illustration-story. Asset type: ORIGINAL GymCount exercise line-art icon sheet.
+The input image is a STYLE reference ONLY, not an edit target or a pose template. Create NINE DIFFERENT NEW actions listed below, exactly one per cell in a strict THREE BY THREE equal-cell square grid, reading row-major. Do not repeat reference actions in place of the requested new ones.
+Same elegant rounded near-black contour illustration as reference: naturally proportioned faceless athletic adult in tank top and shorts, short neck, subtle chin, realistic smoothly curved joints, compact shoes. White interiors and white background. No filled black body, no colored fill, no shading, ground shadows or gradients. Consistent moderately bold smooth linework. Equipment minimal but unmistakable. Simplify small details (no fingers, laces, muscle lines). Anatomically correct poses are crucial.
+Each figure and its equipment fits entirely within its own cell, generous blank margins on ALL sides, clear separation from adjacent cells. Exactly equal grid cell size. Similar optical scale. NO text, NO labels, NO digits, NO title, NO borders or separators, NO watermark. A white background must separate each icon. Full body included, no cropping. Each action has correct limb count, realistic grips, no fused limbs/equipment.
+Actions in precise row-major order:
+1. Lat pulldown: seated on padded seat with thighs restrained, hands wide on overhead cable bar, elbows bent down, bar near upper chest, cable and tall pulley visible.
+2. Seated cable row: seated with knees slightly bent and feet on footplates, torso upright, elbows pulled back with handle near abdomen, low horizontal cable visible.
+3. Standing cable fly: between two simple tall cable uprights, staggered stance, both arms curved inward holding handles in front of chest, cables to side pulleys.
+4. Cable triceps pushdown: standing before high pulley, elbows fixed at sides and forearms extended downward, short bar near hips, cable from overhead.
+5. Cable biceps curl: standing facing low pulley, upper arms by sides, forearms bent upward gripping short bar, cable rising from floor pulley.
+6. Cable face pull: standing with rope handle pulled to eye height, elbows high and bent outward, horizontal cable to chest-height pulley.
+7. 45-degree leg press: athlete seated/reclined in sled machine, back supported, hips and knees bent, feet on large angled footplate, rails visible.
+8. Seated leg extension: sitting on machine with vertical backrest, thighs on seat, shins extended forward lifting roller pad near ankles, hands at seat handles.
+9. Prone leg curl: lying facedown along padded bench, knees bent so feet lifted toward buttocks, roller pad resting behind ankles, thighs still on bench.

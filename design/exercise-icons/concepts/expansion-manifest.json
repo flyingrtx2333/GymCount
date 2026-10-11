@@ -1,0 +1,150 @@
+[
+  {
+    "key": "barbell",
+    "names": [
+      "杠铃前蹲",
+      "罗马尼亚硬拉",
+      "相扑硬拉",
+      "杠铃俯身划船",
+      "杠铃肩上推举",
+      "杠铃弓步蹲",
+      "杠铃臀推",
+      "杠铃弯举",
+      "仰卧杠铃臂屈伸"
+    ],
+    "ids": [
+      "front_squat",
+      "romanian_deadlift",
+      "sumo_deadlift",
+      "barbell_row",
+      "overhead_press",
+      "barbell_lunge",
+      "hip_thrust",
+      "barbell_curl",
+      "lying_triceps_extension"
+    ],
+    "poses": [
+      "Front squat: bar in front rack across front shoulders, elbows high, deep squat, heels planted.",
+      "Romanian deadlift: standing with hips hinged backward, slight knee bend, neutral back, arms straight, bar near mid-shins, not a squat.",
+      "Sumo deadlift: front three-quarter view, very wide stance with toes outward, both hands gripping bar between knees, straight arms, plates at floor.",
+      "Bent-over barbell row: hinged torso about 45 degrees, bent elbows pulling bar toward lower ribs, knees slightly bent.",
+      "Standing overhead barbell press: upright athlete, both hands holding bar just above head, upper arms raised, elbows slightly bent, no bar through head.",
+      "Barbell reverse lunge: bar on upper back, front knee bends 90 degrees, rear knee lowered near ground, feet separated front/back.",
+      "Barbell hip thrust: shoulders on low bench, feet planted, knees bent 90 degrees, hips raised horizontally, bar with pad across hips.",
+      "Standing barbell curl: elbows fixed beside torso, both forearms bent up, bar held near upper abdomen, upright straight legs.",
+      "Lying triceps extension with short bar: supine on bench, upper arms vertical, elbows bent, bar above forehead with clearance, feet planted."
+    ],
+    "source": "exec-4429b4cf-623c-4906-80c8-ad54069e14b5.png"
+  },
+  {
+    "key": "dumbbell",
+    "names": [
+      "哑铃卧推",
+      "上斜哑铃卧推",
+      "哑铃飞鸟",
+      "哑铃肩推",
+      "哑铃侧平举",
+      "哑铃前平举",
+      "单臂哑铃划船",
+      "锤式弯举",
+      "哑铃过顶臂屈伸"
+    ],
+    "ids": [
+      "dumbbell_bench_press",
+      "incline_dumbbell_press",
+      "dumbbell_fly",
+      "dumbbell_shoulder_press",
+      "lateral_raise",
+      "front_raise",
+      "single_arm_row",
+      "hammer_curl",
+      "overhead_triceps_extension"
+    ],
+    "poses": [
+      "Flat dumbbell bench press: lying supine on flat bench, feet grounded, elbows bent about90degrees, one dumbbell in each hand above chest.",
+      "Incline dumbbell bench press: athlete supported by clearly inclined 40degree bench back, feet planted, two dumbbells raised above upper chest, elbows bent.",
+      "Flat dumbbell fly: supine on bench, three-quarter view, arms spread wide at chest height with a slight elbow bend, one dumbbell per hand, palms facing inward.",
+      "Seated dumbbell shoulder press: upright torso on seated bench with vertical backrest, both elbows bent outward, dumbbells just above shoulders.",
+      "Standing dumbbell lateral raise: frontal view, both arms extending out to sides about shoulder height, slight elbow bend, dumbbells held outward.",
+      "Standing dumbbell front raise: side three-quarter view, both arms raised straight in front to shoulder height, dumbbells at hands, upright torso.",
+      "Single-arm dumbbell row: one knee and same-side hand on flat bench, other foot planted, back flat, other elbow pulled behind torso lifting dumbbell beside ribs.",
+      "Standing hammer curl: elbows by sides, two dumbbells raised toward shoulders, neutral vertical grips with thumb upward, no supinated grip.",
+      "Seated two-hand dumbbell overhead triceps extension: torso upright, both hands gripping one dumbbell behind head, upper arms pointing up, elbows visibly bent."
+    ],
+    "source": "exec-4237a7e5-af80-4437-8923-7c52ca7dfa95.png"
+  },
+  {
+    "key": "machine",
+    "names": [
+      "高位下拉",
+      "坐姿绳索划船",
+      "绳索夹胸",
+      "绳索三头下压",
+      "绳索弯举",
+      "绳索面拉",
+      "腿举",
+      "坐姿腿屈伸",
+      "俯卧腿弯举"
+    ],
+    "ids": [
+      "lat_pulldown",
+      "seated_cable_row",
+      "cable_fly",
+      "cable_triceps_pushdown",
+      "cable_biceps_curl",
+      "cable_face_pull",
+      "leg_press",
+      "leg_extension",
+      "leg_curl"
+    ],
+    "poses": [
+      "Lat pulldown: seated on padded seat with thighs restrained, hands wide on overhead cable bar, elbows bent down, bar near upper chest, cable and tall pulley visible.",
+      "Seated cable row: seated with knees slightly bent and feet on footplates, torso upright, elbows pulled back with handle near abdomen, low horizontal cable visible.",
+      "Standing cable fly: between two simple tall cable uprights, staggered stance, both arms curved inward holding handles in front of chest, cables to side pulleys.",
+      "Cable triceps pushdown: standing before high pulley, elbows fixed at sides and forearms extended downward, short bar near hips, cable from overhead.",
+      "Cable biceps curl: standing facing low pulley, upper arms by sides, forearms bent upward gripping short bar, cable rising from floor pulley.",
+      "Cable face pull: standing with rope handle pulled to eye height, elbows high and bent outward, horizontal cable to chest-height pulley.",
+      "45-degree leg press: athlete seated/reclined in sled machine, back supported, hips and knees bent, feet on large angled footplate, rails visible.",
+      "Seated leg extension: sitting on machine with vertical backrest, thighs on seat, shins extended forward lifting roller pad near ankles, hands at seat handles.",
+      "Prone leg curl: lying facedown along padded bench, knees bent so feet lifted toward buttocks, roller pad resting behind ankles, thighs still on bench."
+    ],
+    "source": "exec-0f3add5a-3cb1-41f6-8753-0e8707b2bfd4.png"
+  },
+  {
+    "key": "bodyweight",
+    "names": [
+      "引体向上",
+      "俯卧撑",
+      "双杠臂屈伸",
+      "保加利亚分腿蹲",
+      "高脚杯深蹲",
+      "壶铃摆动",
+      "站姿提踵",
+      "平板支撑",
+      "仰卧起坐"
+    ],
+    "ids": [
+      "pull_up",
+      "push_up",
+      "dips",
+      "bulgarian_split_squat",
+      "goblet_squat",
+      "kettlebell_swing",
+      "calf_raise",
+      "plank",
+      "sit_up"
+    ],
+    "poses": [
+      "Pull-up: both hands on horizontal overhead bar, elbows bent, chin above bar, feet lifted with knees slightly bent.",
+      "Push-up: side view, hands and toes grounded, body straight from head to heels, elbows bent lowering chest close to ground.",
+      "Parallel-bar dips: both hands on two parallel bars at hip sides, feet suspended, elbows bent about90degrees, torso leaning slightly forward.",
+      "Bulgarian split squat: front foot planted and knee bent, rear foot resting on a low bench behind athlete, hips lowered, no weights.",
+      "Goblet squat: holding one vertical dumbbell with both hands in front of chest, deep squat, elbows inside knees, heels grounded.",
+      "Kettlebell swing: three-quarter side view, athlete with soft knees and hips extending, both straight arms holding one kettlebell in front at chest height, back neutral.",
+      "Standing calf raise: athlete upright on small step, heels lifted clearly above step edge, tiptoes supporting body, no squat.",
+      "Forearm plank: side view, forearms and toes grounded, elbows under shoulders, straight body line, no hand-supported pushup.",
+      "Sit-up: sitting partway up from supine, knees bent and feet planted, arms crossed on chest, torso about45degrees to floor."
+    ],
+    "source": "exec-0c325fd6-00ee-4575-890d-391d78973a1c.png"
+  }
+]

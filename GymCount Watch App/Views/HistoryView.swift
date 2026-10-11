@@ -17,7 +17,8 @@ struct HistoryView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 10) {
+            VStack(spacing: GymStyle.spacing) {
+                GymHeader(title: "历史", back: { showingHistory = false })
 
                 // MARK: 运动类型选择器
                 ExerciseTypePicker(selected: $selectedExercise)
@@ -49,18 +50,13 @@ struct HistoryView: View {
 
                 Spacer(minLength: 4)
             }
-            .padding(.horizontal, 6)
-            .padding(.top, 4)
+            .gymPageContent()
         }
         .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(action: { showingHistory = false }) {
-                    Image(systemName: "chevron.left")
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
+        .toolbar(.hidden)
+        .tint(GymStyle.mint)
+        .gymPage()
+
     }
 
     // MARK: - Helpers
@@ -119,11 +115,11 @@ struct ExerciseTypePicker: View {
                         Image(exercise.icon)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 18, height: 18)
+                            .frame(width: 24, height: 24)
                             .opacity(selected == exercise ? 1.0 : 0.4)
 
                         Circle()
-                            .fill(selected == exercise ? Color.accentColor : Color.clear)
+                            .fill(selected == exercise ? GymStyle.mint : Color.clear)
                             .frame(width: 4, height: 4)
                     }
                     .padding(.vertical, 5)
@@ -131,7 +127,7 @@ struct ExerciseTypePicker: View {
                     .background(
                         RoundedRectangle(cornerRadius: 8)
                             .fill(selected == exercise
-                                  ? Color.accentColor.opacity(0.15)
+                                  ? GymStyle.mint.opacity(0.15)
                                   : Color.white.opacity(0.05))
                     )
                 }
@@ -193,13 +189,13 @@ struct StatsRow: View {
                 value: "\(reps)",
                 unit: NSLocalizedString("times", comment: "次"),
                 change: repChange,
-                accentColor: .blue
+                accentColor: GymStyle.mint
             )
             StatCard(
                 value: "\(weight)",
                 unit: NSLocalizedString("kg", comment: "kg"),
                 change: weightChange,
-                accentColor: .orange
+                accentColor: GymStyle.mint
             )
         }
     }
@@ -215,7 +211,7 @@ struct StatCard: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .lastTextBaseline, spacing: 2) {
                 Text(value)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
                     .foregroundColor(.white)
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
@@ -226,21 +222,21 @@ struct StatCard: View {
 
             Text("上周 \(change >= 0 ? "+" : "−")\(abs(change))")
                 .font(GymStyle.detail)
-                .foregroundColor(change >= 0 ? .green : .red)
+                .foregroundStyle(GymStyle.muted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(accentColor.opacity(0.12))
+                .fill(Color.clear)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(accentColor.opacity(0.25), lineWidth: 0.5)
+                .strokeBorder(Color.clear, lineWidth: 0)
         )
     }
 }
@@ -258,7 +254,7 @@ struct SimpleBarChart: View {
         Group {
             if chartData.allSatisfy({ $0.count == 0 }) {
                 // 无数据空状态
-                VStack(spacing: 4) {
+                VStack(spacing: GymStyle.spacing) {
                     Image(systemName: "chart.bar")
                         .font(.title3)
                         .foregroundColor(Color.white.opacity(0.2))
@@ -269,7 +265,7 @@ struct SimpleBarChart: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.white.opacity(0.04))
+                        .fill(Color.clear)
                 )
             } else {
                 Chart {
@@ -281,7 +277,7 @@ struct SimpleBarChart: View {
                         .foregroundStyle(
                             d.count > 0
                                 ? LinearGradient(
-                                    colors: [Color.blue, Color.blue.opacity(0.6)],
+                                    colors: [GymStyle.mint, GymStyle.mint],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
@@ -306,7 +302,7 @@ struct SimpleBarChart: View {
                 .padding(.vertical, 6)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.white.opacity(0.04))
+                        .fill(Color.clear)
                 )
             }
         }

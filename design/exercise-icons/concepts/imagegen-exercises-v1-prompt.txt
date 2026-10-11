@@ -1,0 +1,19 @@
+Use case: stylized-concept
+Asset type: original exercise illustration/icon family design sheet for GymCount, a premium Apple Watch and iPhone fitness app.
+Create a completely NEW, beautiful, coherent family of SEVEN fitness action icons. The previous attempts looked like awkward stick people with pipe necks and zigzag legs; do not reproduce that aesthetic. Aim for the clarity of professional exercise instruction drawings, simplified into polished flat vector-style miniature human illustrations. Attractive clean contour, natural athletic human proportions, short anatomical neck, oval head with subtle chin, smooth shoulder/back/hip contours, realistic knees/ankles and compact shoes. Same faceless athletic adult in every icon, off-white/light gray sleeveless shirt, muted jade green shorts, dark charcoal limbs/outline and equipment. Very restrained 2–3-tone palette. No gradients, textures, shadows, muscles drawn individually, circles masquerading as heads, stick limbs, elongated neck, geometric angular limbs, overly bulky shoes, or decorative motion marks.
+
+White/off-white background. Square sheet, tidy three-column grid. First row: BACK SQUAT, BENCH PRESS, DEADLIFT. Second row: SINGLE-ARM DUMBBELL CURL, STANDING REST, WALKING. Third row: OTHER NON-TRAINING MOVEMENT centered in its cell, remaining cells empty. Equal visual scale. Each drawing should fill its cell generously, readable full body, compact composition, with one small Chinese label beneath. No card borders or title/header.
+
+Detailed pose constraints (essential):
+1 深蹲: true barbell BACK squat shown from 3/4 side view. Bar rests across upper BACK behind neck, hands gripping at sides; hips back and down, thighs near parallel, both knees bend in the same natural direction, heels planted, spine neutral, eyes forward. Bar must NOT run through the face or neck. No dancing pose.
+2 卧推: athlete lying SUPINE on a flat bench, feet flat on the floor. Depict LOWERED position: both ELBOWS visibly BENT around 90 degrees, upper arms directed outward/down, forearms vertical and wrists stacked above elbows; bar close to chest, two hands gripping bar. Not straight-arm lockout, not squat legs pointing up. Clear bench separate from body.
+3 硬拉: conventional deadlift setup from 3/4 side. Hips hinged back above knees, knees moderately bent, neutral fairly straight back leaning forward, both ARMS STRAIGHT down gripping bar just in front of shins, barbell plates near floor. Both feet parallel, compact shoes flat, no bar/weight merging into legs.
+4 弯举: standing SINGLE-ARM dumbbell curl, upper arm close to torso, elbow fixed by side, forearm raised approximately 90 degrees, dumbbell in hand with wrist neutral. Other arm relaxed. Feet shoulder width, both legs almost straight, no lunge or twisted legs.
+5 静止: same athlete standing relaxed upright with arms at sides, naturally spaced feet.
+6 走动: same athlete walking with moderate realistic stride and opposing arm swing, no extreme spread legs.
+7 其他非训练: same athlete standing with relaxed slight shrug / palms open to indicate unspecified non-training movement, no question mark or dots.
+
+Exact labels: 深蹲, 卧推, 硬拉, 弯举, 静止, 走动, 其他非训练.
+Draw all equipment convincingly with round weight plates and simple bars, without perspective distortions. Original artwork, no brand logo, no watermark, no copied existing icon. Before rendering, prioritize biomechanical plausibility and elegant silhouette over extreme abstraction.
+
+Targeted revision: show a clear head resting on the left end of the bench; keep the bench press elbows bent. Remove the lower dumbbell in the curl so the relaxed hand is empty.

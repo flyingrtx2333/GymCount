@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A10000000000000000000001 = {isa = PBXBuildFile; fileRef = A10000000000000000000002; };
 		8BB41D052E9D0E9C00EF6076 /* GymCount Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 8BB41D042E9D0E9C00EF6076 /* GymCount Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -50,15 +49,14 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		A10000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GymCount Watch App/Models.swift"; sourceTree = SOURCE_ROOT; };
 		8BB41CFE2E9D0E9C00EF6076 /* GymCount.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GymCount.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BB41D042E9D0E9C00EF6076 /* GymCount Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "GymCount Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BB41D162E9D0E9D00EF6076 /* GymCount Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "GymCount Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BB41D202E9D0E9D00EF6076 /* GymCount Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "GymCount Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000002 /* GymCount Watch App/Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GymCount Watch App/Models.swift"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A10000000000000000000003 = {isa = PBXFileSystemSynchronizedRootGroup; path = "GymCount iOS"; sourceTree = "<group>"; };
 		8BB41D082E9D0E9C00EF6076 /* GymCount Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "GymCount Watch App";
@@ -72,6 +70,11 @@
 		8BB41D232E9D0E9D00EF6076 /* GymCount Watch AppUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "GymCount Watch AppUITests";
+			sourceTree = "<group>";
+		};
+		A10000000000000000000003 /* GymCount iOS */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "GymCount iOS";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -104,8 +107,8 @@
 		8BB41CF72E9D0E9C00EF6076 = {
 			isa = PBXGroup;
 			children = (
-				A10000000000000000000003,
-				A10000000000000000000002,
+				A10000000000000000000003 /* GymCount iOS */,
+				A10000000000000000000002 /* GymCount Watch App/Models.swift */,
 				8BB41D082E9D0E9C00EF6076 /* GymCount Watch App */,
 				8BB41D192E9D0E9D00EF6076 /* GymCount Watch AppTests */,
 				8BB41D232E9D0E9D00EF6076 /* GymCount Watch AppUITests */,
@@ -240,7 +243,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 8BB41CFB2E9D0E9C00EF6076 /* Build configuration list for PBXProject "GymCount" */;
+			buildConfigurationList = 8BB41CFB2E9D0E9C00EF6076 /* Build configuration list for PBXProject "GymCountCapture" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -295,7 +298,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A10000000000000000000004 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, ); runOnlyForDeploymentPostprocessing = 0; };
 		8BB41D002E9D0E9C00EF6076 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -464,9 +466,9 @@
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_FILE = "GymCount-Watch-App-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "GymCount needs access to your health data to sync workout records to Apple Watch activity rings, helping you better track your fitness progress.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GymCount needs to write health data to sync your workout records to Apple Watch activity rings, including workout duration, calories burned, and other information.";
@@ -502,9 +504,9 @@
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_FILE = "GymCount-Watch-App-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "GymCount needs access to your health data to sync workout records to Apple Watch activity rings, helping you better track your fitness progress.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GymCount needs to write health data to sync your workout records to Apple Watch activity rings, including workout duration, calories burned, and other information.";
@@ -521,11 +523,11 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) GYMCOUNT_CAPTURE";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
 				VALIDATE_PRODUCT = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) GYMCOUNT_CAPTURE";
 				WATCHOS_DEPLOYMENT_TARGET = 11.2;
 			};
 			name = Release;
@@ -533,42 +535,42 @@
 		8BB41D2F2E9D0E9D00EF6076 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 8;
+				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = GymCount;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				TARGETED_DEVICE_FAMILY = 1;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
-				DEVELOPMENT_TEAM = 8BPSC5L74V;
-				INFOPLIST_KEY_CFBundleDisplayName = GymCount;
 				MARKETING_VERSION = 1.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
 		8BB41D302E9D0E9D00EF6076 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 8;
+				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = GymCount;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				TARGETED_DEVICE_FAMILY = 1;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
-				DEVELOPMENT_TEAM = 8BPSC5L74V;
-				INFOPLIST_KEY_CFBundleDisplayName = GymCount;
 				MARKETING_VERSION = 1.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -660,7 +662,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		8BB41CFB2E9D0E9C00EF6076 /* Build configuration list for PBXProject "GymCount" */ = {
+		8BB41CFB2E9D0E9C00EF6076 /* Build configuration list for PBXProject "GymCountCapture" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				8BB41D282E9D0E9D00EF6076 /* Debug */,

@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import HealthKit
+import WatchKit
 
 class DataManager: ObservableObject {
     static let shared = DataManager()
@@ -92,6 +93,7 @@ class DataManager: ObservableObject {
     
     // MARK: - 锻炼会话管理
     func startWorkout(exerciseType: ExerciseType, weight: Double = 0.0) {
+        WKInterfaceDevice.current().play(.click)
         currentSession = WorkoutSession(
             exerciseType: exerciseType,
             startTime: Date(),

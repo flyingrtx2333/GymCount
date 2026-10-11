@@ -1,0 +1,14 @@
+Use case: illustration-story. Asset type: ORIGINAL GymCount exercise line-art icon sheet.
+The input image is a STYLE reference ONLY, not an edit target or a pose template. Create NINE DIFFERENT NEW actions listed below, exactly one per cell in a strict THREE BY THREE equal-cell square grid, reading row-major. Do not repeat reference actions in place of the requested new ones.
+Same elegant rounded near-black contour illustration as reference: naturally proportioned faceless athletic adult in tank top and shorts, short neck, subtle chin, realistic smoothly curved joints, compact shoes. White interiors and white background. No filled black body, no colored fill, no shading, ground shadows or gradients. Consistent moderately bold smooth linework. Equipment minimal but unmistakable. Simplify small details (no fingers, laces, muscle lines). Anatomically correct poses are crucial.
+Each figure and its equipment fits entirely within its own cell, generous blank margins on ALL sides, clear separation from adjacent cells. Exactly equal grid cell size. Similar optical scale. NO text, NO labels, NO digits, NO title, NO borders or separators, NO watermark. A white background must separate each icon. Full body included, no cropping. Each action has correct limb count, realistic grips, no fused limbs/equipment.
+Actions in precise row-major order:
+1. Pull-up: both hands on horizontal overhead bar, elbows bent, chin above bar, feet lifted with knees slightly bent.
+2. Push-up: side view, hands and toes grounded, body straight from head to heels, elbows bent lowering chest close to ground.
+3. Parallel-bar dips: both hands on two parallel bars at hip sides, feet suspended, elbows bent about90degrees, torso leaning slightly forward.
+4. Bulgarian split squat: front foot planted and knee bent, rear foot resting on a low bench behind athlete, hips lowered, no weights.
+5. Goblet squat: holding one vertical dumbbell with both hands in front of chest, deep squat, elbows inside knees, heels grounded.
+6. Kettlebell swing: three-quarter side view, athlete with soft knees and hips extending, both straight arms holding one kettlebell in front at chest height, back neutral.
+7. Standing calf raise: athlete upright on small step, heels lifted clearly above step edge, tiptoes supporting body, no squat.
+8. Forearm plank: side view, forearms and toes grounded, elbows under shoulders, straight body line, no hand-supported pushup.
+9. Sit-up: sitting partway up from supine, knees bent and feet planted, arms crossed on chest, torso about45degrees to floor.

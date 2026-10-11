@@ -9,6 +9,13 @@ import SwiftUI
 import HealthKit
 import Intents
 
+enum WatchHealthPermissionGuide {
+    static let path = "设置 → 健康 → 数据来源、App 和服务 → 健身计数器"
+    static let instruction = "开启「允许写入」中的「体能训练」。"
+    static let alternateName = "应用也可能显示为 PowerReps。"
+    static let message = "在手表本机打开：\n" + path + "\n" + instruction + "\n" + alternateName
+}
+
 struct SettingsView: View {
     @EnvironmentObject var dataManager: DataManager
     @EnvironmentObject var notificationManager: NotificationManager
@@ -16,6 +23,7 @@ struct SettingsView: View {
     @State private var tempSettings: AppSettings
     @State private var healthKitStatus: HKAuthorizationStatus = .notDetermined
     @State private var siriStatus: INSiriAuthorizationStatus = .notDetermined
+    @State private var showingHealthGuide = false
 
     var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "--"
@@ -29,16 +37,20 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationView {
-            List {
-                #if DEBUG || GYMCOUNT_CAPTURE
-                Section {
-                    NavigationLink { CollectionView() } label: {
-                        Label("采集测试", systemImage: "waveform.path")
-                            .font(GymStyle.body)
+        NavigationStack {
+            ScrollView {
+            VStack(spacing: GymStyle.spacing) {
+                HStack(spacing: 0) {
+                    GymHeader(title: "设置", back: { presentationMode.wrappedValue.dismiss() })
+                    Button("保存") {
+                        dataManager.updateSettings(tempSettings)
+                        presentationMode.wrappedValue.dismiss()
                     }
+                    .font(GymStyle.button).foregroundStyle(GymStyle.mint)
+                    .frame(minHeight: 44)
+                    .buttonStyle(.plain)
                 }
-                #endif
+                .frame(height: 28)
 
 
                 // MARK: 器械重量
@@ -46,7 +58,7 @@ struct SettingsView: View {
                     WeightRow(
                         label: NSLocalizedString("equipment weight", comment: "器械重量"),
                         icon: "dumbbell.fill",
-                        iconColor: .blue,
+                        iconColor: GymStyle.mint,
                         value: $tempSettings.defaultWeight,
                         step: 2.5,
                         minValue: 0
@@ -58,7 +70,7 @@ struct SettingsView: View {
                     WeightRow(
                         label: NSLocalizedString("my_weight", comment: "我的体重"),
                         icon: "person.fill",
-                        iconColor: .green,
+                        iconColor: GymStyle.mint,
                         value: $tempSettings.userBodyWeight,
                         step: 1.0,
                         minValue: 30,
@@ -66,12 +78,32 @@ struct SettingsView: View {
                     )
                 }
 
+                #if DEBUG || GYMCOUNT_CAPTURE
+                Section {
+                    NavigationLink { CollectionView() } label: {
+                        Label("采集测试", systemImage: "waveform.path")
+                            .font(GymStyle.body)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(GymStyle.surface, in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                }
+                #endif
+
                 // MARK: 运动圆环
-                Section(header: Text(NSLocalizedString("healthkit_section", comment: "Apple Watch 运动圆环"))) {
+                Section(header: Text("运动圆环")) {
+                    Button { showingHealthGuide = true } label: {
+                        Label("健康权限怎么开", systemImage: "questionmark.circle")
+                            .font(GymStyle.body)
+                            .frame(maxWidth: .infinity, minHeight: GymStyle.buttonHeight, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(GymStyle.mint)
+                    .accessibilityIdentifier("settings.healthGuide")
                     // 同步开关
                     HStack {
                         Image(systemName: "heart.fill")
-                            .foregroundColor(.red)
+                            .foregroundStyle(GymStyle.mint)
                             .frame(width: 16)
                         Text(NSLocalizedString("sync_to_activity_rings", comment: "同步到运动圆环"))
                             .font(GymStyle.body)
@@ -84,7 +116,7 @@ struct SettingsView: View {
                         // 自动同步
                         HStack {
                             Image(systemName: "arrow.triangle.2.circlepath")
-                                .foregroundColor(.blue)
+                                .foregroundStyle(GymStyle.mint)
                                 .frame(width: 16)
                             Text(NSLocalizedString("auto_sync", comment: "自动同步"))
                                 .font(GymStyle.body)
@@ -110,7 +142,7 @@ struct SettingsView: View {
                                 systemImage: "icloud.and.arrow.up"
                             )
                             .font(GymStyle.body)
-                            .foregroundColor(.blue)
+                            .foregroundStyle(GymStyle.mint)
                         }
 
                         // 请求权限
@@ -126,7 +158,7 @@ struct SettingsView: View {
                                     systemImage: "lock.open"
                                 )
                                 .font(GymStyle.body)
-                                .foregroundColor(.orange)
+                                .foregroundStyle(GymStyle.mint)
                             }
                         }
                     }
@@ -150,7 +182,7 @@ struct SettingsView: View {
                                 systemImage: "bell.badge"
                             )
                             .font(GymStyle.body)
-                            .foregroundColor(.blue)
+                            .foregroundStyle(GymStyle.mint)
                         }
                     }
                 }
@@ -159,7 +191,7 @@ struct SettingsView: View {
                 Section(header: Text(NSLocalizedString("app_info", comment: "应用信息"))) {
                     HStack {
                         Image(systemName: "info.circle.fill")
-                            .foregroundColor(.blue)
+                            .foregroundStyle(GymStyle.mint)
                             .frame(width: 16)
                         Text(NSLocalizedString("version", comment: "版本"))
                             .font(GymStyle.body)
@@ -170,28 +202,35 @@ struct SettingsView: View {
                     }
                 }
             }
-            .font(GymStyle.body)
-            .navigationTitle(NSLocalizedString("settings", comment: "设置"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                        Image(systemName: "xmark")
-                            .foregroundColor(.secondary)
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(NSLocalizedString("save", comment: "保存")) {
-                        dataManager.updateSettings(tempSettings)
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .font(GymStyle.button)
-                }
+            .gymPageContent(fullWidthHeader: true)
             }
+            .navigationBarBackButtonHidden(true)
+            .toolbar(.hidden)
+            .gymPage()
+
         }
         .onAppear {
             healthKitStatus = dataManager.getHealthKitAuthorizationStatus()
             notificationManager.checkAuthorizationStatus()
+        }
+        .sheet(isPresented: $showingHealthGuide) {
+            VStack(spacing: GymStyle.spacing) {
+                GymHeader(title: "健康权限")
+                    .padding(.horizontal, GymStyle.inset)
+                    .padding(.top, 44)
+                ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("在手表本机操作").font(GymStyle.body.bold())
+                    Text(WatchHealthPermissionGuide.path)
+                    Text(WatchHealthPermissionGuide.instruction)
+                    Text(WatchHealthPermissionGuide.alternateName).font(GymStyle.detail).foregroundStyle(GymStyle.muted)
+                    Text("开启后，回到采集页点「检查同步权限」。").font(GymStyle.detail).foregroundStyle(GymStyle.muted)
+                }
+                .padding(.horizontal, GymStyle.inset)
+                .padding(.bottom, 12)
+                }
+            }
+            .gymPage()
         }
     }
 
@@ -256,55 +295,69 @@ struct WeightRow: View {
     var minValue: Double = 0
     var maxValue: Double = .infinity
 
-    var body: some View {
-        VStack(spacing: 6) {
-            // 标签 + 当前值
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: icon)
-                    .foregroundColor(iconColor)
-                    .frame(width: 16)
-                Text(label)
-                    .font(GymStyle.body)
-                Spacer()
-                HStack(alignment: .lastTextBaseline, spacing: 2) {
-                    Text(formatValue(value))
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
-                        .contentTransition(.numericText())
-                        .animation(.spring(duration: 0.2), value: value)
-                    Text("kg")
-                        .font(GymStyle.detail)
-                        .foregroundColor(.secondary)
-                }
-            }
-            // 加减控制
-            HStack(spacing: 8) {
-                Button(action: { if value - step >= minValue { value -= step } }) {
-                    Image(systemName: "minus")
-                        .font(GymStyle.button)
-                        .foregroundColor(.orange)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(RoundedRectangle(cornerRadius: 7).fill(Color.orange.opacity(0.15)))
-                }
-                .buttonStyle(.plain)
-                .disabled(value - step < minValue)
+    @State private var editing = false
 
-                Button(action: { if value + step <= maxValue { value += step } }) {
-                    Image(systemName: "plus")
-                        .font(GymStyle.button)
-                        .foregroundColor(.blue)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(RoundedRectangle(cornerRadius: 7).fill(Color.blue.opacity(0.15)))
-                }
-                .buttonStyle(.plain)
-                .disabled(value + step > maxValue)
+    var body: some View {
+        Button { editing = true } label: {
+            HStack(spacing: 4) {
+                Text(label).font(GymStyle.body)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .layoutPriority(1)
+                Spacer(minLength: 2)
+                Text(formatValue(value) + " 公斤")
+                    .font(GymStyle.caption).foregroundStyle(.white)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .monospacedDigit()
+                Image(systemName: "chevron.right")
+                    .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
             }
+            .padding(.horizontal, 10)
+            .frame(minHeight: 44)
+            .background(GymStyle.surface, in: RoundedRectangle(cornerRadius: 12))
         }
-        .padding(.vertical, 2)
+        .buttonStyle(.plain)
+        .sheet(isPresented: $editing) {
+            WeightAdjustmentView(label: label, value: $value, step: step,
+                                 minValue: minValue, maxValue: maxValue)
+        }
     }
 
     private func formatValue(_ v: Double) -> String {
         v.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(v))" : String(format: "%.1f", v)
+    }
+}
+
+struct WeightAdjustmentView: View {
+    let label: String
+    @Binding var value: Double
+    let step: Double
+    let minValue: Double
+    let maxValue: Double
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: GymStyle.spacing) {
+                GymHeader(title: label, back: { dismiss() })
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(value.formatted(.number.precision(.fractionLength(0...1))))
+                        .font(GymStyle.counter).monospacedDigit()
+                    Text("公斤").font(GymStyle.body).foregroundStyle(GymStyle.muted)
+                }
+                HStack(spacing: 20) {
+                    CircleButton(icon: "minus", color: GymStyle.mint, size: 44,
+                                 disabled: value - step < minValue) { value -= step }
+                        .accessibilityLabel("减少重量")
+                    CircleButton(icon: "plus", color: GymStyle.mint, size: 44,
+                                 disabled: value + step > maxValue) { value += step }
+                        .accessibilityLabel("增加重量")
+                }
+                Button("完成") { dismiss() }.buttonStyle(GymActionStyle(primary: true))
+            }
+            .gymPageContent(fullWidthHeader: true)
+        }
+        .toolbar(.hidden)
+        .gymPage()
     }
 }
 

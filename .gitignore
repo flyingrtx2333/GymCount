@@ -10,3 +10,12 @@ xcuserdata/
 .env
 .env.*
 !.env.example
+
+# Generated Python cache and icon distribution archive
+__pycache__/
+*.py[cod]
+design/exercise-icons/gymcount-exercise-icons.zip
+
+# Local design experiments and screenshot evidence
+/design/concepts/
+/design/evidence/

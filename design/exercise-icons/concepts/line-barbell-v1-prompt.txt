@@ -1,0 +1,14 @@
+Use case: illustration-story. Asset type: ORIGINAL GymCount exercise line-art icon sheet.
+The input image is a STYLE reference ONLY, not an edit target or a pose template. Create NINE DIFFERENT NEW actions listed below, exactly one per cell in a strict THREE BY THREE equal-cell square grid, reading row-major. Do not repeat reference actions in place of the requested new ones.
+Same elegant rounded near-black contour illustration as reference: naturally proportioned faceless athletic adult in tank top and shorts, short neck, subtle chin, realistic smoothly curved joints, compact shoes. White interiors and white background. No filled black body, no colored fill, no shading, ground shadows or gradients. Consistent moderately bold smooth linework. Equipment minimal but unmistakable. Simplify small details (no fingers, laces, muscle lines). Anatomically correct poses are crucial.
+Each figure and its equipment fits entirely within its own cell, generous blank margins on ALL sides, clear separation from adjacent cells. Exactly equal grid cell size. Similar optical scale. NO text, NO labels, NO digits, NO title, NO borders or separators, NO watermark. A white background must separate each icon. Full body included, no cropping. Each action has correct limb count, realistic grips, no fused limbs/equipment.
+Actions in precise row-major order:
+1. Front squat: bar in front rack across front shoulders, elbows high, deep squat, heels planted.
+2. Romanian deadlift: standing with hips hinged backward, slight knee bend, neutral back, arms straight, bar near mid-shins, not a squat.
+3. Sumo deadlift: front three-quarter view, very wide stance with toes outward, both hands gripping bar between knees, straight arms, plates at floor.
+4. Bent-over barbell row: hinged torso about 45 degrees, bent elbows pulling bar toward lower ribs, knees slightly bent.
+5. Standing overhead barbell press: upright athlete, both hands holding bar just above head, upper arms raised, elbows slightly bent, no bar through head.
+6. Barbell reverse lunge: bar on upper back, front knee bends 90 degrees, rear knee lowered near ground, feet separated front/back.
+7. Barbell hip thrust: shoulders on low bench, feet planted, knees bent 90 degrees, hips raised horizontally, bar with pad across hips.
+8. Standing barbell curl: elbows fixed beside torso, both forearms bent up, bar held near upper abdomen, upright straight legs.
+9. Lying triceps extension with short bar: supine on bench, upper arms vertical, elbows bent, bar above forehead with clearance, feet planted.

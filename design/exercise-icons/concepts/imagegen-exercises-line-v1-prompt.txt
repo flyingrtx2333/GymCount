@@ -1,0 +1,16 @@
+Use case: style-transfer.
+Transform the provided seven-exercise design sheet into a premium, elegant, simplified LINE ART icon family for GymCount. The reference is the approved anatomical and pose foundation. Preserve the exact seven actions, all correct anatomical proportions, all poses, the single-arm curl with empty relaxed hand, and the bent-elbow bench press. Preserve the Chinese labels and 3-column arrangement.
+
+Style: airy, abstract contour illustration with carefully drawn smooth rounded strokes, consistent medium line weight, near-black / deep charcoal-green lines on pure warm-white background. No colored fills, no filled black silhouettes, no gray shading, no gradients, no shadows, no skin color, no muscle details, no fabric folds, no shoe laces. White interiors. Use economical flowing curves: one simple oval head contour with a subtle chin and a short natural neck, broad smooth shoulders, torso outline, clearly articulated but fluid arms/legs with natural joint bends and very compact simplified shoes. Do NOT turn people into stick figures, circles on pipe necks, angular zigzag limbs, or geometric tubes. Keep real anatomical silhouette but reduce detail strongly. Hair only as one simple contour, no filled dark hair patch. Shirt and shorts can have only one or two essential boundary lines.
+Equipment: simplified yet recognizable, clean circular barbell plates, two contours max per plate, simple bench, minimal dumbbell. Do not let hands, arms, head, legs and bars overlap confusingly. All seven icons should share an identical visual language and feel attractive at small app-icon sizes. Remove all drop shadows and ground marks.
+
+Detailed invariants:
+深蹲: back squat, bar across upper back behind neck, thighs near parallel, both heels grounded, realistic knees.
+卧推: lying supine on bench, head visible on left end, both elbows BENT about 90 degrees, bar lowered near chest, feet grounded.
+硬拉: hips hinged back, neutral back, knees moderately bent, arms straight down, bar in front of shins.
+弯举: one dumbbell raised by the bent arm, upper arm close to torso; opposite hand empty and relaxed.
+静止: relaxed standing.
+走动: natural moderate walking stride.
+其他非训练: standing with open palms / slight shrug.
+
+This is a strong stylistic simplification of the reference, not a new set of poses. Target a refined editorial line icon system: simple, beautiful, human, and readable. No title, no card borders, no watermark. Exact labels remain 深蹲, 卧推, 硬拉, 弯举, 静止, 走动, 其他非训练.

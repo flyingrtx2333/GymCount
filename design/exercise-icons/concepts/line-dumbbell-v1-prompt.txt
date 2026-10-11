@@ -1,0 +1,14 @@
+Use case: illustration-story. Asset type: ORIGINAL GymCount exercise line-art icon sheet.
+The input image is a STYLE reference ONLY, not an edit target or a pose template. Create NINE DIFFERENT NEW actions listed below, exactly one per cell in a strict THREE BY THREE equal-cell square grid, reading row-major. Do not repeat reference actions in place of the requested new ones.
+Same elegant rounded near-black contour illustration as reference: naturally proportioned faceless athletic adult in tank top and shorts, short neck, subtle chin, realistic smoothly curved joints, compact shoes. White interiors and white background. No filled black body, no colored fill, no shading, ground shadows or gradients. Consistent moderately bold smooth linework. Equipment minimal but unmistakable. Simplify small details (no fingers, laces, muscle lines). Anatomically correct poses are crucial.
+Each figure and its equipment fits entirely within its own cell, generous blank margins on ALL sides, clear separation from adjacent cells. Exactly equal grid cell size. Similar optical scale. NO text, NO labels, NO digits, NO title, NO borders or separators, NO watermark. A white background must separate each icon. Full body included, no cropping. Each action has correct limb count, realistic grips, no fused limbs/equipment.
+Actions in precise row-major order:
+1. Flat dumbbell bench press: lying supine on flat bench, feet grounded, elbows bent about90degrees, one dumbbell in each hand above chest.
+2. Incline dumbbell bench press: athlete supported by clearly inclined 40degree bench back, feet planted, two dumbbells raised above upper chest, elbows bent.
+3. Flat dumbbell fly: supine on bench, three-quarter view, arms spread wide at chest height with a slight elbow bend, one dumbbell per hand, palms facing inward.
+4. Seated dumbbell shoulder press: upright torso on seated bench with vertical backrest, both elbows bent outward, dumbbells just above shoulders.
+5. Standing dumbbell lateral raise: frontal view, both arms extending out to sides about shoulder height, slight elbow bend, dumbbells held outward.
+6. Standing dumbbell front raise: side three-quarter view, both arms raised straight in front to shoulder height, dumbbells at hands, upright torso.
+7. Single-arm dumbbell row: one knee and same-side hand on flat bench, other foot planted, back flat, other elbow pulled behind torso lifting dumbbell beside ribs.
+8. Standing hammer curl: elbows by sides, two dumbbells raised toward shoulders, neutral vertical grips with thumb upward, no supinated grip.
+9. Seated two-hand dumbbell overhead triceps extension: torso upright, both hands gripping one dumbbell behind head, upper arms pointing up, elbows visibly bent.

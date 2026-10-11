@@ -3,8 +3,9 @@ import SwiftUI
 import CoreMotion
 import WatchKit
 import Darwin
+import OSLog
 
-private struct CaptureSample: Encodable {
+struct CaptureSample: Encodable {
     let t: Double
     let received_t: Double
     let x: Double
@@ -12,20 +13,20 @@ private struct CaptureSample: Encodable {
     let z: Double
 }
 
-private struct CaptureVector: Encodable {
+struct CaptureVector: Encodable {
     let x: Double
     let y: Double
     let z: Double
 }
 
-private struct CaptureQuaternion: Encodable {
+struct CaptureQuaternion: Encodable {
     let x: Double
     let y: Double
     let z: Double
     let w: Double
 }
 
-private struct CaptureMotion: Encodable {
+struct CaptureMotion: Encodable {
     let t: Double
     let received_t: Double
     let gravity: CaptureVector
@@ -38,13 +39,13 @@ private struct CaptureMotion: Encodable {
     let heading: Double
 }
 
-private struct CaptureAvailability: Encodable {
+struct CaptureAvailability: Encodable {
     let gyroscope: Bool
     let device_motion: Bool
     let magnetometer: Bool
 }
 
-private struct CaptureRecord: Encodable {
+struct CaptureRecord: Encodable {
     let schema_version = 2
     let session_id: UUID
     let started_at: Date
@@ -86,6 +87,11 @@ private final class RawCapture {
         return queue
     }()
     private var origin: Double?
+    private let wallAnchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
+    var originWallTime: Double? {
+        lock.lock(); defer { lock.unlock() }
+        return origin.map { wallAnchor + $0 }
+    }
     private var points: [CaptureSample] = []
     private var gyro: [CaptureSample] = []
     private var deviceMotion: [CaptureMotion] = []
@@ -94,6 +100,8 @@ private final class RawCapture {
     private var eventsTruncated = false
     private var overflow = false
     private var sensorFailed = false
+    private var accelerationContinuity = CaptureContinuity()
+    private var motionContinuity = CaptureContinuity()
     var availability: CaptureAvailability {
         CaptureAvailability(gyroscope: motion.isGyroAvailable,
                             device_motion: motion.isDeviceMotionAvailable,
@@ -143,6 +151,7 @@ private final class RawCapture {
         let t = data.timestamp - origin!
         guard points.last.map({ t > $0.t }) ?? true else { return }
         guard points.count < 19200 else { overflow = true; return }
+        accelerationContinuity.observe(timestamp: data.timestamp, received: received)
         points.append(CaptureSample(t: t, received_t: max(0, received - origin!),
                                     x: data.acceleration.x, y: data.acceleration.y, z: data.acceleration.z))
     }
@@ -164,6 +173,7 @@ private final class RawCapture {
         let t = data.timestamp - origin
         guard deviceMotion.last.map({ t > $0.t }) ?? true else { return }
         guard deviceMotion.count < 19200 else { overflow = true; return }
+        motionContinuity.observe(timestamp: data.timestamp, received: received)
         let q = data.attitude.quaternion
         deviceMotion.append(CaptureMotion(t: t, received_t: max(0, received - origin),
             gravity: CaptureVector(x: data.gravity.x, y: data.gravity.y, z: data.gravity.z),
@@ -173,6 +183,19 @@ private final class RawCapture {
             quaternion: CaptureQuaternion(x: q.x, y: q.y, z: q.z, w: q.w),
             magnetic_field: CaptureVector(x: data.magneticField.field.x, y: data.magneticField.field.y, z: data.magneticField.field.z),
             magnetic_field_accuracy: Int(data.magneticField.accuracy.rawValue), heading: data.heading))
+    }
+    var elapsedDuration: Double? {
+        lock.lock(); defer { lock.unlock() }
+        return origin.map { max(0, ProcessInfo.processInfo.systemUptime - $0) }
+    }
+    func continuity() -> (gap: Double, delay: Double, age: Double?) {
+        lock.lock(); defer { lock.unlock() }
+        let now = ProcessInfo.processInfo.systemUptime
+        let timestamps = [accelerationContinuity.lastTimestamp,
+                          availability.device_motion ? motionContinuity.lastTimestamp : nil].compactMap { $0 }
+        return (max(accelerationContinuity.maximumGap, motionContinuity.maximumGap),
+                max(accelerationContinuity.maximumDeliveryDelay, motionContinuity.maximumDeliveryDelay),
+                timestamps.min().map { max(0, now - $0) })
     }
     func markRep() {
         lock.lock(); defer { lock.unlock() }
@@ -189,7 +212,8 @@ private final class RawCapture {
 }
 
 @MainActor
-private final class CollectionStore: ObservableObject {
+final class CollectionStore: ObservableObject {
+    static let shared = CollectionStore()
     @Published var recording = false
     @Published var detected = 0
     @Published var draft: CaptureRecord?
@@ -202,7 +226,14 @@ private final class CollectionStore: ObservableObject {
     private var pace = "normal"
     private var captureNotes = ""
     private var start = Date()
+    private var sessionID = UUID()
+    var sampleOriginWallTime: Double? { capture?.originWallTime }
     private var timeout: Timer?
+    private var continuityTimer: Timer?
+    private var continuityWarningShown = false
+    private let captureLog = Logger(subsystem: "com.flyingrtx.GymCount.watchkitapp", category: "CaptureContinuity")
+    private let storageFolder: URL
+    private let send: (URLRequest) async throws -> (Data, URLResponse)
     private func hardwareModel() -> String {
         var info = utsname()
         uname(&info)
@@ -211,15 +242,27 @@ private final class CollectionStore: ObservableObject {
         }
     }
     private var folder: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("DevelopmentCaptures", isDirectory: true)
+        storageFolder
     }
     private func files() -> [URL] {
         (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil).filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }) ?? []
     }
-    init() { pending = files().count }
-    func begin(_ kind: String, pace: String, notes: String) {
+    init(folder: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("DevelopmentCaptures", isDirectory: true),
+         send: @escaping (URLRequest) async throws -> (Data, URLResponse) = { try await URLSession.shared.data(for: $0) }) {
+        storageFolder = folder
+        self.send = send
+        pending = files().count
+    }
+    func begin(_ kind: String, pace: String, notes: String, sessionID: UUID = UUID()) {
         guard !recording && draft == nil else { return }
+        guard WatchCaptureLink.shared.isCaptureWorkoutRunning else {
+            message = "训练会话未启动，请重试"
+            return
+        }
+        WKInterfaceDevice.current().play(.click)
+        continuityWarningShown = false
         let raw = RawCapture(); capture = raw; exercise = kind; self.pace = pace; captureNotes = String(notes.prefix(1000)); start = Date(); detected = 0; message = ""
+        self.sessionID = sessionID
         let hasWatchCounter = ["squat", "bench_press", "deadlift"].contains(kind)
         detector.configureForExercise(kind == "squat" ? .squat : kind == "deadlift" ? .deadlift : .benchPress)
         detector.onRawAcceleration = { raw.append($0) }
@@ -229,26 +272,55 @@ private final class CollectionStore: ObservableObject {
         }
         raw.start()
         detector.startDetection(countRepetitions: hasWatchCounter); recording = detector.isDetecting
-        if !recording { raw.stop(); capture = nil; message = "加速度计不可用"; return }
-        // A bounded, foreground test session; not a HealthKit workout.
+        if !recording { raw.stop(); capture = nil; message = "加速度计不可用"; WKInterfaceDevice.current().play(.failure); return }
+        // Both entry points have already started an active HealthKit workout.
+        continuityTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.checkContinuity() }
+        }
         timeout = Timer.scheduledTimer(withTimeInterval: 180, repeats: false) { [weak self] _ in
             Task { @MainActor in self?.finish() }
         }
     }
-    func finish() {
+    private func checkContinuity() {
+        guard recording, !continuityWarningShown, let state = capture?.continuity() else { return }
+        let age = state.age ?? Date().timeIntervalSince(start)
+        guard state.gap > 0.25 || age > 1 else { return }
+        continuityWarningShown = true
+        message = "采样中断，请结束后重新采集"
+        WKInterfaceDevice.current().play(.failure)
+        captureLog.error("Capture continuity warning: gap=\(state.gap), age=\(age), delay=\(state.delay)")
+    }
+    func noteScenePhase(_ phase: ScenePhase) {
         guard recording else { return }
-        detector.stopDetection(); capture?.stop(); timeout?.invalidate(); timeout = nil; recording = false
+        captureLog.info("Capture scene phase: \(String(describing: phase), privacy: .public)")
+        if phase == .active { checkContinuity() }
+    }
+    func finish(interruption: String? = nil) {
+        guard recording else { return }
+        WKInterfaceDevice.current().play(.click)
+        WatchCaptureLink.shared.noteSampleOrigin(sampleOriginWallTime)
+        defer { WatchCaptureLink.shared.captureFinished() }
+        detector.stopDetection(); capture?.stop(); timeout?.invalidate(); timeout = nil
+        continuityTimer?.invalidate(); continuityTimer = nil; recording = false
         guard let raw = capture else { return }
         let result = raw.snapshot()
+        let continuity = raw.continuity()
+        captureLog.info("Capture finished: gap=\(continuity.gap), delay=\(continuity.delay)")
+        let incomplete = continuity.gap > 0.25 || (continuity.age ?? 0) > 1 || interruption != nil
+        if incomplete {
+            let diagnostic = "采集诊断：\(interruption ?? "采样中断")，最大缺口 \(String(format: "%.3f", continuity.gap)) 秒，最大回调延迟 \(String(format: "%.3f", continuity.delay)) 秒"
+            captureNotes = String(captureNotes.prefix(800)) + "\n" + diagnostic
+            message = "采样中断，数据已保留"
+        }
         let points = result.points, events = result.events
         guard points.count >= 2, !result.invalid, events.count <= 500 else {
-            message = "记录不完整或超出采集上限，请重新采集"; return
+            message = "记录不完整或超出采集上限，请重新采集"; WKInterfaceDevice.current().play(.failure); return
         }
         let saved = UserDefaults.standard.string(forKey: "captureParticipantID").flatMap(UUID.init(uuidString:)) ?? UUID()
         UserDefaults.standard.set(saved.uuidString, forKey: "captureParticipantID")
         let info = Bundle.main.infoDictionary ?? [:]
-        draft = CaptureRecord(session_id: UUID(), started_at: start, exercise: exercise, actual_count: 0,
-            detected_count: events.count, duration_seconds: [points.last!.t, result.gyro.last?.t ?? 0, result.motion.last?.t ?? 0, result.magnetic.last?.t ?? 0].max()!, wrist: WKInterfaceDevice.current().wristLocation == .left ? "left" : "right",
+        draft = CaptureRecord(session_id: sessionID, started_at: start, exercise: exercise, actual_count: 0,
+            detected_count: events.count, duration_seconds: [raw.elapsedDuration ?? 0, points.last!.t, result.gyro.last?.t ?? 0, result.motion.last?.t ?? 0, result.magnetic.last?.t ?? 0].max()!, wrist: WKInterfaceDevice.current().wristLocation == .left ? "left" : "right",
             watch_crown: WKInterfaceDevice.current().crownOrientation == .left ? "left" : "right", pace: pace,
             watch_model: hardwareModel(), os_version: WKInterfaceDevice.current().systemVersion,
             app_version: "\(info["CFBundleShortVersionString"] ?? "unknown") (\(info["CFBundleVersion"] ?? "unknown"))",
@@ -259,6 +331,7 @@ private final class CollectionStore: ObservableObject {
     }
     func persist(_ actual: Int) async {
         guard var record = draft, !uploading else { return }
+        message = ""
         record.actual_count = ["rest", "walking", "other"].contains(record.exercise) ? 0 : actual
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -270,53 +343,135 @@ private final class CollectionStore: ObservableObject {
             try encoded.write(to: folder.appendingPathComponent(record.session_id.uuidString + ".json"), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             draft = nil; pending = files().count
             await retry()
-        } catch { message = "无法保存到手表，请保留本页并重试" }
+            // Failed uploads remain editable; success removes the queued file.
+            if FileManager.default.fileExists(atPath: folder.appendingPathComponent(record.session_id.uuidString + ".json").path) {
+                draft = record
+            }
+        } catch { message = "无法保存到手表，请保留本页并重试"; WKInterfaceDevice.current().play(.failure) }
     }
     func retry() async {
         guard !uploading else { return }
+        let queued = files()
+        guard !queued.isEmpty else { message = "没有待上传记录"; return }
+        message = "正在上传…"
+        WKInterfaceDevice.current().play(.click)
         uploading = true; defer { uploading = false; pending = files().count }
         do {
-            for file in files() {
+            for file in queued {
                 var req = URLRequest(url: URL(string: "https://api.flyingrtx.com/api/v1/gymcount/sessions")!)
                 req.httpMethod = "POST"; req.timeoutInterval = 45
                 req.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 req.httpBody = try Data(contentsOf: file)
-                let (_, response) = try await URLSession.shared.data(for: req)
+                let (_, response) = try await send(req)
                 guard let http = response as? HTTPURLResponse, http.statusCode == 201 else {
-                    message = "上传失败（\((response as? HTTPURLResponse)?.statusCode ?? 0)），记录仍在手表"; return
+                    WKInterfaceDevice.current().play(.failure)
+                    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    message = status == 409 ? "记录已上传，请在网站修改次数" : status == 429 ? "请稍后重试，数据已保留" : "上传失败（\(status)），数据已保留"
+                    return
                 }
                 try FileManager.default.removeItem(at: file)
             }
             message = "上传完成"
-        } catch { message = "网络未完成，记录已保留，可安全重试" }
+            WKInterfaceDevice.current().play(.success)
+        } catch { message = "上传失败，数据已保留，请重试"; WKInterfaceDevice.current().play(.failure) }
     }
-    func discard() { draft = nil; message = "" }
+    func discard() {
+        if let record = draft {
+            let file = folder.appendingPathComponent(record.session_id.uuidString + ".json")
+            if FileManager.default.fileExists(atPath: file.path) {
+                do { try FileManager.default.removeItem(at: file) }
+                catch { message = "无法丢弃本地记录，请重试"; return }
+            }
+        }
+        draft = nil; pending = files().count; message = ""
+    }
 }
 
 struct CollectionView: View {
-    @StateObject private var store = CollectionStore()
+    var onClose: (() -> Void)? = nil
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var store = CollectionStore.shared
+    @ObservedObject private var link = WatchCaptureLink.shared
     @State private var exercise = "squat"
-    @State private var actual = 10
-    @State private var pace = "normal"
+    @State private var actual = 0
     @State private var notes = ""
+    @State private var confirmingUpload = false
+    @State private var confirmingRetry = false
+    @State private var confirmingDiscard = false
 
     var body: some View {
         CollectionPanel(
-            exercise: $exercise, actual: $actual, pace: $pace, notes: $notes,
+            exercise: $exercise, actual: $actual, notes: $notes,
             recording: store.recording, reviewing: store.draft != nil,
             detected: store.detected, uploading: store.uploading,
             pending: store.pending, message: store.message,
             onStartStop: {
-                if store.recording { store.finish() } else { store.begin(exercise, pace: pace, notes: notes) }
+                if store.recording { store.finish() } else {
+                    Task { await link.startStandaloneCapture(exercise: exercise, notes: notes) }
+                }
             },
-            onUpload: { Task { await store.persist(actual) } },
-            onDiscard: { store.discard() },
-            onRetry: { Task { await store.retry() } }
+            onUpload: { confirmingUpload = true },
+            onDiscard: { confirmingDiscard = true },
+            onRetry: { confirmingRetry = true },
+            onBack: { if let onClose { onClose() } else { dismiss() } },
+            onPhoneSync: { Task { await link.startFromWatch(exercise: exercise) } },
+            phoneConnecting: link.requestingPhone,
+            startingCapture: link.startingCapture,
+            authorizing: link.authorizing,
+            needsAuthorization: link.needsAuthorization
         )
-        .navigationTitle("采集测试")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(store.recording || store.draft != nil)
-        .onDisappear { store.finish() }
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden)
+        .tint(GymStyle.mint)
+        .alert("同步权限", isPresented: $link.showingAuthorizationHelp) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(link.authorizationMessage + (link.authorizationMessage == "手表尚未获得体能训练权限" ? "。\n\n" + WatchHealthPermissionGuide.message : ""))
+        }
+        .confirmationDialog("实际 \(actual) 次，确认上传？", isPresented: $confirmingUpload, titleVisibility: .visible) {
+            Button("上传 \(actual) 次") {
+                let confirmed = actual
+                Task { await store.persist(confirmed) }
+            }
+            Button("继续修改", role: .cancel) {}
+        }
+        .confirmationDialog("上传保留的 \(store.pending) 组记录？", isPresented: $confirmingRetry, titleVisibility: .visible) {
+            Button("重试上传") { Task { await store.retry() } }
+            Button("取消", role: .cancel) {}
+        }
+        .confirmationDialog("丢弃本组采集？", isPresented: $confirmingDiscard, titleVisibility: .visible) {
+            Button("确认丢弃", role: .destructive) { store.discard() }
+            Button("取消", role: .cancel) {}
+        }
+        .onChange(of: store.draft?.session_id) { _, id in
+            if id != nil { actual = store.draft?.actual_count ?? 0 }
+        }
+        .onAppear {
+            link.refreshAuthorization()
+            if let draft = store.draft { actual = draft.actual_count; exercise = draft.exercise }
+            else { exercise = link.requestedExercise }
+        }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await link.requestInitialCaptureAuthorization()
+            // Phone settings can change while this page stays in the foreground.
+            while scenePhase == .active && !Task.isCancelled {
+                link.refreshAuthorization()
+                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            }
+        }
+        .onChange(of: link.requestedExercise) { _, value in
+            if store.draft == nil { exercise = value }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            store.noteScenePhase(phase)
+            if phase == .active { link.refreshAuthorization() }
+        }
+        .onDisappear {
+            link.cancelStandaloneStart()
+            if !link.remoteSession { store.finish() }
+        }
     }
 }
 
@@ -324,7 +479,6 @@ struct CollectionView: View {
 struct CollectionPanel: View {
     @Binding var exercise: String
     @Binding var actual: Int
-    @Binding var pace: String
     @Binding var notes: String
     let recording: Bool
     let reviewing: Bool
@@ -336,17 +490,15 @@ struct CollectionPanel: View {
     let onUpload: () -> Void
     let onDiscard: () -> Void
     let onRetry: () -> Void
+    var onBack: (() -> Void)? = nil
+    var onPhoneSync: (() -> Void)? = nil
+    var phoneConnecting = false
+    var phoneMessage = ""
+    var startingCapture = false
+    var authorizing = false
+    var needsAuthorization = false
     @State private var choosingExercise = false
-    @State private var choosingPace = false
-
-    private var paceName: String {
-        switch pace {
-        case "slow": return "慢速"
-        case "fast": return "快速"
-        case "mixed": return "混合"
-        default: return "正常"
-        }
-    }
+    @State private var editingNotes = false
 
     private var exerciseName: String {
         switch exercise {
@@ -361,85 +513,102 @@ struct CollectionPanel: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 8) {
+        VStack(spacing: GymStyle.spacing) {
+            GymHeader(title: reviewing ? "确认采集" : recording ? exerciseName : "采集",
+                      back: recording || reviewing || startingCapture ? nil : onBack)
+                .padding(.horizontal, GymStyle.inset)
+                .padding(.top, 12)
+            ScrollView {
+            VStack(spacing: GymStyle.spacing) {
                 if reviewing {
                     reviewCard
                 } else {
+                    if !recording {
                     Button { choosingExercise = true } label: {
-                        HStack {
-                            Text(exerciseName)
+                        HStack(spacing: 8) {
+                            Image("Exercise-\(exercise)")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 36, height: 36)
+                                .accessibilityHidden(true)
+                            Text(exerciseName).font(GymStyle.section)
                             Spacer()
-                            Image(systemName: "chevron.up.chevron.down")
+                            Image(systemName: "chevron.right")
                                 .font(GymStyle.detail)
                                 .foregroundStyle(.secondary)
                         }
-                        .padding(8)
-                        .background(GymStyle.surface, in: RoundedRectangle(cornerRadius: 12))
+                        .padding(.horizontal, 8)
+                        .frame(minHeight: 44)
                     }
                     .buttonStyle(.plain)
                     .disabled(recording || uploading)
                     .accessibilityIdentifier("capture.exercise")
+                    }
 
                     if !recording {
-                        Button { choosingPace = true } label: {
+                        Button { editingNotes = true } label: {
                             HStack(spacing: 4) {
-                                Text("动作速度")
-                                    .foregroundStyle(.secondary)
+                                Text("备注").foregroundStyle(GymStyle.muted)
                                 Spacer(minLength: 0)
-                                Text(paceName)
-                                Image(systemName: "chevron.up.chevron.down")
-                                    .font(GymStyle.detail)
-                                    .foregroundStyle(.secondary)
+                                Text(notes.isEmpty ? "选填" : notes)
+                                    .lineLimit(1).truncationMode(.tail)
+                                    .foregroundStyle(GymStyle.muted)
+                                Image(systemName: "chevron.right").font(GymStyle.detail)
                             }
                             .padding(.horizontal, 8)
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .frame(minHeight: 44)
                             .background(GymStyle.surface, in: RoundedRectangle(cornerRadius: 12))
                         }
                         .buttonStyle(.plain)
-                        .fixedSize(horizontal: false, vertical: true)
                         .disabled(uploading)
-                        .accessibilityIdentifier("capture.pace")
-                        TextField("备注：握持方式、负重等", text: $notes)
-                            .disabled(uploading)
+                        .accessibilityIdentifier("capture.notes")
                     }
+                    if recording {
                     VStack(spacing: 2) {
-                        Text(recording ? "正在采集" : exercise == "bicep_curl" ? "弯举仅采集" : "已识别次数")
+                        Text("手表计数")
                             .font(GymStyle.detail)
-                            .foregroundStyle(recording ? Color.green : Color.secondary)
+                            .foregroundStyle(GymStyle.mint)
                         Text("\(detected)")
                             .font(GymStyle.counter)
                             .monospacedDigit()
                             .contentTransition(.numericText())
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 0)
+                    }
 
-                    actionButton(recording ? "结束采集" : "开始采集",
-                                 icon: recording ? "stop.fill" : "play.fill",
-                                 color: recording ? .orange : .green, action: onStartStop)
-                        .disabled(uploading)
+                    actionButton(recording ? "结束采集" : startingCapture ? "正在准备采集…" : "开始采集",
+                                 primary: !recording, action: onStartStop)
+                        .disabled(uploading || (!recording && (startingCapture || authorizing || phoneConnecting)))
                         .accessibilityIdentifier("capture.startStop")
+                    if !recording, let onPhoneSync {
+                        Button(authorizing ? "等待授权…" : phoneConnecting ? "正在连接…" : needsAuthorization ? "检查同步权限" : "手机同步录像", action: onPhoneSync)
+                            .buttonStyle(GymActionStyle())
+                            .disabled(phoneConnecting || startingCapture || authorizing || uploading)
+                            .accessibilityIdentifier("capture.phoneSync")
+                        if !phoneMessage.isEmpty {
+                            Text(phoneMessage).font(GymStyle.detail).foregroundStyle(GymStyle.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
 
                 if reviewing {
                     actionButton(uploading ? "正在上传" : "确认并上传",
-                                 icon: "arrow.up.circle.fill", color: .green, action: onUpload)
+                                 primary: true, action: onUpload)
                         .disabled(uploading)
                         .accessibilityIdentifier("capture.upload")
                     Button("丢弃此组", role: .destructive, action: onDiscard)
-                        .font(GymStyle.detail)
-                        .buttonStyle(.plain)
-                        .frame(minHeight: 36)
+                        .buttonStyle(GymActionStyle())
                         .disabled(uploading)
                 }
 
                 if pending > 0 {
                     actionButton(uploading ? "正在上传" : "重试上传 · \(pending) 组",
-                                 icon: "arrow.clockwise", color: .blue, action: onRetry)
-                        .disabled(uploading || recording)
+                                 primary: false, action: onRetry)
+                        .disabled(uploading || recording || reviewing)
                 }
-                if !message.isEmpty {
+                if !message.isEmpty, !(uploading && message == "正在上传…"), message != phoneMessage {
                     Text(message)
                         .font(GymStyle.detail)
                         .foregroundStyle(.secondary)
@@ -449,13 +618,29 @@ struct CollectionPanel: View {
                 }
 
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, GymStyle.inset)
             .padding(.bottom, 12)
+            }
         }
-        .font(GymStyle.body)
+        .gymPage()
+        .sheet(isPresented: $editingNotes) {
+            ScrollView {
+                VStack(spacing: 8) {
+                    GymHeader(title: "备注", back: { editingNotes = false })
+                    TextField("握持方式、负重等", text: $notes).font(GymStyle.body)
+                    Button("完成") { editingNotes = false }
+                        .buttonStyle(GymActionStyle(primary: true))
+                }
+                .gymPageContent()
+            }
+            .gymPage()
+            .tint(GymStyle.mint)
+        }
         .sheet(isPresented: $choosingExercise) {
             NavigationStack {
-                List {
+                ScrollView {
+                VStack(spacing: GymStyle.spacing) {
+                    GymHeader(title: "选择动作", back: { choosingExercise = false })
                     exerciseOption("深蹲", value: "squat")
                     exerciseOption("卧推", value: "bench_press")
                     exerciseOption("硬拉", value: "deadlift")
@@ -464,39 +649,37 @@ struct CollectionPanel: View {
                     exerciseOption("走动", value: "walking")
                     exerciseOption("其他非训练", value: "other")
                 }
-                .font(GymStyle.body)
-                .navigationTitle("选择动作")
-            }
-        }
-        .sheet(isPresented: $choosingPace) {
-            NavigationStack {
-                List {
-                    paceOption("正常", value: "normal")
-                    paceOption("慢速", value: "slow")
-                    paceOption("快速", value: "fast")
-                    paceOption("混合", value: "mixed")
+                .gymPageContent(fullWidthHeader: true)
                 }
-                .font(GymStyle.body)
-                .navigationTitle("动作速度")
+                .gymPage()
+                .toolbar(.hidden)
+                .tint(GymStyle.mint)
             }
         }
     }
 
     private var reviewCard: some View {
-        VStack(spacing: 8) {
-            Text("\(exerciseName) · 识别 \(detected) 次")
+        VStack(spacing: GymStyle.spacing) {
+            HStack {
+                Text("已识别")
+                Spacer()
+                Text("\(detected) 次").foregroundStyle(.white)
+            }
                 .font(GymStyle.detail)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(GymStyle.surface, in: RoundedRectangle(cornerRadius: 12))
             if ["rest", "walking", "other"].contains(exercise) {
-                Text("非训练样本 · 实际次数 0").font(GymStyle.body)
+                Text("实际次数：0").font(GymStyle.body)
             } else {
+            Text("实际次数")
+                .font(GymStyle.detail)
+                .foregroundStyle(GymStyle.muted)
             HStack(spacing: 6) {
-                countButton("minus", label: "减少实际次数", disabled: actual == 0) { actual -= 1 }
+                countButton("minus", label: "减少实际次数", disabled: uploading || actual == 0) { actual -= 1 }
                 VStack(spacing: 2) {
-                    Text("实际次数")
-                        .font(GymStyle.detail)
-                        .foregroundStyle(.secondary)
                     Text("\(actual)")
                         .font(GymStyle.counter)
                         .monospacedDigit()
@@ -504,49 +687,29 @@ struct CollectionPanel: View {
                         .minimumScaleFactor(0.5)
                 }
                 .frame(maxWidth: .infinity)
-                countButton("plus", label: "增加实际次数", disabled: actual == 500) { actual += 1 }
+                countButton("plus", label: "增加实际次数", disabled: uploading || actual == 500) { actual += 1 }
             }
             }
         }
-        .padding(8)
-        .background(GymStyle.surface, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func countButton(_ icon: String, label: String, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(GymStyle.body)
-                .frame(width: 32, height: 40)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                .frame(width: 44, height: 44)
+                .background(GymStyle.surface, in: Circle())
         }
         .buttonStyle(.plain)
         .disabled(disabled || uploading)
         .accessibilityLabel(label)
     }
 
-    private func actionButton(_ title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+    private func actionButton(_ title: String, primary: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(title, systemImage: icon)
-                .font(GymStyle.button)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .foregroundStyle(color)
-                .background(color.opacity(0.18), in: RoundedRectangle(cornerRadius: 12))
+            Text(title)
         }
-        .buttonStyle(.plain)
-    }
-
-    private func paceOption(_ name: String, value: String) -> some View {
-        Button {
-            pace = value
-            choosingPace = false
-        } label: {
-            HStack {
-                Text(name)
-                Spacer()
-                if pace == value { Image(systemName: "checkmark").foregroundStyle(.green) }
-            }
-            .frame(minHeight: 36)
-        }
+        .buttonStyle(GymActionStyle(primary: primary))
     }
 
     private func exerciseOption(_ name: String, value: String) -> some View {
@@ -554,12 +717,22 @@ struct CollectionPanel: View {
             exercise = value
             choosingExercise = false
         } label: {
-            HStack {
+            HStack(spacing: 8) {
+                Image("Exercise-\(value)")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 32, height: 32)
+                    .accessibilityHidden(true)
                 Text(name)
                 Spacer()
-                if exercise == value { Image(systemName: "checkmark").foregroundStyle(.green) }
+                if exercise == value { Image(systemName: "checkmark").foregroundStyle(GymStyle.mint) }
             }
+            .padding(.horizontal, 8)
+            .frame(minHeight: 44)
+            .background(GymStyle.surface, in: RoundedRectangle(cornerRadius: 12))
         }
+        .buttonStyle(.plain)
     }
 }
 #endif
