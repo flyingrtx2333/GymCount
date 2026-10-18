@@ -20,6 +20,7 @@ final class GymCountPhoneDelegate: NSObject, UIApplicationDelegate {
 @main
 struct GymCountPhoneApp: App {
     @StateObject private var store: PhoneWorkoutStore
+    private let trainingDefaults: UserDefaults
     #if GYMCOUNT_SYNC
     @UIApplicationDelegateAdaptor(GymCountPhoneDelegate.self) private var appDelegate
     @StateObject private var capture = PhoneCaptureStore()
@@ -27,18 +28,24 @@ struct GymCountPhoneApp: App {
 
     init() {
         var defaults = UserDefaults.standard
+        var reminderID = "phone.training.rest"
         #if GYMCOUNT_SYNC
         if ProcessInfo.processInfo.arguments.contains("--isolated-ui-test") {
-            defaults = UserDefaults(suiteName: "GymCountUITest." + UUID().uuidString)!
+            let storageID = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--ui-test-storage-id=") })?
+                .replacingOccurrences(of: "--ui-test-storage-id=", with: "") ?? UUID().uuidString
+            defaults = UserDefaults(suiteName: "GymCountUITest." + storageID)!
+            reminderID += ".uitest." + storageID
         }
         #endif
-        _store = StateObject(wrappedValue: PhoneWorkoutStore(defaults: defaults))
+        trainingDefaults = defaults
+        _store = StateObject(wrappedValue: PhoneWorkoutStore(defaults: defaults, reminderID: reminderID))
     }
 
     var body: some Scene {
         WindowGroup {
             PhoneContentView()
                 .environmentObject(store)
+                .defaultAppStorage(trainingDefaults)
                 #if GYMCOUNT_SYNC
                 .environmentObject(capture)
                 #endif

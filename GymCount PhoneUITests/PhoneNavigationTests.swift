@@ -2,6 +2,111 @@ import XCTest
 
 final class PhoneNavigationTests: XCTestCase {
     @MainActor
+    func testWholeTrainingSetsRestRestoreAndReuse() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--isolated-ui-test", "--ui-test-storage-id=" + UUID().uuidString]
+        app.launch()
+        XCTAssertTrue(app.buttons["tab-2"].waitForExistence(timeout: 15))
+        app.buttons["tab-2"].tap()
+        let duration = app.steppers["rest-duration"]
+        XCTAssertTrue(duration.waitForExistence(timeout: 5))
+        for _ in 0..<5 { duration.buttons.element(boundBy: 0).tap() }
+        XCTAssertTrue(app.staticTexts["休息时长：15 秒"].exists)
+        app.buttons["tab-0"].tap()
+        app.buttons["开始训练"].tap()
+        enterSet(app, weight: "60", reps: "10")
+        snapshot(app, "training-quick-entry")
+        tapVisible(app, "complete-set")
+        XCTAssertTrue(app.otherElements["rest-card"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["已保存 1 组 · 10 次"].exists)
+        snapshot(app, "training-rest-countdown")
+
+        // Relaunch the actual app with the same isolated storage: timer and sets survive.
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["已保存 1 组 · 10 次"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["休息结束，准备下一组"].waitForExistence(timeout: 22))
+        enterSet(app, weight: "62.5", reps: "8")
+        tapVisible(app, "complete-set")
+        tapVisible(app, "撤回上一组")
+        XCTAssertTrue(app.staticTexts["已完成 8 次"].exists)
+        tapVisible(app, "complete-set")
+        tapVisible(app, "active-exercise-squat")
+        enterSet(app, weight: "80", reps: "5")
+        tapVisible(app, "active-exercise-deadlift")
+        XCTAssertTrue(app.buttons["继续本组"].waitForExistence(timeout: 5))
+        app.buttons["继续本组"].tap()
+        XCTAssertTrue(app.staticTexts["已完成 5 次"].exists)
+        tapVisible(app, "complete-set")
+        tapVisible(app, "跳过休息")
+        XCTAssertFalse(app.otherElements["rest-card"].exists)
+        tapVisible(app, "finish-training")
+        app.buttons["confirm-finish"].tap()
+        XCTAssertTrue(app.staticTexts["23 次"].waitForExistence(timeout: 5))
+        app.buttons["tab-1"].tap()
+        app.cells.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["训练详情"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["\(Double(1500).formatted(.number.precision(.fractionLength(0...1)))) 公斤"].exists)
+        snapshot(app, "training-multiple-exercise-summary")
+        app.navigationBars.buttons.firstMatch.tap()
+
+        app.buttons["tab-0"].tap()
+        tapVisible(app, "沿用上次开始")
+        XCTAssertTrue(app.staticTexts["已完成 10 次"].waitForExistence(timeout: 5))
+        snapshot(app, "training-reuse-last-session")
+        tapVisible(app, "complete-set")
+        enterSet(app, weight: "65", reps: "6")
+        tapVisible(app, "reuse-last-set")
+        XCTAssertTrue(app.alerts["替换当前组？"].waitForExistence(timeout: 5))
+        app.alerts.buttons["保留本组"].tap()
+        XCTAssertTrue(app.staticTexts["已完成 6 次"].exists)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["已完成 6 次"].waitForExistence(timeout: 15))
+        tapVisible(app, "reuse-last-set")
+        app.alerts.buttons["替换本组"].tap()
+        XCTAssertTrue(app.staticTexts["已完成 8 次"].exists)
+        tapVisible(app, "finish-training")
+        app.buttons["confirm-finish"].tap()
+        XCTAssertTrue(app.staticTexts["18 次"].waitForExistence(timeout: 5))
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["tab-1"].waitForExistence(timeout: 15))
+        app.buttons["tab-1"].tap()
+        XCTAssertTrue(app.staticTexts["18 次"].exists)
+        XCTAssertTrue(app.staticTexts["23 次"].exists)
+        snapshot(app, "training-history-after-relaunch")
+    }
+
+    @MainActor
+    private func enterSet(_ app: XCUIApplication, weight: String, reps: String) {
+        tapVisible(app, "直接填次数")
+        let weightInput = app.textFields["set-weight-input"]
+        XCTAssertTrue(weightInput.waitForExistence(timeout: 5))
+        replaceText(weightInput, with: weight)
+        replaceText(app.textFields["set-reps-input"], with: reps)
+        app.buttons["confirm-set-input"].tap()
+    }
+
+    @MainActor
+    private func replaceText(_ field: XCUIElement, with text: String) {
+        field.tap()
+        let current = field.value as? String ?? ""
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count) + text)
+    }
+
+    @MainActor
+    private func tapVisible(_ app: XCUIApplication, _ identifier: String) {
+        let button = app.buttons[identifier]
+        for _ in 0..<6 {
+            if button.exists && button.isHittable { button.tap(); return }
+            if button.exists && button.frame.midY < app.frame.midY { app.swipeDown() }
+            else { app.swipeUp() }
+        }
+        XCTFail("Cannot reach button: " + identifier)
+    }
+
+    @MainActor
     func testWatchHealthGuideNavigation() {
         let app = XCUIApplication()
         app.launchArguments = ["--isolated-ui-test"]
@@ -92,10 +197,8 @@ final class PhoneNavigationTests: XCTestCase {
         app.buttons["增加一次"].tap()
         XCTAssertTrue(app.staticTexts["已完成 1 次"].exists)
         snapshot(app, "active-training")
-        app.buttons["结束并保存"].tap()
-        let confirm = app.buttons.matching(identifier: "结束并保存").allElementsBoundByIndex.first(where: { $0.isHittable })
-        XCTAssertNotNil(confirm)
-        confirm?.tap()
+        tapVisible(app, "finish-training")
+        app.buttons["confirm-finish"].tap()
         app.buttons["tab-1"].tap()
         XCTAssertTrue(app.navigationBars["训练记录"].exists)
         XCTAssertTrue(app.staticTexts["1 次"].exists)

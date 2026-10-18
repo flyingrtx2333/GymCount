@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 enum Studio {
     static let title = Font.system(size: 30, weight: .semibold)
@@ -23,6 +24,14 @@ struct PhoneContentView: View {
     @State private var tab = 0
     @State private var confirmingFinish = false
     @State private var historyEditMode: EditMode = .inactive
+    @State private var editingSet = false
+    @State private var inputWeight = ""
+    @State private var inputReps = ""
+    @State private var pendingExercise: ExerciseType?
+    @State private var confirmingSwitch = false
+    @State private var confirmingReuse = false
+    @Environment(\.scenePhase) private var scenePhase
+    private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private func name(_ exercise: ExerciseType) -> String {
         switch exercise {
@@ -43,6 +52,29 @@ struct PhoneContentView: View {
         .tint(Studio.accent)
         .foregroundStyle(Studio.ink)
         .preferredColorScheme(.dark)
+        .onReceive(clock) { store.checkRest(now: $0) }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { store.checkRest() }
+        }
+        .sensoryFeedback(.success, trigger: store.restFinished) { _, finished in finished }
+        .sheet(isPresented: $editingSet) { setEditor }
+        .alert("替换当前组？", isPresented: $confirmingReuse) {
+            Button("替换本组", role: .destructive) { store.reuseSuggestedSet(replacingDraft: true) }
+            Button("保留本组", role: .cancel) {}
+        } message: {
+            Text("沿用上次会替换当前组已输入的重量和次数，已保存的组不受影响。")
+        }
+        .confirmationDialog("当前组还有未保存的次数", isPresented: $confirmingSwitch, titleVisibility: .visible) {
+            Button("保存本组并切换") {
+                store.completeSet()
+                switchExercise()
+            }
+            Button("放弃本组并切换", role: .destructive) {
+                store.discardDraft()
+                switchExercise()
+            }
+            Button("继续本组", role: .cancel) { pendingExercise = nil }
+        }
     }
 
     private var training: some View {
@@ -74,7 +106,8 @@ struct PhoneContentView: View {
             .background(Studio.background.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .confirmationDialog("结束当前训练并保存记录？", isPresented: $confirmingFinish, titleVisibility: .visible) {
-                Button("结束并保存", action: store.finish)
+                Button("结束并保存") { store.finish(); tab = 1 }
+                    .accessibilityIdentifier("confirm-finish")
                 Button("继续训练", role: .cancel) {}
             }
         }
@@ -107,11 +140,13 @@ struct PhoneContentView: View {
             HStack(spacing: 0) {
                 weightButton("减少重量", symbol: "minus", disabled: weight <= 0) { weight = max(0, weight - 2.5) }
                 Spacer(minLength: 8)
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(weight, format: .number.precision(.fractionLength(0...1)))
-                        .font(.system(size: 44, weight: .semibold, design: .rounded)).monospacedDigit().minimumScaleFactor(0.65)
-                    Text("公斤").font(.system(size: 17)).foregroundStyle(Studio.muted)
-                }.accessibilityElement(children: .combine)
+                Button { openEditor() } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(weight, format: .number.precision(.fractionLength(0...1)))
+                            .font(.system(size: 44, weight: .semibold, design: .rounded)).monospacedDigit().minimumScaleFactor(0.65)
+                        Text("公斤").font(.system(size: 17)).foregroundStyle(Studio.muted)
+                    }
+                }.buttonStyle(.plain).accessibilityLabel("输入训练重量")
                 Spacer(minLength: 8)
                 weightButton("增加重量", symbol: "plus", disabled: weight >= 500) { weight = min(500, weight + 2.5) }
             }
@@ -119,14 +154,16 @@ struct PhoneContentView: View {
             Button { store.start(exercise: exercise, weight: weight) } label: {
                 Text("开始训练")
             }.buttonStyle(StudioPrimaryButton()).disabled(store.storageError != nil)
-                .padding(.top, 10).padding(.bottom, 33)
+                .padding(.top, 10).padding(.bottom, 16)
+            previousTraining(exercise, canStart: true)
+                .padding(.bottom, 24)
             Rectangle().fill(Studio.line).frame(height: 0.5)
             Button { tab = 1 } label: {
                 VStack(spacing: 10) {
                     Image(systemName: "clock").font(.system(size: 25, weight: .light))
                         .foregroundStyle(Studio.muted)
                     if let latest = store.history.first {
-                        Text("最近训练 · \(name(latest.exerciseType)) · \(latest.totalReps) 次")
+                        Text("最近训练 · \(latest.exercises.map(name).joined(separator: "、")) · \(latest.totalReps) 次")
                             .font(.system(size: 15)).foregroundStyle(Studio.muted)
                     } else {
                         Text("还没有训练记录").font(.system(size: 15)).foregroundStyle(Studio.muted)
@@ -156,53 +193,281 @@ struct PhoneContentView: View {
         }.buttonStyle(.plain).disabled(disabled).opacity(disabled ? 0.4 : 1).accessibilityLabel(title)
     }
 
-    private func activeTraining(_ session: WorkoutSession) -> some View {
-        VStack(spacing: 14) {
-            exerciseImage(session.exerciseType, size: 92)
-            Text(name(session.exerciseType)).font(.system(size: 30, weight: .bold))
-            HStack(spacing: 16) {
-                Text("\(session.weight, specifier: "%.1f") 公斤")
+    private func activeTraining(_ session: PhoneTrainingSession) -> some View {
+        VStack(spacing: 20) {
+            HStack {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("本次训练").font(.system(size: 26, weight: .semibold))
+                    Text("已保存 \(session.sets.filter { !$0.imported }.count) 组 · \(session.totalReps) 次")
+                        .font(Studio.detail).foregroundStyle(Studio.muted)
+                }
+                Spacer()
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(Duration.seconds(max(0, context.date.timeIntervalSince(session.startTime)))
-                        .formatted(.time(pattern: .minuteSecond))).monospacedDigit()
+                        .formatted(.time(pattern: .minuteSecond)))
+                        .font(Studio.detail).monospacedDigit().foregroundStyle(Studio.muted)
                 }
-            }.font(.system(size: 17)).foregroundStyle(Studio.muted)
-            Text("\(session.totalReps)").font(.system(size: 92, weight: .semibold, design: .rounded)).monospacedDigit()
-                .accessibilityLabel("已完成 \(session.totalReps) 次")
-            Text("完成次数").font(.system(size: 15)).foregroundStyle(Studio.muted)
-            Button(action: store.addRep) {
-                Label("增加一次", systemImage: "plus")
-                    .frame(maxWidth: .infinity)
-            }.buttonStyle(StudioPrimaryButton()).sensoryFeedback(.increase, trigger: session.totalReps)
-            Button("撤销一次", action: store.removeRep).disabled(session.totalReps == 0)
-                .frame(minHeight: 44)
-            Button("结束并保存") { confirmingFinish = true }
-                .buttonStyle(StudioSecondaryButton())
+            }
+            HStack(spacing: 10) {
+                ForEach(ExerciseType.allCases, id: \.self) { item in
+                    Button { requestExercise(item) } label: {
+                        Text(name(item)).font(Studio.button)
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                            .foregroundStyle(session.exercise == item ? Studio.accent : Studio.ink)
+                            .background(session.exercise == item ? Studio.accent.opacity(0.1) : Studio.surface, in: Capsule())
+                    }.buttonStyle(.plain).accessibilityIdentifier("active-exercise-" + item.rawValue)
+                        .accessibilityAddTraits(session.exercise == item ? .isSelected : [])
+                }
+            }
+            if let end = session.restEndsAt {
+                restCard(end)
+            } else if store.restFinished {
+                Label("休息结束，准备下一组", systemImage: "checkmark.circle")
+                    .font(Studio.body).foregroundStyle(Studio.accent)
+                    .accessibilityIdentifier("rest-finished")
+            }
+            VStack(spacing: 16) {
+                HStack {
+                    exerciseImage(session.exercise, size: 48)
+                    Text("\(name(session.exercise)) · 第 \(store.nextSetNumber) 组").font(.headline)
+                    Spacer()
+                }
+                HStack {
+                    weightButton("本组减少重量", symbol: "minus", disabled: session.weight <= 0) {
+                        store.setWeight(max(0, session.weight - 2.5))
+                    }
+                    Spacer()
+                    Button { openEditor() } label: {
+                        Text("\(session.weight, specifier: "%.1f") 公斤")
+                            .font(.system(size: 27, weight: .semibold)).monospacedDigit()
+                    }.buttonStyle(.plain).accessibilityLabel("修改本组重量")
+                    Spacer()
+                    weightButton("本组增加重量", symbol: "plus", disabled: session.weight >= 500) {
+                        store.setWeight(min(500, session.weight + 2.5))
+                    }
+                }
+                HStack(spacing: 18) {
+                    Button(action: store.removeRep) {
+                        Image(systemName: "minus").frame(width: 48, height: 48)
+                    }.buttonStyle(.plain).disabled(session.reps == 0).accessibilityLabel("撤销一次")
+                    Text("\(session.reps)").font(.system(size: 64, weight: .semibold, design: .rounded))
+                        .monospacedDigit().frame(maxWidth: .infinity)
+                        .accessibilityLabel("已完成 \(session.reps) 次")
+                    Button(action: store.addRep) {
+                        Image(systemName: "plus").frame(width: 48, height: 48)
+                    }.buttonStyle(.plain).disabled(session.reps >= 999).accessibilityLabel("增加一次")
+                }.font(.system(size: 25)).sensoryFeedback(.increase, trigger: session.reps)
+                Button("直接填次数") { openEditor() }
+                    .font(Studio.body).foregroundStyle(Studio.accent).frame(minHeight: 44)
+                if let suggested = store.suggestedSet {
+                    Button {
+                        if session.reps > 0 { confirmingReuse = true }
+                        else { store.reuseSuggestedSet() }
+                    } label: {
+                        Label("沿用上次：\(suggested.weight, specifier: "%.1f") 公斤 × \(suggested.reps) 次", systemImage: "arrow.counterclockwise")
+                            .font(Studio.detail).frame(minHeight: 44)
+                    }.buttonStyle(.plain).foregroundStyle(Studio.accent).accessibilityIdentifier("reuse-last-set")
+                }
+                Button(session.restEndsAt == nil ? "完成本组 · 开始休息" : "完成本组 · 重新计时", action: store.completeSet)
+                    .buttonStyle(StudioPrimaryButton()).disabled(session.reps == 0 || store.storageError != nil)
+                    .accessibilityIdentifier("complete-set")
+                Text("完成后保存本组，次数归零；整场训练结束后统一归档。")
+                    .font(.caption).foregroundStyle(Studio.muted)
+            }.padding(18).background(Studio.surface, in: RoundedRectangle(cornerRadius: 24))
+            if !session.sets.isEmpty {
+                savedSets(session)
+            }
+            if session.sets.isEmpty && session.reps == 0 {
+                Button("取消本次训练", action: store.cancelEmptyTraining)
+                    .buttonStyle(StudioSecondaryButton())
+            } else {
+                Button("结束并保存") { confirmingFinish = true }
+                    .buttonStyle(StudioSecondaryButton())
+                    .accessibilityIdentifier("finish-training")
+                if session.reps > 0 {
+                    Text("当前组 \(session.reps) 次也会一并保存。")
+                        .font(.caption).foregroundStyle(Studio.muted)
+                }
+            }
         }
+    }
+
+    private func restCard(_ end: Date) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("组间休息").font(.headline)
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(Duration.seconds(max(0, ceil(end.timeIntervalSince(context.date))))
+                        .formatted(.time(pattern: .minuteSecond)))
+                        .font(.system(size: 30, weight: .semibold, design: .rounded)).monospacedDigit()
+                }
+            }
+            Spacer()
+            Button("跳过休息", action: store.skipRest)
+                .font(Studio.button).frame(minHeight: 44)
+        }.foregroundStyle(Studio.accent).padding(18)
+            .background(Studio.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("rest-card")
+    }
+
+    private func savedSets(_ session: PhoneTrainingSession) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("本次已记录").font(.headline)
+                Spacer()
+                if session.reps == 0 && session.sets.last?.imported == false {
+                    Button("撤回上一组", action: store.undoLastSet)
+                        .font(Studio.detail).frame(minHeight: 44)
+                }
+            }
+            ForEach(session.exercises, id: \.self) { exercise in
+                exerciseSets(session, exercise: exercise)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func exerciseSets(_ session: PhoneTrainingSession, exercise: ExerciseType) -> some View {
+        let sets = session.sets.filter { $0.exercise == exercise }
+        ForEach(sets.filter { $0.imported }) { set in
+            setRow(set, number: 0)
+        }
+        ForEach(Array(sets.filter { !$0.imported }.enumerated()), id: \.element.id) { index, set in
+            setRow(set, number: index + 1)
+        }
+    }
+
+    private func setRow(_ set: PhoneTrainingSet, number: Int) -> some View {
+        HStack {
+            Text(set.imported ? "旧版次数" : "\(number)")
+                .font(Studio.detail).foregroundStyle(Studio.muted).frame(minWidth: 24)
+            Text(name(set.exercise)).font(Studio.body)
+            Spacer()
+            Text("\(set.weight, specifier: "%.1f") 公斤 × \(set.reps) 次")
+                .font(Studio.detail).monospacedDigit().foregroundStyle(Studio.accent)
+        }.padding(.vertical, 8).accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private func previousTraining(_ exercise: ExerciseType, canStart: Bool) -> some View {
+        let sets = store.lastSets(for: exercise)
+        if !sets.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("上次\(name(exercise))").font(.headline)
+                ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
+                    Text("第 \(index + 1) 组 · \(set.weight, specifier: "%.1f") 公斤 × \(set.reps) 次")
+                        .font(Studio.detail).foregroundStyle(Studio.muted)
+                }
+                if canStart {
+                    Button("沿用上次开始") { store.start(exercise: exercise, weight: weight, reuseLast: true) }
+                        .buttonStyle(StudioSecondaryButton()).disabled(store.storageError != nil)
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading)
+                .padding(18).background(Studio.surface, in: RoundedRectangle(cornerRadius: 20))
+        }
+    }
+
+    private func requestExercise(_ exercise: ExerciseType) {
+        guard exercise != store.session?.exercise else { return }
+        pendingExercise = exercise
+        if (store.session?.reps ?? 0) > 0 { confirmingSwitch = true }
+        else { switchExercise() }
+    }
+
+    private func switchExercise() {
+        if let pendingExercise { store.selectExercise(pendingExercise, defaultWeight: weight) }
+        pendingExercise = nil
+    }
+
+    private func openEditor() {
+        inputWeight = String(store.session?.weight ?? weight)
+        inputReps = String(store.session?.reps ?? 0)
+        editingSet = true
+    }
+
+    private var parsedWeight: Double? {
+        guard let value = Double(inputWeight.replacingOccurrences(of: ",", with: ".")), value.isFinite, (0...500).contains(value) else { return nil }
+        return value
+    }
+
+    private var parsedReps: Int? {
+        guard let value = Int(inputReps), (0...999).contains(value) else { return nil }
+        return value
+    }
+
+    private var setEditor: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack {
+                        Text("重量（公斤）")
+                        TextField("0–500", text: $inputWeight).keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing).accessibilityIdentifier("set-weight-input")
+                    }
+                    if store.session != nil {
+                        HStack {
+                            Text("次数")
+                            TextField("0–999", text: $inputReps).keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing).accessibilityIdentifier("set-reps-input")
+                        }
+                        HStack {
+                            ForEach([5, 8, 10, 12, 15], id: \.self) { reps in
+                                Button("\(reps)") { inputReps = String(reps) }
+                                    .buttonStyle(.bordered).frame(maxWidth: .infinity)
+                                    .accessibilityLabel("填入 \(reps) 次")
+                            }
+                        }
+                    }
+                } footer: {
+                    Text("重量支持 0–500 公斤，自重动作可填 0。次数支持 0–999。")
+                }
+            }
+            .navigationTitle(store.session == nil ? "输入重量" : "快速录入本组")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { editingSet = false } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("确认") {
+                        guard let parsedWeight else { return }
+                        if store.session != nil, let parsedReps {
+                            store.setWeight(parsedWeight)
+                            store.setReps(parsedReps)
+                        } else { weight = parsedWeight }
+                        editingSet = false
+                    }.disabled(parsedWeight == nil || (store.session != nil && parsedReps == nil))
+                        .accessibilityIdentifier("confirm-set-input")
+                }
+            }
+        }.tint(Studio.accent).preferredColorScheme(.dark)
     }
 
     private var history: some View {
         NavigationStack {
             List {
+                if let error = store.storageError { Text(error).foregroundStyle(.red) }
                 ForEach(store.history) { item in
-                    HStack(spacing: 16) {
-                        exerciseImage(item.exerciseType, size: 54)
-                        VStack(alignment: .leading, spacing: 7) {
+                    NavigationLink { historyDetail(item) } label: {
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Text(name(item.exerciseType)).font(.headline)
+                                Text(item.exercises.map(name).joined(separator: " · ")).font(.headline)
                                 Spacer()
                                 Text("\(item.totalReps) 次").font(.headline).foregroundStyle(Studio.accent)
                             }
-                            Text(item.date.formatted(.dateTime.month().day().hour().minute().locale(Locale(identifier: "zh_CN"))))
-                            Text("\(item.maxWeight, specifier: "%.1f") 公斤 · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))")
-                        }.font(.subheadline)
+                            Text(item.startTime.formatted(.dateTime.month().day().hour().minute().locale(Locale(identifier: "zh_CN"))))
+                            if item.legacySummary != nil {
+                                Text("旧版记录 · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))")
+                            } else {
+                                Text("\(item.sets.filter { !$0.imported }.count) 组 · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))")
+                            }
+                        }.font(Studio.detail).foregroundStyle(Studio.muted).padding(.vertical, 8)
                     }.listRowBackground(Studio.surface).listRowSeparatorTint(Studio.line)
                 }.onDelete(perform: store.deleteHistory)
             }
             .scrollContentBackground(.hidden).background(Studio.background)
             .overlay {
-                if store.history.isEmpty {
-                    ContentUnavailableView("还没有训练记录", systemImage: "clock")
+                if store.history.isEmpty && store.storageError == nil {
+                    ContentUnavailableView("还没有训练记录", systemImage: "clock", description: Text("完成一次训练后，可以在这里查看每个动作和每组表现。"))
                 }
             }
             .navigationTitle("训练记录")
@@ -211,10 +476,39 @@ struct PhoneContentView: View {
             .toolbar {
                 Button(historyEditMode == .active ? "完成" : "编辑") {
                     withAnimation { historyEditMode = historyEditMode == .active ? .inactive : .active }
-                }
+                }.disabled(store.storageError != nil)
             }
             .toolbarBackground(Studio.background, for: .navigationBar)
         }
+    }
+
+    private func historyDetail(_ item: PhoneTrainingSession) -> some View {
+        List {
+            Section("训练总结") {
+                LabeledContent("开始时间", value: item.startTime.formatted(date: .abbreviated, time: .shortened))
+                LabeledContent("训练时长", value: Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))
+                LabeledContent("总次数", value: "\(item.totalReps) 次")
+                if let volume = item.volume {
+                    LabeledContent("总训练量", value: "\(volume.formatted(.number.precision(.fractionLength(0...1)))) 公斤")
+                    Text("训练量 = 各组重量 × 次数之和").font(.caption).foregroundStyle(Studio.muted)
+                }
+            }.listRowBackground(Studio.surface)
+            if let old = item.legacySummary {
+                Section("旧版训练记录") {
+                    LabeledContent("动作", value: name(old.exerciseType))
+                    LabeledContent("最大重量", value: "\(old.maxWeight.formatted()) 公斤")
+                    Text("旧版仅保存汇总信息，没有各组明细。").font(.footnote).foregroundStyle(Studio.muted)
+                }.listRowBackground(Studio.surface)
+            } else {
+                ForEach(item.exercises, id: \.self) { exercise in
+                    Section(name(exercise)) {
+                        exerciseSets(item, exercise: exercise)
+                    }.listRowBackground(Studio.surface)
+                }
+            }
+        }.scrollContentBackground(.hidden).background(Studio.background)
+            .navigationTitle("训练详情").navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Studio.background, for: .navigationBar)
     }
 
     private var settings: some View {
@@ -223,6 +517,19 @@ struct PhoneContentView: View {
                 Section("训练偏好") {
                     Stepper(value: $weight, in: 0...500, step: 2.5) {
                         Text("默认重量：\(weight, specifier: "%.1f") 公斤")
+                    }
+                }.listRowBackground(Studio.surface)
+                Section("组间休息") {
+                    Stepper(value: Binding(get: { store.restSeconds }, set: { store.setRestSeconds($0) }), in: 0...600, step: 15) {
+                        Text(store.restSeconds == 0 ? "完成本组后不自动休息" : "休息时长：\(store.restSeconds) 秒")
+                    }.accessibilityIdentifier("rest-duration")
+                    Toggle("后台休息提醒", isOn: Binding(get: { store.remindersEnabled }, set: { enabled in
+                        Task { await store.setRemindersEnabled(enabled) }
+                    }))
+                    Text("完成一组后自动倒计时。开启通知后，锁屏或切到其他应用也能收到提醒。")
+                        .font(.footnote).foregroundStyle(Studio.muted)
+                    if let message = store.reminderMessage {
+                        Text(message).font(.footnote).foregroundStyle(Studio.accent)
                     }
                 }.listRowBackground(Studio.surface)
                 Section("权限与帮助") {
