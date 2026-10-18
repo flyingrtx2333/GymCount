@@ -12,16 +12,22 @@
 
 iPhone 普通训练记录仍独立保存，暂不支持 Watch 普通训练历史同步、手机自动动作识别和 iPhone HealthKit 写入。同步版本中的手表采集工具仍保留。
 
+## 卧推计数 v8
+
+配套版本使用 `GymCountSync.xcodeproj` / `GymCount Capture`。Watch 卧推改用融合运动数据与传感器时间，在推起回到顶端后确认；前两次一起确认，训练中为有延迟的估计，结束时核准。iPhone 采集详情使用同一模块复核，保留原始计数与人工标注。
+
+5 条已有视频记录的总次数回放一致；完成节点仍有 4/25 处偏差超过半秒，尚未完成新版本的独立佩戴验证。数据不足时需人工核对。详见[实现与真实回放证据](docs/bench-watch-ios-v8.md)。
+
 ## 1. 简介
 
 ### 1.1 应用描述
-"GymCount"是一款专为健身爱好者打造的Apple Watch智能计数应用。通过先进的运动检测技术和直观的用户界面，帮助用户精确记录卧推、深蹲、硬拉等力量训练动作，让每一次努力都被准确计数。
+"GymCount"是一款 Apple Watch 健身计数应用，支持卧推、深蹲、硬拉的自动估计、手动修正与训练记录。动作识别仍在通过真实采集改进，使用时请核对次数。
 中文：
-加速度计自动识别你的健身运动动作，无需手动输入，开始即用
+通过运动传感器估计训练次数，支持手动核对与调整
 精准记录和灵活调整锻炼体重，追踪每一次进步
 完整的锻炼历史记录和周统计图表，直观了解训练成果
 与 Apple 健康应用无缝同步，轻松合上运动圆环
-Accelerometer automatically detects your workout movements. Start exercising.
+Motion sensors estimate workout repetitions; review and adjust the count as needed.
 Precisely record and flexibly adjust your exercise weights to track every bit of your progress.
 Complete workout history and weekly statistical charts to see your training results at a glance.
 Seamlessly sync with Apple Health and close your activity rings effortlessly.
@@ -36,7 +42,7 @@ Your Smart Fitness Counter.
 本文档的使用对象主要为产品测试与使用人员。
 
 ### 1.4 核心价值
-- **智能计数**：基于加速度计自动识别运动动作，精确计数每一次重复
+- **智能计数**：基于运动传感器估计动作次数，支持人工修正
 - **多运动支持**：支持卧推、深蹲、硬拉等主流力量训练动作
 - **数据统计**：完整的锻炼历史记录和统计分析
 - **健康集成**：与Apple HealthKit无缝同步，完善运动圆环
@@ -53,7 +59,7 @@ Your Smart Fitness Counter.
 
 ### 1.7 技术优势
 - **原生WatchOS开发**：专为Apple Watch优化，性能卓越
-- **CoreMotion运动检测**：基于加速度计的高精度动作识别
+- **CoreMotion运动检测**：卧推使用融合运动数据，其余动作使用既有加速度规则
 - **SwiftUI现代化界面**：响应式设计，用户体验流畅
 - **HealthKit深度集成**：与Apple健康生态无缝连接
 - **多语言本地化**：完整支持中英文双语界面
@@ -72,7 +78,7 @@ Your Smart Fitness Counter.
 ## 4. 核心功能 ✅
 
 ### 4.1 已实现功能：
-- ✅ **卧推计数** - 支持卧推动作计数，精确识别推举动作
+- ✅ **卧推计数** - 根据下放、推起及顶端保持估计次数，结束时核准
 - ✅ **深蹲计数** - 支持深蹲动作计数，检测蹲起循环
 - ✅ **硬拉计数** - 支持硬拉动作计数，识别提拉动作
 - ✅ **自动运动检测** - 基于CoreMotion加速度计自动识别运动动作
@@ -90,7 +96,7 @@ Your Smart Fitness Counter.
 ### 5.1 架构设计：
 - **MVVM架构** - 使用SwiftUI + ObservableObject，数据与视图分离
 - **数据管理** - DataManager单例模式管理应用状态，统一数据流
-- **运动检测** - CoreMotion框架实现高精度自动计数
+- **运动检测** - CoreMotion 数据驱动动作计数估计与人工核对
 - **本地化** - NSLocalizedString完整支持中英文，界面完全本地化
 - **响应式编程** - Combine框架处理数据流和状态变化
 
