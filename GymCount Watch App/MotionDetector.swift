@@ -20,6 +20,8 @@ class MotionDetector: ObservableObject {
     #if DEBUG || GYMCOUNT_CAPTURE
     var onRawAcceleration: ((CMAccelerometerData) -> Void)?
     var onRawRepDetected: (() -> Void)?
+    var onRawDeviceMotion: ((CMDeviceMotion) -> Void)?
+    var onRawBenchAnalysis: ((BenchAnalysis) -> Void)?
     #endif
     private var accelerometerData: [CMAccelerometerData] = []
     private var dataUpdateTimer: Timer?
@@ -31,6 +33,7 @@ class MotionDetector: ObservableObject {
     private var deadliftDetector: DeadliftDetector?
     private var currentExerciseType: ExerciseType = .benchPress
     private var countsRepetitions = true
+    private var generation = UUID()
     
     @Published var isDetecting = false
     @Published var repCount = 0
@@ -40,6 +43,8 @@ class MotionDetector: ObservableObject {
     private let sampleRate = 40.0 // 采样率
     private let dataUpdateInterval = 0.05 // 数据更新间隔（50ms）
     
+    var onBenchAnalysis: ((BenchAnalysis) -> Void)?
+    var onCountingError: ((String) -> Void)?
     var onRepDetected: (() -> Void)?
     var onAccelerationDataReceived: ((Double, Double, Double, Double) -> Void)?
     
@@ -54,13 +59,14 @@ class MotionDetector: ObservableObject {
     
     private func setupMotionManager() {
         motionManager.accelerometerUpdateInterval = 1.0 / sampleRate
+        motionManager.deviceMotionUpdateInterval = 1.0 / sampleRate
     }
     
     private func setupDetectors() {
         // 初始化卧推检测器
         benchPressDetector = BenchPressDetector()
-        benchPressDetector?.onRepDetected = { [weak self] in
-            self?.handleRepDetected()
+        benchPressDetector?.onAnalysis = { [weak self] result in
+            self?.publishBenchAnalysis(result)
         }
         
         // 初始化深蹲检测器
@@ -77,15 +83,22 @@ class MotionDetector: ObservableObject {
     }
     
     func startDetection(countRepetitions: Bool = true) {
+        guard !isDetecting else { return }
         guard motionManager.isAccelerometerAvailable else {
             print("❌ 加速计不可用")
             return
         }
         
+        guard !countRepetitions || currentExerciseType != .benchPress || motionManager.isDeviceMotionAvailable else {
+            onCountingError?("融合运动不可用，请手动计数")
+            return
+        }
+        generation = UUID()
         isDetecting = true
         countsRepetitions = countRepetitions
         accelerometerData.removeAll()
         repCount = 0
+        lastRepTime = nil
         lastDataUpdateTime = Date()
         
         // 重置当前检测器
@@ -107,14 +120,49 @@ class MotionDetector: ObservableObject {
             self.processAccelerometerData(data)
         }
         
+        if countRepetitions && currentExerciseType == .benchPress {
+            motionManager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: motionQueue) { [weak self] data, error in
+                guard let self else { return }
+                guard let data else {
+                    if error != nil {
+                        self.benchPressDetector?.markInterrupted()
+                        let token = self.generation
+                        DispatchQueue.main.async {
+                            guard self.generation == token, self.isDetecting else { return }
+                            self.onCountingError?("运动采样中断，请手动核对")
+                        }
+                    }
+                    return
+                }
+                #if DEBUG || GYMCOUNT_CAPTURE
+                self.onRawDeviceMotion?(data)
+                #endif
+                self.benchPressDetector?.processMotion(data)
+            }
+        }
         print("🏃‍♂️ 运动检测已启动（后台模式）")
     }
     
     func stopDetection() {
         print("🛑 停止运动检测")
         motionManager.stopAccelerometerUpdates()
+        motionManager.stopDeviceMotionUpdates()
         if OperationQueue.current !== motionQueue {
             motionQueue.waitUntilAllOperationsAreFinished()
+        }
+        let wasDetecting = isDetecting
+        generation = UUID() // Discard queued UI updates from the previous run.
+        if wasDetecting && countsRepetitions && currentExerciseType == .benchPress,
+           let result = benchPressDetector?.finish() {
+            #if DEBUG || GYMCOUNT_CAPTURE
+            onRawBenchAnalysis?(result)
+            #endif
+            applyBenchAnalysis(result)
+        } else if wasDetecting && countsRepetitions {
+            let finalCount = currentExerciseType == .squat ? (squatDetector?.repCount ?? 0) : (deadliftDetector?.repCount ?? 0)
+            let pending = max(0, finalCount - repCount)
+            repCount = finalCount
+            for _ in 0..<pending { onRepDetected?() }
         }
         isDetecting = false
         stopDataUpdateTimer()
@@ -126,17 +174,12 @@ class MotionDetector: ObservableObject {
         #endif
         guard countsRepetitions else { return }
         // 添加新数据
-        accelerometerData.append(data)
-        
-        // 保持窗口大小
-        if accelerometerData.count > 30 {
-            accelerometerData.removeFirst()
-        }
+        accelerometerData = [data]
         
         // 将数据传递给当前活动的检测器
         switch currentExerciseType {
         case .benchPress:
-            benchPressDetector?.processAccelerometerData(data)
+            break // Bench press uses fused motion, never raw X-axis stability.
         case .squat:
             squatDetector?.processAccelerometerData(data)
         case .deadlift:
@@ -156,52 +199,54 @@ class MotionDetector: ObservableObject {
     }
     
     private func sendDataToView() {
-        guard let lastData = accelerometerData.last else { return }
-        
-        let x = lastData.acceleration.x
-        let y = lastData.acceleration.y
-        let z = lastData.acceleration.z
-        let magnitude = sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2))
-        
-        // 确保UI更新在主线程执行
-        DispatchQueue.main.async { [weak self] in
-            // 发送数据给调试视图
-            self?.onAccelerationDataReceived?(x, y, z, magnitude)
+        motionQueue.addOperation { [weak self] in
+            guard let self, let lastData = self.accelerometerData.last else { return }
+            let x = lastData.acceleration.x, y = lastData.acceleration.y, z = lastData.acceleration.z
+            let magnitude = sqrt(x*x + y*y + z*z)
+            let token = self.generation
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.generation == token else { return }
+                self.onAccelerationDataReceived?(x, y, z, magnitude)
+            }
         }
     }
-    
+
+    private func publishBenchAnalysis(_ result: BenchAnalysis) {
+        #if DEBUG || GYMCOUNT_CAPTURE
+        onRawBenchAnalysis?(result)
+        #endif
+        let token = generation
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.generation == token, self.isDetecting else { return }
+            self.applyBenchAnalysis(result)
+        }
+    }
+
+    private func applyBenchAnalysis(_ result: BenchAnalysis) {
+        repCount = result.cycles.count
+        let anchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
+        lastRepTime = result.cycles.last.map { Date(timeIntervalSince1970: anchor + $0.end) }
+        onBenchAnalysis?(result)
+    }
+
     private func handleRepDetected() {
         #if DEBUG || GYMCOUNT_CAPTURE
         onRawRepDetected?()
         #endif
-        // 从当前活动的检测器获取计数信息
+        let count: Int
+        let time: Date?
         switch currentExerciseType {
-        case .benchPress:
-            if let detector = benchPressDetector {
-                repCount = detector.repCount
-                lastRepTime = detector.lastRepTime
-            }
-        case .squat:
-            if let detector = squatDetector {
-                repCount = detector.repCount
-                lastRepTime = detector.lastRepTime
-            }
-        case .deadlift:
-            if let detector = deadliftDetector {
-                repCount = detector.repCount
-                lastRepTime = detector.lastRepTime
-            }
+        case .benchPress: return
+        case .squat: count = squatDetector?.repCount ?? 0; time = squatDetector?.lastRepTime
+        case .deadlift: count = deadliftDetector?.repCount ?? 0; time = deadliftDetector?.lastRepTime
         }
-        
-        // 确保UI更新在主线程执行
+        let token = generation
         DispatchQueue.main.async { [weak self] in
-            // 触发回调
-            self?.onRepDetected?()
+            guard let self, self.generation == token, self.isDetecting else { return }
+            self.repCount = count; self.lastRepTime = time; self.onRepDetected?()
         }
-        
-        print("💪 检测到运动次数: \(repCount)")
     }
-    
+
     private func resetCurrentDetector() {
         switch currentExerciseType {
         case .benchPress:
@@ -214,9 +259,12 @@ class MotionDetector: ObservableObject {
     }
     
     func resetCount() {
+        let restart = isDetecting
+        if restart { stopDetection() }
         repCount = 0
         lastRepTime = nil
         resetCurrentDetector()
+        if restart { startDetection(countRepetitions: countsRepetitions) }
         print("🔄 重置运动检测状态")
     }
     

@@ -15,11 +15,12 @@ F20000000000000000000006 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147
 F20000000000000000000007 = {isa = XCConfigurationList; buildConfigurations = (F20000000000000000000008,F20000000000000000000009,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 F20000000000000000000010 = {isa = PBXContainerItemProxy; containerPortal = 8BB41CF82E9D0E9C00EF6076; proxyType = 1; remoteGlobalIDString = 8BB41CFD2E9D0E9C00EF6076; remoteInfo = GymCount; };
 F20000000000000000000011 = {isa = PBXTargetDependency; target = 8BB41CFD2E9D0E9C00EF6076; targetProxy = F20000000000000000000010; };
-F20000000000000000000008 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 8BPSC5L74V; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.PhoneUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = GymCount; TARGETED_DEVICE_FAMILY = 1; CURRENT_PROJECT_VERSION = 27; MARKETING_VERSION = 1.1.3; }; name = Debug; };
-F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 8BPSC5L74V; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.PhoneUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = GymCount; TARGETED_DEVICE_FAMILY = 1; CURRENT_PROJECT_VERSION = 27; MARKETING_VERSION = 1.1.3; }; name = Release; };
+F20000000000000000000008 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 8BPSC5L74V; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.PhoneUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = GymCount; TARGETED_DEVICE_FAMILY = 1; CURRENT_PROJECT_VERSION = 28; MARKETING_VERSION = 1.1.3; }; name = Debug; };
+F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 8BPSC5L74V; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.PhoneUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = GymCount; TARGETED_DEVICE_FAMILY = 1; CURRENT_PROJECT_VERSION = 28; MARKETING_VERSION = 1.1.3; }; name = Release; };
 
 
 /* Begin PBXBuildFile section */
+B30000000000000000000001 = {isa = PBXBuildFile; fileRef = B30000000000000000000002; };
 		8BB41D052E9D0E9C00EF6076 /* GymCount Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 8BB41D042E9D0E9C00EF6076 /* GymCount Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A10000000000000000000001 /* GymCount Watch App/Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* GymCount Watch App/Models.swift */; };
 /* End PBXBuildFile section */
@@ -63,6 +64,7 @@ F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SI
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GymCount Watch App/Detectors/BenchPressAnalysis.swift"; sourceTree = SOURCE_ROOT; };
 		8BB41CFE2E9D0E9C00EF6076 /* GymCount.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GymCount.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BB41D042E9D0E9C00EF6076 /* GymCount Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "GymCount Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BB41D162E9D0E9D00EF6076 /* GymCount Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "GymCount Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -124,6 +126,7 @@ F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SI
 				F20000000000000000000002,
 				A10000000000000000000003 /* GymCount iOS */,
 				A10000000000000000000002 /* GymCount Watch App/Models.swift */,
+                B30000000000000000000002,
 				8BB41D082E9D0E9C00EF6076 /* GymCount Watch App */,
 				8BB41D192E9D0E9D00EF6076 /* GymCount Watch AppTests */,
 				8BB41D232E9D0E9D00EF6076 /* GymCount Watch AppUITests */,
@@ -344,6 +347,7 @@ F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SI
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                B30000000000000000000001,
 				A10000000000000000000001 /* GymCount Watch App/Models.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -490,7 +494,7 @@ F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SI
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "GymCount Watch App/GymCount Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_ASSET_PATHS = "\"GymCount Watch App/Preview Content\"";
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				ENABLE_PREVIEWS = YES;
@@ -530,7 +534,7 @@ F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SI
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "GymCount Watch App/GymCount Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_ASSET_PATHS = "\"GymCount Watch App/Preview Content\"";
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				ENABLE_PREVIEWS = YES;
@@ -571,7 +575,7 @@ F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SI
 				CODE_SIGN_ENTITLEMENTS = "GymCount-Phone-Health.entitlements";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = GymCount;
@@ -599,7 +603,7 @@ F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SI
 				CODE_SIGN_ENTITLEMENTS = "GymCount-Phone-Health.entitlements";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = GymCount;
@@ -627,7 +631,7 @@ F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SI
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
@@ -648,7 +652,7 @@ F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SI
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
@@ -669,7 +673,7 @@ F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SI
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
@@ -689,7 +693,7 @@ F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SI
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;

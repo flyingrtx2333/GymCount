@@ -17,6 +17,9 @@ class DataManager: ObservableObject {
     @Published var workoutHistory: [WorkoutHistory] = []
     @Published var settings = AppSettings.shared
     @Published var isFirstLaunch = true
+    @Published var countingMessage = "检测中"
+    private var automaticBenchCycles: [UUID: BenchCycle] = [:]
+    private var removedBenchIDs: Set<UUID> = []
     
     let motionDetector = MotionDetector()
     let healthKitManager = HealthKitManager.shared
@@ -41,6 +44,38 @@ class DataManager: ObservableObject {
         motionDetector.onRepDetected = { [weak self] in
             self?.addRep()
         }
+        motionDetector.onBenchAnalysis = { [weak self] in self?.applyBenchAnalysis($0) }
+        motionDetector.onCountingError = { [weak self] in self?.countingMessage = $0 }
+    }
+
+    private func applyBenchAnalysis(_ result: BenchAnalysis) {
+        guard var session = currentSession, session.exerciseType == .benchPress else { return }
+        countingMessage = result.status == "insufficient_data" ? "采样中断，请手动核对" : "估计中 · 结束时核准"
+        guard result.status != "insufficient_data" else { return }
+        let oldCount = session.totalReps
+        var activeIDs: Set<UUID> = []
+        let anchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
+        for cycle in result.cycles {
+            let match = automaticBenchCycles.filter {
+                !activeIDs.contains($0.key) && abs($0.value.turn - cycle.turn) < 0.75
+            }.min { abs($0.value.turn - cycle.turn) < abs($1.value.turn - cycle.turn) }
+            let id = match?.key ?? UUID()
+            automaticBenchCycles[id] = cycle
+            activeIDs.insert(id)
+            // Keep manual additions, manual removals, and each existing rep's weight.
+            if !removedBenchIDs.contains(id) {
+                let date = Date(timeIntervalSince1970: anchor + cycle.end)
+                if let index = session.repRecords.firstIndex(where: { $0.id == id }) {
+                    session.repRecords[index] = RepRecord(id: id, timestamp: date, weight: session.repRecords[index].weight)
+                } else {
+                    session.repRecords.append(RepRecord(id: id, timestamp: date, weight: session.weight))
+                }
+            }
+        }
+        session.repRecords.removeAll { automaticBenchCycles[$0.id] != nil && !activeIDs.contains($0.id) }
+        session.repRecords.sort { $0.timestamp < $1.timestamp }
+        currentSession = session
+        if session.totalReps > oldCount { WKInterfaceDevice.current().play(.directionUp) }
     }
     
     private func setupHealthKit() {
@@ -93,6 +128,8 @@ class DataManager: ObservableObject {
     
     // MARK: - 锻炼会话管理
     func startWorkout(exerciseType: ExerciseType, weight: Double = 0.0) {
+        automaticBenchCycles = [:]; removedBenchIDs = []
+        countingMessage = exerciseType == .benchPress ? "估计中 · 前两次一起确认" : "检测中"
         WKInterfaceDevice.current().play(.click)
         currentSession = WorkoutSession(
             exerciseType: exerciseType,
@@ -116,16 +153,16 @@ class DataManager: ObservableObject {
     
     func removeRep() {
         guard var session = currentSession else { return }
+        if let id = session.repRecords.last?.id, automaticBenchCycles[id] != nil { removedBenchIDs.insert(id) }
         session.removeRep()
         currentSession = session
     }
     
     func endWorkout() {
+        // Finish the centered-filter pass before copying/persisting the session.
+        motionDetector.stopDetection()
         guard var session = currentSession else { return }
         session.endSession()
-        
-        // 停止运动检测
-        motionDetector.stopDetection()
         
         // 结束 HealthKit 运动会话
         endHKWorkoutSession()

@@ -62,9 +62,9 @@ struct RepRecord: Codable, Identifiable {
     let timestamp: Date
     let weight: Double // 重量（公斤）
     
-    init(weight: Double = 0.0) {
-        self.id = UUID()
-        self.timestamp = Date()
+    init(id: UUID = UUID(), timestamp: Date = Date(), weight: Double = 0.0) {
+        self.id = id
+        self.timestamp = timestamp
         self.weight = weight
     }
 }

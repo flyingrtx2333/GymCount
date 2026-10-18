@@ -15,6 +15,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
     @Published private(set) var message = ""
     @Published private(set) var history: [VideoCaptureManifest] = []
     @Published private(set) var cameraReady = false
+    @Published private(set) var benchReviews: [UUID: BenchAnalysis] = [:]
     let camera = AVCaptureSession()
     private let health = HKHealthStore()
     private let movie = AVCaptureMovieFileOutput()
@@ -35,6 +36,29 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
     func folder(_ id: UUID) -> URL { root.appendingPathComponent(id.uuidString, isDirectory: true) }
     func videoURL(_ id: UUID) -> URL { folder(id).appendingPathComponent("video.mov") }
     func sensorURL(_ id: UUID) -> URL { folder(id).appendingPathComponent("motion.json") }
+    func reviewBench(_ id: UUID) async {
+        guard history.first(where: { $0.id == id })?.exercise == "bench_press" else { return }
+        let url = sensorURL(id)
+        let result = await Task.detached(priority: .utility) { () -> BenchAnalysis? in
+            struct Input: Decodable {
+                struct Point: Decodable { let t: Double }
+                let motion_samples: [BenchMotionSample]
+                let samples: [Point]
+                let duration_seconds: Double
+            }
+            guard let data = try? Data(contentsOf: url),
+                  let input = try? JSONDecoder().decode(Input.self, from: data) else { return nil }
+            guard let first = input.motion_samples.first, let last = input.motion_samples.last,
+                  let origin = input.samples.first?.t,
+                  first.t - origin <= 0.25, origin + input.duration_seconds - last.t <= 0.25 else {
+                var result = BenchAnalysis(); result.status = "insufficient_data"; return result
+            }
+            return BenchPressAnalysis.analyze(input.motion_samples)
+        }.value
+        // A separate local review never rewrites the original Watch result,
+        // video labels, uploaded payload/hash, or historical actual_count.
+        benchReviews[id] = result
+    }
     private func save(_ manifest: VideoCaptureManifest) {
         do {
             try FileManager.default.createDirectory(at: folder(manifest.id), withIntermediateDirectories: true)
@@ -434,6 +458,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
                 if let detected = json["detected_count"] as? Int { item.detectedCount = detected }
                 if self.active?.id == id { self.active = item }
                 self.save(item); self.message = "已保存"
+                await self.reviewBench(id)
             } catch { self.message = "手表采样保存失败，请重试接收" }
         }
     }

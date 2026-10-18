@@ -34,6 +34,9 @@ struct PhoneCaptureView: View {
                 .disabled(capture.recording || capture.busy)
                 if capture.recording {
                     Text("\(capture.count)").font(.system(size: 64, weight: .bold, design: .rounded)).monospacedDigit()
+                    if exercise == "bench_press" {
+                        Text("手表估计 · 前两次一起确认，结束时核准").font(.caption).foregroundStyle(Studio.muted)
+                    }
                 }
                 if !capture.message.isEmpty, capture.message != "正在准备采集…", capture.message != "采集中" {
                     Text(capture.message).font(.callout)
@@ -125,6 +128,12 @@ struct VideoCaptureDetailView: View {
                 VStack(spacing: Studio.spacing) {
                     if let player { VideoPlayer(player: player).frame(height: 360).clipShape(RoundedRectangle(cornerRadius: 20)) }
                     Text("手表计数：\(item.detectedCount) 次")
+                    if let review = capture.benchReviews[id] {
+                        Text(review.count.map { "本机复核：\($0) 次（实验）" } ?? "本机复核：数据不足，需人工核对")
+                            .font(.callout).foregroundStyle(Studio.muted)
+                        Text("按推起回到顶端识别，仍请结合视频核对。")
+                            .font(.caption).foregroundStyle(Studio.muted)
+                    }
                     Button("标记一次") {
                         if let player {
                             player.pause()
@@ -165,6 +174,7 @@ struct VideoCaptureDetailView: View {
                         Text(capture.message).font(.footnote)
                     }
                 }.padding(Studio.inset)
+                .task(id: id) { await capture.reviewBench(id) }
                 .onAppear {
                     actual = item.actualCount ?? 0
                     if player == nil { player = AVPlayer(url: capture.videoURL(id)) }

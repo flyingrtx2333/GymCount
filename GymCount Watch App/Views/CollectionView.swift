@@ -107,7 +107,7 @@ private final class RawCapture {
                             device_motion: motion.isDeviceMotionAvailable,
                             magnetometer: motion.isMagnetometerAvailable)
     }
-    func start() {
+    func start(includeDeviceMotion: Bool = true) {
         motion.gyroUpdateInterval = 1 / 40.0
         motion.deviceMotionUpdateInterval = 1 / 40.0
         motion.magnetometerUpdateInterval = 1 / 40.0
@@ -119,7 +119,7 @@ private final class RawCapture {
                 } else if error != nil { self.fail() }
             }
         }
-        if motion.isDeviceMotionAvailable {
+        if includeDeviceMotion && motion.isDeviceMotionAvailable {
             motion.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: queue) { [weak self] data, error in
                 guard let self else { return }
                 if let data { self.appendMotion(data) } else if error != nil { self.fail() }
@@ -166,7 +166,7 @@ private final class RawCapture {
         let sample = CaptureSample(t: t, received_t: max(0, received - origin), x: x, y: y, z: z)
         if isGyro { gyro.append(sample) } else { magnetometer.append(sample) }
     }
-    private func appendMotion(_ data: CMDeviceMotion) {
+    func appendMotion(_ data: CMDeviceMotion) {
         let received = ProcessInfo.processInfo.systemUptime
         lock.lock(); defer { lock.unlock() }
         guard let origin, data.timestamp >= origin else { return }
@@ -203,6 +203,12 @@ private final class RawCapture {
             if events.count < 500 { events.append(t) } else { eventsTruncated = true }
         }
     }
+    func setBenchAnalysis(_ analysis: BenchAnalysis) {
+        lock.lock(); defer { lock.unlock() }
+        guard let origin else { return }
+        events = analysis.cycles.map { $0.end - origin }.filter { $0 >= 0 }
+        if events.count > 500 { events = Array(events.prefix(500)); eventsTruncated = true }
+    }
     func snapshot() -> (points: [CaptureSample], gyro: [CaptureSample], motion: [CaptureMotion], magnetic: [CaptureSample], events: [Double], invalid: Bool, eventsTruncated: Bool) {
         lock.lock(); defer { lock.unlock() }
         let available = availability
@@ -225,6 +231,7 @@ final class CollectionStore: ObservableObject {
     private var exercise = "squat"
     private var pace = "normal"
     private var captureNotes = ""
+    private var benchNeedsReview = false
     private var start = Date()
     private var sessionID = UUID()
     var sampleOriginWallTime: Double? { capture?.originWallTime }
@@ -263,14 +270,24 @@ final class CollectionStore: ObservableObject {
         continuityWarningShown = false
         let raw = RawCapture(); capture = raw; exercise = kind; self.pace = pace; captureNotes = String(notes.prefix(1000)); start = Date(); detected = 0; message = ""
         self.sessionID = sessionID
+        benchNeedsReview = false
         let hasWatchCounter = ["squat", "bench_press", "deadlift"].contains(kind)
         detector.configureForExercise(kind == "squat" ? .squat : kind == "deadlift" ? .deadlift : .benchPress)
         detector.onRawAcceleration = { raw.append($0) }
-        detector.onRawRepDetected = { if hasWatchCounter { raw.markRep() } }
+        detector.onRawDeviceMotion = { raw.appendMotion($0) }
+        detector.onRawBenchAnalysis = { raw.setBenchAnalysis($0) }
+        detector.onRawRepDetected = { if hasWatchCounter && kind != "bench_press" { raw.markRep() } }
+        detector.onBenchAnalysis = { [weak self] analysis in
+            self?.detected = analysis.cycles.count
+            self?.benchNeedsReview = analysis.count == nil
+            if analysis.status == "insufficient_data" { self?.message = "采样中断，请手动核对次数" }
+        }
+        detector.onCountingError = { [weak self] in self?.message = $0 }
         detector.onRepDetected = { [weak self] in
             Task { @MainActor in self?.detected = hasWatchCounter ? (self?.detector.repCount ?? 0) : 0 }
         }
-        raw.start()
+        // Bench counting and capture share the very same fused motion stream.
+        raw.start(includeDeviceMotion: kind != "bench_press")
         detector.startDetection(countRepetitions: hasWatchCounter); recording = detector.isDetecting
         if !recording { raw.stop(); capture = nil; message = "加速度计不可用"; WKInterfaceDevice.current().play(.failure); return }
         // Both entry points have already started an active HealthKit workout.
@@ -313,6 +330,9 @@ final class CollectionStore: ObservableObject {
             message = "采样中断，数据已保留"
         }
         let points = result.points, events = result.events
+        if exercise == "bench_press", benchNeedsReview {
+            captureNotes = String(captureNotes.prefix(850)) + "\n卧推自动计数证据不足，请结合视频核对；手表次数仅作采集对照。"
+        }
         guard points.count >= 2, !result.invalid, events.count <= 500 else {
             message = "记录不完整或超出采集上限，请重新采集"; WKInterfaceDevice.current().play(.failure); return
         }
@@ -324,7 +344,7 @@ final class CollectionStore: ObservableObject {
             watch_crown: WKInterfaceDevice.current().crownOrientation == .left ? "left" : "right", pace: pace,
             watch_model: hardwareModel(), os_version: WKInterfaceDevice.current().systemVersion,
             app_version: "\(info["CFBundleShortVersionString"] ?? "unknown") (\(info["CFBundleVersion"] ?? "unknown"))",
-            algorithm_version: ["squat", "bench_press", "deadlift"].contains(exercise) ? "rules-20261007" : "capture-only-20261009",
+            algorithm_version: exercise == "bench_press" ? BenchAnalysis.version : ["squat", "deadlift"].contains(exercise) ? "rules-20261007" : "capture-only-20261009",
             participant_id: saved, notes: captureNotes, samples: points, gyroscope_samples: result.gyro,
             motion_samples: result.motion, magnetometer_samples: result.magnetic, sensor_availability: raw.availability, detected_events: events, reference_events_truncated: result.eventsTruncated)
         detected = events.count; capture = nil
@@ -566,7 +586,7 @@ struct CollectionPanel: View {
                     }
                     if recording {
                     VStack(spacing: 2) {
-                        Text("手表计数")
+                        Text(exercise == "bench_press" ? "估计 · 结束核准" : "手表计数")
                             .font(GymStyle.detail)
                             .foregroundStyle(GymStyle.mint)
                         Text("\(detected)")

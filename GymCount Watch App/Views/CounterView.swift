@@ -23,6 +23,7 @@ struct CounterView: View {
         CounterPanel(
             exercise: currentSession?.exerciseType.displayName ?? "",
             count: currentSession?.totalReps ?? 0,
+            countingMessage: dataManager.countingMessage,
             weight: currentSession?.weight ?? dataManager.settings.defaultWeight,
             onWeight: {
                 tempWeight = currentSession?.weight ?? dataManager.settings.defaultWeight
@@ -49,6 +50,7 @@ struct CounterView: View {
 struct CounterPanel: View {
     let exercise: String
     let count: Int
+    var countingMessage: String = NSLocalizedString("detecting", comment: "检测中")
     let weight: Double
     let onWeight: () -> Void
     let onMinus: () -> Void
@@ -90,7 +92,7 @@ struct CounterPanel: View {
                 }
                 HStack(spacing: 5) {
                     Circle().fill(GymStyle.mint).frame(width: 5, height: 5)
-                    Text(NSLocalizedString("detecting", comment: "检测中"))
+                    Text(countingMessage)
                         .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
                 }
                 Button("结束", action: onEnd).buttonStyle(GymActionStyle())
