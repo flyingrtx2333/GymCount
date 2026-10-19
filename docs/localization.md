@@ -16,3 +16,11 @@ xcrun swiftc -parse-as-library scripts/verify-localization.swift -o /tmp/verify-
 提取界面键时构建需传入 `SWIFT_EMIT_LOC_STRINGS=YES`。两个工程均需编译，发布包还需签名与资源核验。
 
 平台说明：[Apple 本地化文档](https://developer.apple.com/documentation/xcode/localization)。
+
+## 2026-10-19 发布
+
+1.1.3 (30) 已通过苹果处理，状态 VALID / IN_BETA_TESTING，内部组 flyingrtx 可用。Delivery UUID：`caa47e53-b166-4cd8-8561-a01065f92317`；发布应用源码 `e696632`。两个工程编译通过，签名归档、导出与最终 IPA 的名称、语言资源、签名、HealthKit 和配套关系核验通过。
+
+实际编译资源检查覆盖手机 200 项、Watch 136 项中文界面键的双语翻译与占位符。Release 优化可能将共享函数的翻译键放入其他源文件的提取结果，因此脚本按 `.build` 目标目录归属校验，不按源码路径推断应用归属。发布证据、编译器提取文件和实际运行的校验器保存在 `build/TestFlight-1.1.3-30/`。
+
+手机当前不可连接，尚未进行新版真机桌面名称、排版、Siri 或双端同步交互验收；用户需更新两端后确认。没有覆盖安装或删除原应用来做验证。

@@ -15,7 +15,12 @@ struct VerifyLocalization {
         let files = FileManager.default.enumerator(at: extraction, includingPropertiesForKeys: nil)!
         for case let file as URL in files where file.pathExtension == "stringsdata" {
             let data = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [String: Any]
-            let target = (data["source"] as! String).contains("/GymCount Watch App/") ? "Watch" : "iPhone"
+            // Shared files compile into both targets; Release optimization may move
+            // extracted calls between source files, so use the owning build target.
+            let target: String
+            if file.path.contains("/GymCount Watch App.build/") { target = "Watch" }
+            else if file.path.contains("/GymCount.build/") { target = "iPhone" }
+            else { continue }
             let tables = data["tables"] as? [String: [[String: Any]]] ?? [:]
             for item in tables["Localizable"] ?? [] {
                 let key = item["key"] as! String
