@@ -19,6 +19,9 @@ enum Studio {
 
 struct PhoneContentView: View {
     @EnvironmentObject private var store: PhoneWorkoutStore
+    #if GYMCOUNT_SYNC
+    @EnvironmentObject private var capture: PhoneCaptureStore
+    #endif
     @AppStorage("phone.defaultWeight") private var weight = 50.0
     @State private var exercise: ExerciseType = .benchPress
     @State private var tab = 0
@@ -54,7 +57,12 @@ struct PhoneContentView: View {
         .preferredColorScheme(.dark)
         .onReceive(clock) { store.checkRest(now: $0) }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { store.checkRest() }
+            if phase == .active {
+                store.checkRest()
+                #if GYMCOUNT_SYNC
+                capture.requestWorkoutHistory()
+                #endif
+            }
         }
         .sensoryFeedback(.success, trigger: store.restFinished) { _, finished in finished }
         .sheet(isPresented: $editingSet) { setEditor }
@@ -446,6 +454,12 @@ struct PhoneContentView: View {
         NavigationStack {
             List {
                 if let error = store.storageError { Text(error).foregroundStyle(.red) }
+                #if GYMCOUNT_SYNC
+                if !capture.workoutSyncMessage.isEmpty {
+                    Text(capture.workoutSyncMessage).font(Studio.detail).foregroundStyle(Studio.muted)
+                        .listRowBackground(Studio.surface)
+                }
+                #endif
                 ForEach(store.history) { item in
                     NavigationLink { historyDetail(item) } label: {
                         VStack(alignment: .leading, spacing: 8) {
@@ -455,7 +469,9 @@ struct PhoneContentView: View {
                                 Text("\(item.totalReps) 次").font(.headline).foregroundStyle(Studio.accent)
                             }
                             Text(item.startTime.formatted(.dateTime.month().day().hour().minute().locale(Locale(identifier: "zh_CN"))))
-                            if item.legacySummary != nil {
+                            if item.watchSummary != nil {
+                                Text("Apple Watch · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))")
+                            } else if item.legacySummary != nil {
                                 Text("旧版记录 · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))")
                             } else {
                                 Text("\(item.sets.filter { !$0.imported }.count) 组 · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))")
@@ -474,6 +490,11 @@ struct PhoneContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .environment(\.editMode, $historyEditMode)
             .toolbar {
+                #if GYMCOUNT_SYNC
+                Button { capture.requestWorkoutHistory(force: true) } label: {
+                    Image(systemName: "arrow.clockwise")
+                }.accessibilityLabel("同步手表记录").disabled(store.storageError != nil)
+                #endif
                 Button(historyEditMode == .active ? "完成" : "编辑") {
                     withAnimation { historyEditMode = historyEditMode == .active ? .inactive : .active }
                 }.disabled(store.storageError != nil)
@@ -493,11 +514,12 @@ struct PhoneContentView: View {
                     Text("训练量 = 各组重量 × 次数之和").font(.caption).foregroundStyle(Studio.muted)
                 }
             }.listRowBackground(Studio.surface)
-            if let old = item.legacySummary {
-                Section("旧版训练记录") {
+            if let old = item.watchSummary ?? item.legacySummary {
+                Section(item.watchSummary != nil ? "Apple Watch 训练记录" : "旧版训练记录") {
                     LabeledContent("动作", value: name(old.exerciseType))
                     LabeledContent("最大重量", value: "\(old.maxWeight.formatted()) 公斤")
-                    Text("旧版仅保存汇总信息，没有各组明细。").font(.footnote).foregroundStyle(Studio.muted)
+                    Text(item.watchSummary != nil ? "来自 Apple Watch 的训练汇总，没有各组明细。" : "旧版仅保存汇总信息，没有各组明细。")
+                        .font(.footnote).foregroundStyle(Studio.muted)
                 }.listRowBackground(Studio.surface)
             } else {
                 ForEach(item.exercises, id: \.self) { exercise in

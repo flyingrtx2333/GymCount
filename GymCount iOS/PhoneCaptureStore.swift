@@ -16,6 +16,11 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
     @Published private(set) var history: [VideoCaptureManifest] = []
     @Published private(set) var cameraReady = false
     @Published private(set) var benchReviews: [UUID: BenchAnalysis] = [:]
+    @Published private(set) var workoutSyncMessage = ""
+    private let workoutStore: PhoneWorkoutStore?
+    private let workoutReceiverID: String
+    private let connectivityEnabled: Bool
+    private var workoutRequestGeneration = UUID()
     let camera = AVCaptureSession()
     private let health = HKHealthStore()
     private let movie = AVCaptureMovieFileOutput()
@@ -27,11 +32,77 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
     private var captureScreenToken: UUID?
     private let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("VideoCaptures", isDirectory: true)
 
-    override init() {
+    init(workoutStore: PhoneWorkoutStore? = nil, defaults: UserDefaults = .standard, activateConnectivity: Bool = true) {
+        self.workoutStore = workoutStore
+        workoutReceiverID = defaults.string(forKey: "watchSync.receiverID") ?? UUID().uuidString
+        defaults.set(workoutReceiverID, forKey: "watchSync.receiverID")
+        connectivityEnabled = activateConnectivity
         super.init()
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         reload()
-        if WCSession.isSupported() { WCSession.default.delegate = self; WCSession.default.activate() }
+        if activateConnectivity && WCSession.isSupported() { WCSession.default.delegate = self; WCSession.default.activate() }
+    }
+
+    func requestWorkoutHistory(force: Bool = false) {
+        guard connectivityEnabled, workoutStore != nil, WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated else {
+            workoutSyncMessage = "正在连接手表…"; session.activate(); return
+        }
+        guard session.isPaired, session.isWatchAppInstalled else {
+            workoutSyncMessage = "请先安装并打开配套手表应用"; return
+        }
+        let payload: [String: Any] = ["kind": WorkoutSync.requestKind,
+                                      "receiver_id": workoutReceiverID, "force": force]
+        let pending = session.outstandingUserInfoTransfers.filter { $0.userInfo["kind"] as? String == WorkoutSync.requestKind }
+        if force { pending.forEach { $0.cancel() } }
+        if force || pending.isEmpty { session.transferUserInfo(payload) }
+        workoutSyncMessage = session.isReachable ? "正在接收手表记录…" : "等待手表连接，连接后自动补传"
+        if session.isReachable {
+            let generation = UUID(); workoutRequestGeneration = generation
+            session.sendMessage(payload, replyHandler: { [weak self] reply in
+                Task { @MainActor in
+                    guard let self, self.workoutRequestGeneration == generation else { return }
+                    if reply["workout_history_ready"] as? Bool != true {
+                        self.workoutSyncMessage = "请先更新手表应用，再同步训练记录"
+                    } else if reply["workout_history_pending"] as? Int == 0 {
+                        self.workoutSyncMessage = reply["workout_history_count"] as? Int == 0 ? "手表暂无训练记录" : "手表记录已核对"
+                    }
+                }
+            }, errorHandler: { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, self.workoutRequestGeneration == generation else { return }
+                    self.workoutSyncMessage = "等待手表连接，连接后自动补传"
+                }
+            })
+        }
+    }
+
+    private func receiveWorkoutHistory(_ payload: [String: Any]) -> [String: Any]? {
+        guard payload["kind"] as? String == WorkoutSync.batchKind else { return nil }
+        do {
+            guard let workoutStore else { throw WorkoutSync.Failure.invalidPayload }
+            let records = try WorkoutSync.decode(payload)
+            try workoutStore.acceptWatchHistory(records)
+            workoutRequestGeneration = UUID()
+            workoutSyncMessage = "已接收 \(records.count) 条手表记录"
+            return ["kind": WorkoutSync.receiptKind, "receiver_id": workoutReceiverID,
+                    "ids": records.map { $0.id.uuidString }]
+        } catch {
+            workoutSyncMessage = "手表记录保存失败，原记录仍保留在手表，请稍后重试"
+            return ["error": workoutSyncMessage]
+        }
+    }
+
+    private func queueWorkoutReceipt(_ receipt: [String: Any]) {
+        guard receipt["kind"] as? String == WorkoutSync.receiptKind else { return }
+        let session = WCSession.default
+        let ids = WorkoutSync.ids(receipt)
+        let exists = session.outstandingUserInfoTransfers.contains {
+            $0.userInfo["kind"] as? String == WorkoutSync.receiptKind && WorkoutSync.ids($0.userInfo) == ids
+        }
+        if !exists { session.transferUserInfo(receipt) }
+        if session.isReachable { session.sendMessage(receipt, replyHandler: nil, errorHandler: nil) }
     }
     func folder(_ id: UUID) -> URL { root.appendingPathComponent(id.uuidString, isDirectory: true) }
     func videoURL(_ id: UUID) -> URL { folder(id).appendingPathComponent("video.mov") }
@@ -414,12 +485,38 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         }
     }
 
-    nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
+    nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        Task { @MainActor in if activationState == .activated { self.requestWorkoutHistory() } }
+    }
+    nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        Task { @MainActor in if session.isReachable { self.requestWorkoutHistory() } }
+    }
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
     nonisolated func sessionDidDeactivate(_ session: WCSession) { session.activate() }
-    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) { Task { @MainActor in self.status(message) } }
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        Task { @MainActor in
+            if let receipt = self.receiveWorkoutHistory(message) { self.queueWorkoutReceipt(receipt); return }
+            self.status(message)
+        }
+    }
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                if let receipt = self.receiveWorkoutHistory(userInfo) { self.queueWorkoutReceipt(receipt) }
+            }
+        } else {
+            DispatchQueue.main.sync {
+                MainActor.assumeIsolated {
+                    if let receipt = self.receiveWorkoutHistory(userInfo) { self.queueWorkoutReceipt(receipt) }
+                }
+            }
+        }
+    }
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
         Task { @MainActor in
+            if let receipt = self.receiveWorkoutHistory(message) {
+                self.queueWorkoutReceipt(receipt); replyHandler(receipt); return
+            }
             guard message["command"] as? String == "startFromWatch", let exercise = message["exercise"] as? String,
                   ["squat", "bench_press", "deadlift", "bicep_curl", "rest", "walking", "other"].contains(exercise),
                   self.captureScreenToken != nil, self.cameraReady, UIApplication.shared.applicationState == .active, !self.busy, !self.recording else {

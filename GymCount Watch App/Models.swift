@@ -6,7 +6,9 @@
 //
 
 import Foundation
+#if os(watchOS) || os(iOS)
 import HealthKit
+#endif
 
 // MARK: - 锻炼类型枚举
 enum ExerciseType: String, CaseIterable, Codable {
@@ -37,12 +39,14 @@ enum ExerciseType: String, CaseIterable, Codable {
     }
     
     // MARK: - HealthKit 映射
+    #if os(watchOS) || os(iOS)
     var hkWorkoutType: HKWorkoutActivityType {
         switch self {
         case .benchPress, .squat, .deadlift:
             return .traditionalStrengthTraining
         }
     }
+    #endif
     
     var hkWorkoutTypeName: String {
         switch self {
@@ -122,6 +126,15 @@ struct WorkoutHistory: Codable, Identifiable {
     let totalReps: Int
     let maxWeight: Double
     let duration: TimeInterval
+
+    init(id: UUID, date: Date, exerciseType: ExerciseType, totalReps: Int, maxWeight: Double, duration: TimeInterval) {
+        self.id = id
+        self.date = date
+        self.exerciseType = exerciseType
+        self.totalReps = totalReps
+        self.maxWeight = maxWeight
+        self.duration = duration
+    }
     
     init(from session: WorkoutSession) {
         self.id = UUID()

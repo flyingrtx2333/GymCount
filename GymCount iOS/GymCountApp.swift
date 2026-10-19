@@ -23,22 +23,29 @@ struct GymCountPhoneApp: App {
     private let trainingDefaults: UserDefaults
     #if GYMCOUNT_SYNC
     @UIApplicationDelegateAdaptor(GymCountPhoneDelegate.self) private var appDelegate
-    @StateObject private var capture = PhoneCaptureStore()
+    @StateObject private var capture: PhoneCaptureStore
     #endif
 
     init() {
         var defaults = UserDefaults.standard
         var reminderID = "phone.training.rest"
+        var watchArchiveURL: URL?
         #if GYMCOUNT_SYNC
         if ProcessInfo.processInfo.arguments.contains("--isolated-ui-test") {
             let storageID = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--ui-test-storage-id=") })?
                 .replacingOccurrences(of: "--ui-test-storage-id=", with: "") ?? UUID().uuidString
             defaults = UserDefaults(suiteName: "GymCountUITest." + storageID)!
             reminderID += ".uitest." + storageID
+            watchArchiveURL = FileManager.default.temporaryDirectory.appendingPathComponent("GymCountUITest/\(storageID)/watch-history.json")
         }
         #endif
         trainingDefaults = defaults
-        _store = StateObject(wrappedValue: PhoneWorkoutStore(defaults: defaults, reminderID: reminderID))
+        let workoutStore = PhoneWorkoutStore(defaults: defaults, reminderID: reminderID, watchArchiveURL: watchArchiveURL)
+        _store = StateObject(wrappedValue: workoutStore)
+        #if GYMCOUNT_SYNC
+        _capture = StateObject(wrappedValue: PhoneCaptureStore(workoutStore: workoutStore, defaults: defaults,
+            activateConnectivity: !ProcessInfo.processInfo.arguments.contains("--isolated-ui-test")))
+        #endif
     }
 
     var body: some Scene {

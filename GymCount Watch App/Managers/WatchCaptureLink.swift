@@ -50,6 +50,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
     private var completedFiles: [UUID: URL] = [:]
     private var phoneRequestID: UUID?
     private var attemptedInitialAuthorization = false
+    private var submittedWorkouts: Set<UUID> = []
 
     init(activateConnectivity: Bool, authorization: CaptureHealthAuthorization? = nil) {
         self.authorization = authorization ?? .live(health)
@@ -62,9 +63,31 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
         }
     }
 
-    nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
+    nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        Task { @MainActor in if activationState == .activated { self.syncWorkouts(retry: true) } }
+    }
+    nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        Task { @MainActor in if session.isReachable { self.syncWorkouts(retry: true) } }
+    }
+    nonisolated func session(_ session: WCSession, didFinish userInfoTransfer: WCSessionUserInfoTransfer, error: Error?) {
+        Task { @MainActor in
+            guard userInfoTransfer.userInfo["kind"] as? String == WorkoutSync.batchKind else { return }
+            // A transport completion is not a persisted-app receipt. Keep these
+            // IDs submitted until receipt or an explicit foreground retry.
+            if error == nil { self.syncWorkouts() }
+        }
+    }
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        // Complete the app's receipt handling before WCSession drains this item.
+        if Thread.isMainThread {
+            MainActor.assumeIsolated { _ = self.handleWorkoutSync(userInfo) }
+        } else {
+            DispatchQueue.main.sync { MainActor.assumeIsolated { _ = self.handleWorkoutSync(userInfo) } }
+        }
+    }
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         Task { @MainActor in
+            if self.handleWorkoutSync(message) { return }
             guard message["command"] as? String == "feedback" else { return }
             if self.showingCapture || (DataManager.shared.currentSession == nil && !CollectionStore.shared.recording && CollectionStore.shared.draft == nil) {
                 self.showCapturePage()
@@ -79,7 +102,91 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
         }
     }
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
-        Task { @MainActor in await self.handle(message, reply: replyHandler) }
+        Task { @MainActor in
+            if self.handleWorkoutSync(message) {
+                let acknowledged = Set((UserDefaults.standard.stringArray(forKey: "workoutSync.received") ?? []).compactMap(UUID.init(uuidString:)))
+                let history = DataManager.shared.workoutHistory
+                replyHandler(["workout_history_ready": true, "workout_history_count": history.count,
+                              "workout_history_pending": history.filter { !acknowledged.contains($0.id) }.count])
+                return
+            }
+            await self.handle(message, reply: replyHandler)
+        }
+    }
+
+    // Reuse the existing WCSession delegate. Workout messages never replace the
+    // application context used by synchronized video capture.
+    func syncWorkouts(retry: Bool = false) {
+        if retry { submittedWorkouts = [] }
+        let session = WCSession.default
+        guard allowsAutomaticAuthorization, session.activationState == .activated, session.isCompanionAppInstalled else { return }
+        let defaults = UserDefaults.standard
+        let acknowledged = Set((defaults.stringArray(forKey: "workoutSync.received") ?? []).compactMap(UUID.init(uuidString:)))
+        let transfers = session.outstandingUserInfoTransfers.filter { $0.userInfo["kind"] as? String == WorkoutSync.batchKind }
+        if retry && session.isReachable {
+            for transfer in transfers { sendWorkoutBatchImmediately(transfer.userInfo) }
+        }
+        let queued = transfers.reduce(into: Set<UUID>()) { $0.formUnion(WorkoutSync.ids($1.userInfo)) }
+        let pending = DataManager.shared.workoutHistory.filter {
+            !acknowledged.contains($0.id) && !queued.contains($0.id) && !submittedWorkouts.contains($0.id)
+        }
+        let slots = max(0, 3 - transfers.count)
+        guard slots > 0 else { return }
+        for offset in stride(from: 0, to: min(pending.count, slots * WorkoutSync.maximumBatchSize), by: WorkoutSync.maximumBatchSize) {
+            let records = pending[offset..<min(offset + WorkoutSync.maximumBatchSize, pending.count)].map {
+                WorkoutSync.Record(id: $0.id, date: $0.date, exercise: $0.exerciseType.rawValue,
+                    totalReps: $0.totalReps, maxWeight: $0.maxWeight, duration: $0.duration)
+            }
+            guard let payload = try? WorkoutSync.message(records) else { continue }
+            submittedWorkouts.formUnion(records.map(\.id))
+            session.transferUserInfo(payload)
+            if session.isReachable { sendWorkoutBatchImmediately(payload) }
+        }
+    }
+
+    private func sendWorkoutBatchImmediately(_ payload: [String: Any]) {
+        WCSession.default.sendMessage(payload, replyHandler: { reply in
+            Task { @MainActor in _ = self.handleWorkoutSync(reply) }
+        }, errorHandler: { _ in /* Background transfer remains queued. */ })
+    }
+
+    func receiveBackgroundUpdates() async {
+        let session = WCSession.default
+        if session.activationState != .activated { session.activate() }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        repeat {
+            do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+        } while !Task.isCancelled && ContinuousClock.now < deadline &&
+            (session.activationState != .activated || session.hasContentPending)
+        if !Task.isCancelled { syncWorkouts() }
+    }
+
+    @discardableResult
+    private func handleWorkoutSync(_ payload: [String: Any]) -> Bool {
+        guard let kind = payload["kind"] as? String,
+              kind == WorkoutSync.requestKind || kind == WorkoutSync.receiptKind else { return false }
+        guard let receiver = payload["receiver_id"] as? String, UUID(uuidString: receiver) != nil else { return true }
+        let defaults = UserDefaults.standard
+        let previous = defaults.string(forKey: "workoutSync.receiver")
+        if kind == WorkoutSync.requestKind {
+            submittedWorkouts = []
+            if previous != receiver || payload["force"] as? Bool == true {
+                defaults.set([String](), forKey: "workoutSync.received")
+            }
+            defaults.set(receiver, forKey: "workoutSync.receiver")
+        } else {
+            guard previous == nil || previous == receiver else { return true }
+            defaults.set(receiver, forKey: "workoutSync.receiver")
+            let known = Set(DataManager.shared.workoutHistory.map(\.id))
+            var acknowledged = Set((defaults.stringArray(forKey: "workoutSync.received") ?? []).compactMap(UUID.init(uuidString:)))
+            acknowledged.formUnion(WorkoutSync.ids(payload).intersection(known))
+            defaults.set(acknowledged.map(\.uuidString), forKey: "workoutSync.received")
+            for transfer in WCSession.default.outstandingUserInfoTransfers where transfer.userInfo["kind"] as? String == WorkoutSync.batchKind {
+                if WorkoutSync.ids(transfer.userInfo).isSubset(of: acknowledged) { transfer.cancel() }
+            }
+        }
+        syncWorkouts(retry: kind == WorkoutSync.requestKind)
+        return true
     }
 
     func showCapturePage(exercise: String? = nil) {

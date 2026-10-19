@@ -173,6 +173,9 @@ class DataManager: ObservableObject {
         
         // 保存数据
         saveData()
+        #if DEBUG || GYMCOUNT_CAPTURE
+        Task { @MainActor in WatchCaptureLink.shared.syncWorkouts() }
+        #endif
         
         // 同步到 HealthKit
         if settings.healthKitSyncEnabled && settings.autoSyncToHealthKit {

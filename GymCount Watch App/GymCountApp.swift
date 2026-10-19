@@ -24,6 +24,7 @@ final class GymCountWatchDelegate: NSObject, WKApplicationDelegate {
 
 @main
 struct GymCount_Watch_AppApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var dataManager = DataManager.shared
     @StateObject private var notificationManager = NotificationManager.shared
     #if DEBUG || GYMCOUNT_CAPTURE
@@ -49,7 +50,15 @@ struct GymCount_Watch_AppApp: App {
             mainContent
             #endif
             }
+            #if DEBUG || GYMCOUNT_CAPTURE
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { captureLink.syncWorkouts(retry: true) }
+            }
+            #endif
         }
+        #if DEBUG || GYMCOUNT_CAPTURE
+        .backgroundTask(.watchConnectivity) { await WatchCaptureLink.shared.receiveBackgroundUpdates() }
+        #endif
     }
 
     private var mainContent: some View {

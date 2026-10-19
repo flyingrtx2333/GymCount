@@ -21,15 +21,17 @@ struct PhoneTrainingSession: Codable, Identifiable {
     var restEndsAt: Date?
     // Old history contains only summaries; keep it verbatim instead of inventing sets.
     var legacySummary: WorkoutHistory?
+    var watchSummary: WorkoutHistory?
+    private var summary: WorkoutHistory? { watchSummary ?? legacySummary }
 
-    var totalReps: Int { legacySummary?.totalReps ?? sets.reduce(0) { $0 + $1.reps } }
-    var duration: TimeInterval { legacySummary?.duration ?? max(0, (endTime ?? Date()).timeIntervalSince(startTime)) }
+    var totalReps: Int { summary?.totalReps ?? sets.reduce(0) { $0 + $1.reps } }
+    var duration: TimeInterval { summary?.duration ?? max(0, (endTime ?? Date()).timeIntervalSince(startTime)) }
     var exercises: [ExerciseType] {
-        if let legacySummary { return [legacySummary.exerciseType] }
+        if let summary { return [summary.exerciseType] }
         return ExerciseType.allCases.filter { exercise in sets.contains { $0.exercise == exercise } }
     }
     var volume: Double? {
-        guard legacySummary == nil else { return nil }
+        guard summary == nil else { return nil }
         return sets.reduce(0) { $0 + $1.weight * Double($1.reps) }
     }
 }
@@ -46,6 +48,7 @@ final class PhoneWorkoutStore: ObservableObject {
     private let defaults: UserDefaults
     private let stateKey = "phone.training.v2"
     private let reminderID: String
+    private var watchArchive: WatchWorkoutArchive?
 
     private struct State: Codable {
         var session: PhoneTrainingSession?
@@ -54,7 +57,7 @@ final class PhoneWorkoutStore: ObservableObject {
         var remindersEnabled: Bool
     }
 
-    init(defaults: UserDefaults = .standard, reminderID: String = "phone.training.rest") {
+    init(defaults: UserDefaults = .standard, reminderID: String = "phone.training.rest", watchArchiveURL: URL? = nil) {
         self.defaults = defaults
         self.reminderID = reminderID
         do {
@@ -88,6 +91,11 @@ final class PhoneWorkoutStore: ObservableObject {
                 }
                 save()
             }
+            let url = watchArchiveURL ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("WatchWorkouts/history.json")
+            watchArchive = try WatchWorkoutArchive(url: url)
+            mergeWatchHistory()
+            save()
         } catch {
             storageError = "无法读取本地训练记录，请勿删除应用。"
         }
@@ -242,8 +250,41 @@ final class PhoneWorkoutStore: ObservableObject {
 
     func deleteHistory(at offsets: IndexSet) {
         guard storageError == nil else { return }
+        let watchIDs = Set(offsets.compactMap { history.indices.contains($0) ? history[$0].watchSummary?.id : nil })
+        if !watchIDs.isEmpty {
+            do { try watchArchive?.remove(watchIDs) }
+            catch { storageError = "删除记录失败，原记录已保留。"; return }
+        }
         for index in offsets.sorted(by: >) where history.indices.contains(index) { history.remove(at: index) }
         save()
+    }
+
+    func acceptWatchHistory(_ records: [WorkoutSync.Record]) throws {
+        guard storageError == nil, let watchArchive else { throw WorkoutSync.Failure.invalidPayload }
+        guard records.allSatisfy({ record in !history.contains { $0.id == record.id && $0.watchSummary == nil } }) else {
+            throw WorkoutSync.Failure.conflictingRecord
+        }
+        // Persist source summaries before acknowledging receipt or changing the UI.
+        try watchArchive.accept(records)
+        mergeWatchHistory()
+        save()
+        guard storageError == nil else { throw WorkoutSync.Failure.invalidPayload }
+    }
+
+    private func mergeWatchHistory() {
+        guard let watchArchive else { return }
+        history.removeAll { $0.watchSummary != nil && watchArchive.deletedIDs.contains($0.id) }
+        let existing = Set(history.map(\.id))
+        for record in watchArchive.records where !existing.contains(record.id) {
+            guard let exercise = ExerciseType(rawValue: record.exercise) else { continue }
+            let summary = WorkoutHistory(id: record.id, date: record.date, exerciseType: exercise,
+                totalReps: record.totalReps, maxWeight: record.maxWeight, duration: record.duration)
+            var imported = PhoneTrainingSession(id: record.id, startTime: record.date, exercise: exercise, weight: record.maxWeight)
+            imported.endTime = record.date.addingTimeInterval(record.duration)
+            imported.watchSummary = summary
+            history.append(imported)
+        }
+        history.sort { $0.startTime > $1.startTime }
     }
 
     private func validWeight(_ weight: Double) -> Bool { weight.isFinite && (0...500).contains(weight) }
