@@ -483,7 +483,19 @@ struct PhoneContentView: View {
             .scrollContentBackground(.hidden).background(Studio.background)
             .overlay {
                 if store.history.isEmpty && store.storageError == nil {
-                    ContentUnavailableView("还没有训练记录", systemImage: "clock", description: Text("完成一次训练后，可以在这里查看每个动作和每组表现。"))
+                    ContentUnavailableView {
+                        Label("还没有训练记录", systemImage: "clock")
+                    } description: {
+                        Text("完成一次训练后，可以在这里查看每个动作和每组表现。")
+                    } actions: {
+                        Button(store.session == nil ? "开始训练" : "继续训练") {
+                            historyEditMode = .inactive
+                            tab = 0
+                        }
+                        .buttonStyle(StudioPrimaryButton())
+                        .frame(maxWidth: 240)
+                        .accessibilityIdentifier("history-start-training")
+                    }
                 }
             }
             .navigationTitle("训练记录")
