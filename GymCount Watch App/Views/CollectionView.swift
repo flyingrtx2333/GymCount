@@ -263,7 +263,7 @@ final class CollectionStore: ObservableObject {
     func begin(_ kind: String, pace: String, notes: String, sessionID: UUID = UUID()) {
         guard !recording && draft == nil else { return }
         guard WatchCaptureLink.shared.isCaptureWorkoutRunning else {
-            message = "训练会话未启动，请重试"
+            message = String(localized: "训练会话未启动，请重试")
             return
         }
         WKInterfaceDevice.current().play(.click)
@@ -280,7 +280,7 @@ final class CollectionStore: ObservableObject {
         detector.onBenchAnalysis = { [weak self] analysis in
             self?.detected = analysis.cycles.count
             self?.benchNeedsReview = analysis.count == nil
-            if analysis.status == "insufficient_data" { self?.message = "采样中断，请手动核对次数" }
+            if analysis.status == "insufficient_data" { self?.message = String(localized: "采样中断，请手动核对次数") }
         }
         detector.onCountingError = { [weak self] in self?.message = $0 }
         detector.onRepDetected = { [weak self] in
@@ -289,7 +289,7 @@ final class CollectionStore: ObservableObject {
         // Bench counting and capture share the very same fused motion stream.
         raw.start(includeDeviceMotion: kind != "bench_press")
         detector.startDetection(countRepetitions: hasWatchCounter); recording = detector.isDetecting
-        if !recording { raw.stop(); capture = nil; message = "加速度计不可用"; WKInterfaceDevice.current().play(.failure); return }
+        if !recording { raw.stop(); capture = nil; message = String(localized: "加速度计不可用"); WKInterfaceDevice.current().play(.failure); return }
         // Both entry points have already started an active HealthKit workout.
         continuityTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.checkContinuity() }
@@ -303,7 +303,7 @@ final class CollectionStore: ObservableObject {
         let age = state.age ?? Date().timeIntervalSince(start)
         guard state.gap > 0.25 || age > 1 else { return }
         continuityWarningShown = true
-        message = "采样中断，请结束后重新采集"
+        message = String(localized: "采样中断，请结束后重新采集")
         WKInterfaceDevice.current().play(.failure)
         captureLog.error("Capture continuity warning: gap=\(state.gap), age=\(age), delay=\(state.delay)")
     }
@@ -327,14 +327,14 @@ final class CollectionStore: ObservableObject {
         if incomplete {
             let diagnostic = "采集诊断：\(interruption ?? "采样中断")，最大缺口 \(String(format: "%.3f", continuity.gap)) 秒，最大回调延迟 \(String(format: "%.3f", continuity.delay)) 秒"
             captureNotes = String(captureNotes.prefix(800)) + "\n" + diagnostic
-            message = "采样中断，数据已保留"
+            message = String(localized: "采样中断，数据已保留")
         }
         let points = result.points, events = result.events
         if exercise == "bench_press", benchNeedsReview {
             captureNotes = String(captureNotes.prefix(850)) + "\n卧推自动计数证据不足，请结合视频核对；手表次数仅作采集对照。"
         }
         guard points.count >= 2, !result.invalid, events.count <= 500 else {
-            message = "记录不完整或超出采集上限，请重新采集"; WKInterfaceDevice.current().play(.failure); return
+            message = String(localized: "记录不完整或超出采集上限，请重新采集"); WKInterfaceDevice.current().play(.failure); return
         }
         let saved = UserDefaults.standard.string(forKey: "captureParticipantID").flatMap(UUID.init(uuidString:)) ?? UUID()
         UserDefaults.standard.set(saved.uuidString, forKey: "captureParticipantID")
@@ -359,7 +359,7 @@ final class CollectionStore: ObservableObject {
             var directory = folder; try directory.setResourceValues(values)
             let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
             let encoded = try encoder.encode(record)
-            guard encoded.count <= 16 * 1024 * 1024 else { message = "记录过大，请缩短单组采集"; return }
+            guard encoded.count <= 16 * 1024 * 1024 else { message = String(localized: "记录过大，请缩短单组采集"); return }
             try encoded.write(to: folder.appendingPathComponent(record.session_id.uuidString + ".json"), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             draft = nil; pending = files().count
             await retry()
@@ -367,13 +367,13 @@ final class CollectionStore: ObservableObject {
             if FileManager.default.fileExists(atPath: folder.appendingPathComponent(record.session_id.uuidString + ".json").path) {
                 draft = record
             }
-        } catch { message = "无法保存到手表，请保留本页并重试"; WKInterfaceDevice.current().play(.failure) }
+        } catch { message = String(localized: "无法保存到手表，请保留本页并重试"); WKInterfaceDevice.current().play(.failure) }
     }
     func retry() async {
         guard !uploading else { return }
         let queued = files()
-        guard !queued.isEmpty else { message = "没有待上传记录"; return }
-        message = "正在上传…"
+        guard !queued.isEmpty else { message = String(localized: "没有待上传记录"); return }
+        message = String(localized: "正在上传…")
         WKInterfaceDevice.current().play(.click)
         uploading = true; defer { uploading = false; pending = files().count }
         do {
@@ -386,21 +386,21 @@ final class CollectionStore: ObservableObject {
                 guard let http = response as? HTTPURLResponse, http.statusCode == 201 else {
                     WKInterfaceDevice.current().play(.failure)
                     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                    message = status == 409 ? "记录已上传，请在网站修改次数" : status == 429 ? "请稍后重试，数据已保留" : "上传失败（\(status)），数据已保留"
+                    message = status == 409 ? String(localized: "记录已上传，请在网站修改次数") : status == 429 ? String(localized: "请稍后重试，数据已保留") : String(localized: "上传失败（\(status)），数据已保留")
                     return
                 }
                 try FileManager.default.removeItem(at: file)
             }
-            message = "上传完成"
+            message = String(localized: "上传完成")
             WKInterfaceDevice.current().play(.success)
-        } catch { message = "上传失败，数据已保留，请重试"; WKInterfaceDevice.current().play(.failure) }
+        } catch { message = String(localized: "上传失败，数据已保留，请重试"); WKInterfaceDevice.current().play(.failure) }
     }
     func discard() {
         if let record = draft {
             let file = folder.appendingPathComponent(record.session_id.uuidString + ".json")
             if FileManager.default.fileExists(atPath: file.path) {
                 do { try FileManager.default.removeItem(at: file) }
-                catch { message = "无法丢弃本地记录，请重试"; return }
+                catch { message = String(localized: "无法丢弃本地记录，请重试"); return }
             }
         }
         draft = nil; pending = files().count; message = ""
@@ -444,25 +444,25 @@ struct CollectionView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden)
         .tint(GymStyle.mint)
-        .alert("同步权限", isPresented: $link.showingAuthorizationHelp) {
-            Button("知道了", role: .cancel) {}
+        .alert(String(localized: "同步权限"), isPresented: $link.showingAuthorizationHelp) {
+            Button(String(localized: "知道了"), role: .cancel) {}
         } message: {
-            Text(link.authorizationMessage + (link.authorizationMessage == "手表尚未获得体能训练权限" ? "。\n\n" + WatchHealthPermissionGuide.message : ""))
+            Text(link.authorizationMessage + (link.authorizationMessage == String(localized: "手表尚未获得体能训练权限") ? "。\n\n" + WatchHealthPermissionGuide.message : ""))
         }
-        .confirmationDialog("实际 \(actual) 次，确认上传？", isPresented: $confirmingUpload, titleVisibility: .visible) {
-            Button("上传 \(actual) 次") {
+        .confirmationDialog(String(localized: "实际 \(actual) 次，确认上传？"), isPresented: $confirmingUpload, titleVisibility: .visible) {
+            Button(String(localized: "上传 \(actual) 次")) {
                 let confirmed = actual
                 Task { await store.persist(confirmed) }
             }
-            Button("继续修改", role: .cancel) {}
+            Button(String(localized: "继续修改"), role: .cancel) {}
         }
-        .confirmationDialog("上传保留的 \(store.pending) 组记录？", isPresented: $confirmingRetry, titleVisibility: .visible) {
-            Button("重试上传") { Task { await store.retry() } }
-            Button("取消", role: .cancel) {}
+        .confirmationDialog(String(localized: "上传保留的 \(store.pending) 组记录？"), isPresented: $confirmingRetry, titleVisibility: .visible) {
+            Button(String(localized: "重试上传")) { Task { await store.retry() } }
+            Button(String(localized: "取消"), role: .cancel) {}
         }
-        .confirmationDialog("丢弃本组采集？", isPresented: $confirmingDiscard, titleVisibility: .visible) {
-            Button("确认丢弃", role: .destructive) { store.discard() }
-            Button("取消", role: .cancel) {}
+        .confirmationDialog(String(localized: "丢弃本组采集？"), isPresented: $confirmingDiscard, titleVisibility: .visible) {
+            Button(String(localized: "确认丢弃"), role: .destructive) { store.discard() }
+            Button(String(localized: "取消"), role: .cancel) {}
         }
         .onChange(of: store.draft?.session_id) { _, id in
             if id != nil { actual = store.draft?.actual_count ?? 0 }
@@ -522,19 +522,19 @@ struct CollectionPanel: View {
 
     private var exerciseName: String {
         switch exercise {
-        case "bench_press": return "卧推"
-        case "deadlift": return "硬拉"
-        case "bicep_curl": return "弯举"
-        case "rest": return "静止"
-        case "walking": return "走动"
-        case "other": return "其他非训练"
-        default: return "深蹲"
+        case "bench_press": return String(localized: "卧推")
+        case "deadlift": return String(localized: "硬拉")
+        case "bicep_curl": return String(localized: "弯举")
+        case "rest": return String(localized: "静止")
+        case "walking": return String(localized: "走动")
+        case "other": return String(localized: "其他非训练")
+        default: return String(localized: "深蹲")
         }
     }
 
     var body: some View {
         VStack(spacing: GymStyle.spacing) {
-            GymHeader(title: reviewing ? "确认采集" : recording ? exerciseName : "采集",
+            GymHeader(title: reviewing ? String(localized: "确认采集") : recording ? exerciseName : String(localized: "采集"),
                       back: recording || reviewing || startingCapture ? nil : onBack)
                 .padding(.horizontal, GymStyle.inset)
                 .padding(.top, 12)
@@ -569,9 +569,9 @@ struct CollectionPanel: View {
                     if !recording {
                         Button { editingNotes = true } label: {
                             HStack(spacing: 4) {
-                                Text("备注").foregroundStyle(GymStyle.muted)
+                                Text(String(localized: "备注")).foregroundStyle(GymStyle.muted)
                                 Spacer(minLength: 0)
-                                Text(notes.isEmpty ? "选填" : notes)
+                                Text(notes.isEmpty ? String(localized: "选填") : notes)
                                     .lineLimit(1).truncationMode(.tail)
                                     .foregroundStyle(GymStyle.muted)
                                 Image(systemName: "chevron.right").font(GymStyle.detail)
@@ -586,7 +586,7 @@ struct CollectionPanel: View {
                     }
                     if recording {
                     VStack(spacing: 2) {
-                        Text(exercise == "bench_press" ? "估计 · 结束核准" : "手表计数")
+                        Text(exercise == "bench_press" ? String(localized: "估计 · 结束核准") : String(localized: "手表计数"))
                             .font(GymStyle.detail)
                             .foregroundStyle(GymStyle.mint)
                         Text("\(detected)")
@@ -597,12 +597,12 @@ struct CollectionPanel: View {
                     .frame(maxWidth: .infinity)
                     }
 
-                    actionButton(recording ? "结束采集" : startingCapture ? "正在准备采集…" : "开始采集",
+                    actionButton(recording ? String(localized: "结束采集") : startingCapture ? String(localized: "正在准备采集…") : String(localized: "开始采集"),
                                  primary: !recording, action: onStartStop)
                         .disabled(uploading || (!recording && (startingCapture || authorizing || phoneConnecting)))
                         .accessibilityIdentifier("capture.startStop")
                     if !recording, let onPhoneSync {
-                        Button(authorizing ? "等待授权…" : phoneConnecting ? "正在连接…" : needsAuthorization ? "检查同步权限" : "手机同步录像", action: onPhoneSync)
+                        Button(authorizing ? String(localized: "等待授权…") : phoneConnecting ? String(localized: "正在连接…") : needsAuthorization ? String(localized: "检查同步权限") : String(localized: "手机同步录像"), action: onPhoneSync)
                             .buttonStyle(GymActionStyle())
                             .disabled(phoneConnecting || startingCapture || authorizing || uploading)
                             .accessibilityIdentifier("capture.phoneSync")
@@ -614,21 +614,21 @@ struct CollectionPanel: View {
                 }
 
                 if reviewing {
-                    actionButton(uploading ? "正在上传" : "确认并上传",
+                    actionButton(uploading ? String(localized: "正在上传") : String(localized: "确认并上传"),
                                  primary: true, action: onUpload)
                         .disabled(uploading)
                         .accessibilityIdentifier("capture.upload")
-                    Button("丢弃此组", role: .destructive, action: onDiscard)
+                    Button(String(localized: "丢弃此组"), role: .destructive, action: onDiscard)
                         .buttonStyle(GymActionStyle())
                         .disabled(uploading)
                 }
 
                 if pending > 0 {
-                    actionButton(uploading ? "正在上传" : "重试上传 · \(pending) 组",
+                    actionButton(uploading ? String(localized: "正在上传") : String(localized: "重试上传 · \(pending) 组"),
                                  primary: false, action: onRetry)
                         .disabled(uploading || recording || reviewing)
                 }
-                if !message.isEmpty, !(uploading && message == "正在上传…"), message != phoneMessage {
+                if !message.isEmpty, !(uploading && message == String(localized: "正在上传…")), message != phoneMessage {
                     Text(message)
                         .font(GymStyle.detail)
                         .foregroundStyle(.secondary)
@@ -646,9 +646,9 @@ struct CollectionPanel: View {
         .sheet(isPresented: $editingNotes) {
             ScrollView {
                 VStack(spacing: 8) {
-                    GymHeader(title: "备注", back: { editingNotes = false })
-                    TextField("握持方式、负重等", text: $notes).font(GymStyle.body)
-                    Button("完成") { editingNotes = false }
+                    GymHeader(title: String(localized: "备注"), back: { editingNotes = false })
+                    TextField(String(localized: "握持方式、负重等"), text: $notes).font(GymStyle.body)
+                    Button(String(localized: "完成")) { editingNotes = false }
                         .buttonStyle(GymActionStyle(primary: true))
                 }
                 .gymPageContent()
@@ -660,14 +660,14 @@ struct CollectionPanel: View {
             NavigationStack {
                 ScrollView {
                 VStack(spacing: GymStyle.spacing) {
-                    GymHeader(title: "选择动作", back: { choosingExercise = false })
-                    exerciseOption("深蹲", value: "squat")
-                    exerciseOption("卧推", value: "bench_press")
-                    exerciseOption("硬拉", value: "deadlift")
-                    exerciseOption("弯举", value: "bicep_curl")
-                    exerciseOption("静止", value: "rest")
-                    exerciseOption("走动", value: "walking")
-                    exerciseOption("其他非训练", value: "other")
+                    GymHeader(title: String(localized: "选择动作"), back: { choosingExercise = false })
+                    exerciseOption(String(localized: "深蹲"), value: "squat")
+                    exerciseOption(String(localized: "卧推"), value: "bench_press")
+                    exerciseOption(String(localized: "硬拉"), value: "deadlift")
+                    exerciseOption(String(localized: "弯举"), value: "bicep_curl")
+                    exerciseOption(String(localized: "静止"), value: "rest")
+                    exerciseOption(String(localized: "走动"), value: "walking")
+                    exerciseOption(String(localized: "其他非训练"), value: "other")
                 }
                 .gymPageContent(fullWidthHeader: true)
                 }
@@ -681,9 +681,9 @@ struct CollectionPanel: View {
     private var reviewCard: some View {
         VStack(spacing: GymStyle.spacing) {
             HStack {
-                Text("已识别")
+                Text(String(localized: "已识别"))
                 Spacer()
-                Text("\(detected) 次").foregroundStyle(.white)
+                Text(String(localized: "\(detected) 次")).foregroundStyle(.white)
             }
                 .font(GymStyle.detail)
                 .foregroundStyle(.secondary)
@@ -692,13 +692,13 @@ struct CollectionPanel: View {
                 .padding(.vertical, 6)
                 .background(GymStyle.surface, in: RoundedRectangle(cornerRadius: 12))
             if ["rest", "walking", "other"].contains(exercise) {
-                Text("实际次数：0").font(GymStyle.body)
+                Text(String(localized: "实际次数：0")).font(GymStyle.body)
             } else {
-            Text("实际次数")
+            Text(String(localized: "实际次数"))
                 .font(GymStyle.detail)
                 .foregroundStyle(GymStyle.muted)
             HStack(spacing: 6) {
-                countButton("minus", label: "减少实际次数", disabled: uploading || actual == 0) { actual -= 1 }
+                countButton("minus", label: String(localized: "减少实际次数"), disabled: uploading || actual == 0) { actual -= 1 }
                 VStack(spacing: 2) {
                     Text("\(actual)")
                         .font(GymStyle.counter)
@@ -707,7 +707,7 @@ struct CollectionPanel: View {
                         .minimumScaleFactor(0.5)
                 }
                 .frame(maxWidth: .infinity)
-                countButton("plus", label: "增加实际次数", disabled: uploading || actual == 500) { actual += 1 }
+                countButton("plus", label: String(localized: "增加实际次数"), disabled: uploading || actual == 500) { actual += 1 }
             }
             }
         }

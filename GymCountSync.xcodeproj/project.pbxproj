@@ -15,8 +15,8 @@ F20000000000000000000006 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147
 F20000000000000000000007 = {isa = XCConfigurationList; buildConfigurations = (F20000000000000000000008,F20000000000000000000009,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 F20000000000000000000010 = {isa = PBXContainerItemProxy; containerPortal = 8BB41CF82E9D0E9C00EF6076; proxyType = 1; remoteGlobalIDString = 8BB41CFD2E9D0E9C00EF6076; remoteInfo = GymCount; };
 F20000000000000000000011 = {isa = PBXTargetDependency; target = 8BB41CFD2E9D0E9C00EF6076; targetProxy = F20000000000000000000010; };
-F20000000000000000000008 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 8BPSC5L74V; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.PhoneUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = GymCount; TARGETED_DEVICE_FAMILY = 1; CURRENT_PROJECT_VERSION = 29; MARKETING_VERSION = 1.1.3; }; name = Debug; };
-F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 8BPSC5L74V; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.PhoneUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = GymCount; TARGETED_DEVICE_FAMILY = 1; CURRENT_PROJECT_VERSION = 29; MARKETING_VERSION = 1.1.3; }; name = Release; };
+F20000000000000000000008 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 8BPSC5L74V; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.PhoneUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = GymCount; TARGETED_DEVICE_FAMILY = 1; CURRENT_PROJECT_VERSION = 30; MARKETING_VERSION = 1.1.3; }; name = Debug; };
+F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 8BPSC5L74V; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.PhoneUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = GymCount; TARGETED_DEVICE_FAMILY = 1; CURRENT_PROJECT_VERSION = 30; MARKETING_VERSION = 1.1.3; }; name = Release; };
 
 
 /* Begin PBXBuildFile section */
@@ -496,13 +496,13 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "GymCount Watch App/GymCount Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_ASSET_PATHS = "\"GymCount Watch App/Preview Content\"";
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "GymCount-Sync-Watch-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_CFBundleDisplayName = PowerReps;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "读取训练与健康数据，用于同步训练记录。";
@@ -536,13 +536,13 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "GymCount Watch App/GymCount Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_ASSET_PATHS = "\"GymCount Watch App/Preview Content\"";
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "GymCount-Sync-Watch-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_CFBundleDisplayName = PowerReps;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "读取训练与健康数据，用于同步训练记录。";
@@ -577,10 +577,10 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				CODE_SIGN_ENTITLEMENTS = "GymCount-Phone-Health.entitlements";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = GymCount;
+				INFOPLIST_KEY_CFBundleDisplayName = PowerReps;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "录像与手表运动采样同步保存，用于核对训练次数。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "处理配套手表的训练与健康数据授权。";
@@ -605,10 +605,10 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				CODE_SIGN_ENTITLEMENTS = "GymCount-Phone-Health.entitlements";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = GymCount;
+				INFOPLIST_KEY_CFBundleDisplayName = PowerReps;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "录像与手表运动采样同步保存，用于核对训练次数。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "处理配套手表的训练与健康数据授权。";
@@ -633,7 +633,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
@@ -654,7 +654,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
@@ -675,7 +675,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
@@ -695,7 +695,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 29;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;

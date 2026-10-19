@@ -1,0 +1,4 @@
+"CFBundleDisplayName" = "PowerReps";
+"NSCameraUsageDescription" = "Record video alongside Apple Watch motion samples to review workout repetitions.";
+"NSHealthShareUsageDescription" = "Handle workout and health authorization for your companion Apple Watch.";
+"NSHealthUpdateUsageDescription" = "Allow your Apple Watch to start workout sessions and keep motion sampling active.";

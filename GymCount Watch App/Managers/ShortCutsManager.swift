@@ -183,7 +183,7 @@ struct GetWorkoutStatusIntent: AppIntent {
         let dataManager = DataManager.shared
         
         guard let session = dataManager.currentSession else {
-            let message = "当前没有活跃的锻炼"
+            let message = String(localized: "当前没有活跃的锻炼")
             print("ℹ️ 快捷指令: \(message)")
             return .result(value: message)
         }
@@ -192,7 +192,7 @@ struct GetWorkoutStatusIntent: AppIntent {
         let totalReps = session.totalReps
         let duration = Int(Date().timeIntervalSince(session.startTime) / 60)
         
-        let message = "正在记录\(exerciseName)，已完成\(totalReps)次，已进行\(duration)分钟"
+        let message = String(localized: "正在记录\(exerciseName)，已完成\(totalReps)次，已进行\(duration)分钟")
         print("ℹ️ 快捷指令: \(message)")
         
         return .result(value: message)

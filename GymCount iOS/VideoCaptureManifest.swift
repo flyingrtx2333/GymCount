@@ -33,7 +33,7 @@ struct VideoCaptureManifest: Codable, Identifiable {
     var cloudVideoUploadedAt: Date?
     var cloudUploadComplete: Bool { cloudRecordID != nil && cloudVideoUploadedAt != nil }
     var uploadStatusTitle: String {
-        cloudUploadComplete ? "已上传" : cloudRecordID != nil ? "仅采样已上传" : "未上传"
+        cloudUploadComplete ? String(localized: "已上传") : cloudRecordID != nil ? String(localized: "仅采样已上传") : String(localized: "未上传")
     }
     var sensorOffsetInVideo: Double? {
         guard let origin = sampleOriginOnPhone, let video = videoStartedAt else { return nil }
@@ -78,7 +78,7 @@ enum CaptureCloudUpload {
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         request.httpBody = body
         let (data, response) = try await URLSession.shared.data(for: request)
-        return try checkedJSON(data, response: response, expected: path == "sessions" ? 201 : 200, fallback: "上传失败")
+        return try checkedJSON(data, response: response, expected: path == "sessions" ? 201 : 200, fallback: String(localized: "上传失败"))
     }
     static func descriptor(file: URL, manifest: VideoCaptureManifest) throws -> Data {
         let handle = try FileHandle(forReadingFrom: file)
@@ -88,7 +88,7 @@ enum CaptureCloudUpload {
             size += chunk.count; md5.update(data: chunk)
         }
         guard size > 0, size <= 512 * 1024 * 1024, let duration = manifest.videoDuration, duration > 0 else {
-            throw UploadError(text: "录像文件不完整或超过 512 MB")
+            throw UploadError(text: String(localized: "录像文件不完整或超过 512 MB"))
         }
         var body: [String: Any] = ["size": size, "md5": Data(md5.finalize()).base64EncodedString(),
             "duration_seconds": duration, "clock_round_trip_seconds": manifest.clockRoundTrip,
@@ -107,11 +107,11 @@ enum CaptureCloudUpload {
         request.httpMethod = "PUT"; request.timeoutInterval = 600
         for (key, value) in ticket.headers { request.setValue(value, forHTTPHeaderField: key) }
         let (_, response) = try await URLSession.shared.upload(for: request, fromFile: file)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw UploadError(text: "录像上传失败，请重试") }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw UploadError(text: String(localized: "录像上传失败，请重试")) }
         let data = try await post("videos/complete", token: ticket.receipt)
         let completion = try JSONDecoder().decode(Completion.self, from: data)
         guard completion.id == sensor.id, completion.session_id == manifest.id, completion.video_complete else {
-            throw UploadError(text: "录像关联失败，请重试")
+            throw UploadError(text: String(localized: "录像关联失败，请重试"))
         }
     }
 }

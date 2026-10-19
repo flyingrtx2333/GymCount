@@ -69,7 +69,7 @@ struct GymHeader: View {
                         .frame(width: 34, height: 44)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("返回")
+                .accessibilityLabel(String(localized: "返回"))
             }
             Text(title).font(GymStyle.title)
                 .lineLimit(1).minimumScaleFactor(0.8)
@@ -121,14 +121,14 @@ struct MainMenuView: View {
         ScrollView {
             VStack(spacing: 0) {
                 HStack(spacing: 6) {
-                    Text("训练").font(GymStyle.title)
+                    Text(String(localized: "训练")).font(GymStyle.title)
                     Spacer(minLength: 0)
                     Button { showingHistory = true } label: {
                         Image(systemName: "chart.bar.fill").frame(width: 32, height: 44)
-                    }.accessibilityLabel("历史")
+                    }.accessibilityLabel(String(localized: "历史"))
                     Button { showingSettings = true } label: {
                         Image(systemName: "gearshape").frame(width: 32, height: 44)
-                    }.accessibilityLabel("设置")
+                    }.accessibilityLabel(String(localized: "设置"))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.white)

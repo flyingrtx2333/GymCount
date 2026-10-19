@@ -186,8 +186,8 @@ class NotificationManager: ObservableObject {
 
     func sendTestNotification() {
         let content = UNMutableNotificationContent()
-        content.title = "测试通知"
-        content.body = "这是一条测试通知，5秒后显示"
+        content.title = String(localized: "测试通知")
+        content.body = String(localized: "这是一条测试通知，5秒后显示")
         content.sound = .default
         
         // 5秒后触发,给你时间切换到后台

@@ -38,9 +38,9 @@ struct PhoneContentView: View {
 
     private func name(_ exercise: ExerciseType) -> String {
         switch exercise {
-        case .benchPress: return "卧推"
-        case .squat: return "深蹲"
-        case .deadlift: return "硬拉"
+        case .benchPress: return String(localized: "卧推")
+        case .squat: return String(localized: "深蹲")
+        case .deadlift: return String(localized: "硬拉")
         }
     }
 
@@ -66,22 +66,22 @@ struct PhoneContentView: View {
         }
         .sensoryFeedback(.success, trigger: store.restFinished) { _, finished in finished }
         .sheet(isPresented: $editingSet) { setEditor }
-        .alert("替换当前组？", isPresented: $confirmingReuse) {
-            Button("替换本组", role: .destructive) { store.reuseSuggestedSet(replacingDraft: true) }
-            Button("保留本组", role: .cancel) {}
+        .alert(String(localized: "替换当前组？"), isPresented: $confirmingReuse) {
+            Button(String(localized: "替换本组"), role: .destructive) { store.reuseSuggestedSet(replacingDraft: true) }
+            Button(String(localized: "保留本组"), role: .cancel) {}
         } message: {
-            Text("沿用上次会替换当前组已输入的重量和次数，已保存的组不受影响。")
+            Text(String(localized: "沿用上次会替换当前组已输入的重量和次数，已保存的组不受影响。"))
         }
-        .confirmationDialog("当前组还有未保存的次数", isPresented: $confirmingSwitch, titleVisibility: .visible) {
-            Button("保存本组并切换") {
+        .confirmationDialog(String(localized: "当前组还有未保存的次数"), isPresented: $confirmingSwitch, titleVisibility: .visible) {
+            Button(String(localized: "保存本组并切换")) {
                 store.completeSet()
                 switchExercise()
             }
-            Button("放弃本组并切换", role: .destructive) {
+            Button(String(localized: "放弃本组并切换"), role: .destructive) {
                 store.discardDraft()
                 switchExercise()
             }
-            Button("继续本组", role: .cancel) { pendingExercise = nil }
+            Button(String(localized: "继续本组"), role: .cancel) { pendingExercise = nil }
         }
     }
 
@@ -91,7 +91,7 @@ struct PhoneContentView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         HStack {
-                            Text("训练").font(Studio.title)
+                            Text(String(localized: "训练")).font(Studio.title)
                             Spacer()
                         }
                         .padding(.bottom, 26)
@@ -113,17 +113,17 @@ struct PhoneContentView: View {
             }
             .background(Studio.background.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
-            .confirmationDialog("结束当前训练并保存记录？", isPresented: $confirmingFinish, titleVisibility: .visible) {
-                Button("结束并保存") { store.finish(); tab = 1 }
+            .confirmationDialog(String(localized: "结束当前训练并保存记录？"), isPresented: $confirmingFinish, titleVisibility: .visible) {
+                Button(String(localized: "结束并保存")) { store.finish(); tab = 1 }
                     .accessibilityIdentifier("confirm-finish")
-                Button("继续训练", role: .cancel) {}
+                Button(String(localized: "继续训练"), role: .cancel) {}
             }
         }
     }
 
     private var readyTraining: some View {
         VStack(spacing: 0) {
-            Text("开始下一组")
+            Text(String(localized: "开始下一组"))
                 .font(.system(size: 26, weight: .medium))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, 16)
@@ -146,21 +146,21 @@ struct PhoneContentView: View {
             Text(name(exercise)).font(.system(size: 24, weight: .medium))
                 .padding(.top, 5).padding(.bottom, 21)
             HStack(spacing: 0) {
-                weightButton("减少重量", symbol: "minus", disabled: weight <= 0) { weight = max(0, weight - 2.5) }
+                weightButton(String(localized: "减少重量"), symbol: "minus", disabled: weight <= 0) { weight = max(0, weight - 2.5) }
                 Spacer(minLength: 8)
                 Button { openEditor() } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(weight, format: .number.precision(.fractionLength(0...1)))
                             .font(.system(size: 44, weight: .semibold, design: .rounded)).monospacedDigit().minimumScaleFactor(0.65)
-                        Text("公斤").font(.system(size: 17)).foregroundStyle(Studio.muted)
+                        Text(String(localized: "公斤")).font(.system(size: 17)).foregroundStyle(Studio.muted)
                     }
-                }.buttonStyle(.plain).accessibilityLabel("输入训练重量")
+                }.buttonStyle(.plain).accessibilityLabel(String(localized: "输入训练重量"))
                 Spacer(minLength: 8)
-                weightButton("增加重量", symbol: "plus", disabled: weight >= 500) { weight = min(500, weight + 2.5) }
+                weightButton(String(localized: "增加重量"), symbol: "plus", disabled: weight >= 500) { weight = min(500, weight + 2.5) }
             }
             .padding(.horizontal, 24).padding(.bottom, 14)
             Button { store.start(exercise: exercise, weight: weight) } label: {
-                Text("开始训练")
+                Text(String(localized: "开始训练"))
             }.buttonStyle(StudioPrimaryButton()).disabled(store.storageError != nil)
                 .padding(.top, 10).padding(.bottom, 16)
             previousTraining(exercise, canStart: true)
@@ -171,13 +171,13 @@ struct PhoneContentView: View {
                     Image(systemName: "clock").font(.system(size: 25, weight: .light))
                         .foregroundStyle(Studio.muted)
                     if let latest = store.history.first {
-                        Text("最近训练 · \(latest.exercises.map(name).joined(separator: "、")) · \(latest.totalReps) 次")
+                        Text(String(localized: "最近训练 · \(latest.exercises.map(name).joined(separator: "、")) · \(latest.totalReps) 次"))
                             .font(.system(size: 15)).foregroundStyle(Studio.muted)
                     } else {
-                        Text("还没有训练记录").font(.system(size: 15)).foregroundStyle(Studio.muted)
+                        Text(String(localized: "还没有训练记录")).font(.system(size: 15)).foregroundStyle(Studio.muted)
                     }
                     HStack(spacing: 8) {
-                        Text("查看历史")
+                        Text(String(localized: "查看历史"))
                         Image(systemName: "chevron.right").font(.system(size: 13, weight: .medium))
                     }.font(.system(size: 16, weight: .medium)).foregroundStyle(Studio.accent)
                 }.frame(maxWidth: .infinity).padding(.top, 30).padding(.bottom, 4)
@@ -205,8 +205,8 @@ struct PhoneContentView: View {
         VStack(spacing: 20) {
             HStack {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("本次训练").font(.system(size: 26, weight: .semibold))
-                    Text("已保存 \(session.sets.filter { !$0.imported }.count) 组 · \(session.totalReps) 次")
+                    Text(String(localized: "本次训练")).font(.system(size: 26, weight: .semibold))
+                    Text(String(localized: "已保存 \(session.sets.filter { !$0.imported }.count) 组 · \(session.totalReps) 次"))
                         .font(Studio.detail).foregroundStyle(Studio.muted)
                 }
                 Spacer()
@@ -230,42 +230,42 @@ struct PhoneContentView: View {
             if let end = session.restEndsAt {
                 restCard(end)
             } else if store.restFinished {
-                Label("休息结束，准备下一组", systemImage: "checkmark.circle")
+                Label(String(localized: "休息结束，准备下一组"), systemImage: "checkmark.circle")
                     .font(Studio.body).foregroundStyle(Studio.accent)
                     .accessibilityIdentifier("rest-finished")
             }
             VStack(spacing: 16) {
                 HStack {
                     exerciseImage(session.exercise, size: 48)
-                    Text("\(name(session.exercise)) · 第 \(store.nextSetNumber) 组").font(.headline)
+                    Text(String(localized: "\(name(session.exercise)) · 第 \(store.nextSetNumber) 组")).font(.headline)
                     Spacer()
                 }
                 HStack {
-                    weightButton("本组减少重量", symbol: "minus", disabled: session.weight <= 0) {
+                    weightButton(String(localized: "本组减少重量"), symbol: "minus", disabled: session.weight <= 0) {
                         store.setWeight(max(0, session.weight - 2.5))
                     }
                     Spacer()
                     Button { openEditor() } label: {
                         Text("\(session.weight, specifier: "%.1f") 公斤")
                             .font(.system(size: 27, weight: .semibold)).monospacedDigit()
-                    }.buttonStyle(.plain).accessibilityLabel("修改本组重量")
+                    }.buttonStyle(.plain).accessibilityLabel(String(localized: "修改本组重量"))
                     Spacer()
-                    weightButton("本组增加重量", symbol: "plus", disabled: session.weight >= 500) {
+                    weightButton(String(localized: "本组增加重量"), symbol: "plus", disabled: session.weight >= 500) {
                         store.setWeight(min(500, session.weight + 2.5))
                     }
                 }
                 HStack(spacing: 18) {
                     Button(action: store.removeRep) {
                         Image(systemName: "minus").frame(width: 48, height: 48)
-                    }.buttonStyle(.plain).disabled(session.reps == 0).accessibilityLabel("撤销一次")
+                    }.buttonStyle(.plain).disabled(session.reps == 0).accessibilityLabel(String(localized: "撤销一次"))
                     Text("\(session.reps)").font(.system(size: 64, weight: .semibold, design: .rounded))
                         .monospacedDigit().frame(maxWidth: .infinity)
-                        .accessibilityLabel("已完成 \(session.reps) 次")
+                        .accessibilityLabel(String(localized: "已完成 \(session.reps) 次"))
                     Button(action: store.addRep) {
                         Image(systemName: "plus").frame(width: 48, height: 48)
-                    }.buttonStyle(.plain).disabled(session.reps >= 999).accessibilityLabel("增加一次")
+                    }.buttonStyle(.plain).disabled(session.reps >= 999).accessibilityLabel(String(localized: "增加一次"))
                 }.font(.system(size: 25)).sensoryFeedback(.increase, trigger: session.reps)
-                Button("直接填次数") { openEditor() }
+                Button(String(localized: "直接填次数")) { openEditor() }
                     .font(Studio.body).foregroundStyle(Studio.accent).frame(minHeight: 44)
                 if let suggested = store.suggestedSet {
                     Button {
@@ -276,24 +276,24 @@ struct PhoneContentView: View {
                             .font(Studio.detail).frame(minHeight: 44)
                     }.buttonStyle(.plain).foregroundStyle(Studio.accent).accessibilityIdentifier("reuse-last-set")
                 }
-                Button(session.restEndsAt == nil ? "完成本组 · 开始休息" : "完成本组 · 重新计时", action: store.completeSet)
+                Button(session.restEndsAt == nil ? String(localized: "完成本组 · 开始休息") : String(localized: "完成本组 · 重新计时"), action: store.completeSet)
                     .buttonStyle(StudioPrimaryButton()).disabled(session.reps == 0 || store.storageError != nil)
                     .accessibilityIdentifier("complete-set")
-                Text("完成后保存本组，次数归零；整场训练结束后统一归档。")
+                Text(String(localized: "完成后保存本组，次数归零；整场训练结束后统一归档。"))
                     .font(.caption).foregroundStyle(Studio.muted)
             }.padding(18).background(Studio.surface, in: RoundedRectangle(cornerRadius: 24))
             if !session.sets.isEmpty {
                 savedSets(session)
             }
             if session.sets.isEmpty && session.reps == 0 {
-                Button("取消本次训练", action: store.cancelEmptyTraining)
+                Button(String(localized: "取消本次训练"), action: store.cancelEmptyTraining)
                     .buttonStyle(StudioSecondaryButton())
             } else {
-                Button("结束并保存") { confirmingFinish = true }
+                Button(String(localized: "结束并保存")) { confirmingFinish = true }
                     .buttonStyle(StudioSecondaryButton())
                     .accessibilityIdentifier("finish-training")
                 if session.reps > 0 {
-                    Text("当前组 \(session.reps) 次也会一并保存。")
+                    Text(String(localized: "当前组 \(session.reps) 次也会一并保存。"))
                         .font(.caption).foregroundStyle(Studio.muted)
                 }
             }
@@ -303,7 +303,7 @@ struct PhoneContentView: View {
     private func restCard(_ end: Date) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 6) {
-                Text("组间休息").font(.headline)
+                Text(String(localized: "组间休息")).font(.headline)
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(Duration.seconds(max(0, ceil(end.timeIntervalSince(context.date))))
                         .formatted(.time(pattern: .minuteSecond)))
@@ -311,7 +311,7 @@ struct PhoneContentView: View {
                 }
             }
             Spacer()
-            Button("跳过休息", action: store.skipRest)
+            Button(String(localized: "跳过休息"), action: store.skipRest)
                 .font(Studio.button).frame(minHeight: 44)
         }.foregroundStyle(Studio.accent).padding(18)
             .background(Studio.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
@@ -322,10 +322,10 @@ struct PhoneContentView: View {
     private func savedSets(_ session: PhoneTrainingSession) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("本次已记录").font(.headline)
+                Text(String(localized: "本次已记录")).font(.headline)
                 Spacer()
                 if session.reps == 0 && session.sets.last?.imported == false {
-                    Button("撤回上一组", action: store.undoLastSet)
+                    Button(String(localized: "撤回上一组"), action: store.undoLastSet)
                         .font(Studio.detail).frame(minHeight: 44)
                 }
             }
@@ -348,7 +348,7 @@ struct PhoneContentView: View {
 
     private func setRow(_ set: PhoneTrainingSet, number: Int) -> some View {
         HStack {
-            Text(set.imported ? "旧版次数" : "\(number)")
+            Text(set.imported ? String(localized: "旧版次数") : "\(number)")
                 .font(Studio.detail).foregroundStyle(Studio.muted).frame(minWidth: 24)
             Text(name(set.exercise)).font(Studio.body)
             Spacer()
@@ -362,13 +362,13 @@ struct PhoneContentView: View {
         let sets = store.lastSets(for: exercise)
         if !sets.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("上次\(name(exercise))").font(.headline)
+                Text(String(localized: "上次\(name(exercise))")).font(.headline)
                 ForEach(Array(sets.enumerated()), id: \.element.id) { index, set in
                     Text("第 \(index + 1) 组 · \(set.weight, specifier: "%.1f") 公斤 × \(set.reps) 次")
                         .font(Studio.detail).foregroundStyle(Studio.muted)
                 }
                 if canStart {
-                    Button("沿用上次开始") { store.start(exercise: exercise, weight: weight, reuseLast: true) }
+                    Button(String(localized: "沿用上次开始")) { store.start(exercise: exercise, weight: weight, reuseLast: true) }
                         .buttonStyle(StudioSecondaryButton()).disabled(store.storageError != nil)
                 }
             }.frame(maxWidth: .infinity, alignment: .leading)
@@ -409,13 +409,13 @@ struct PhoneContentView: View {
             Form {
                 Section {
                     HStack {
-                        Text("重量（公斤）")
+                        Text(String(localized: "重量（公斤）"))
                         TextField("0–500", text: $inputWeight).keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing).accessibilityIdentifier("set-weight-input")
                     }
                     if store.session != nil {
                         HStack {
-                            Text("次数")
+                            Text(String(localized: "次数"))
                             TextField("0–999", text: $inputReps).keyboardType(.numberPad)
                                 .multilineTextAlignment(.trailing).accessibilityIdentifier("set-reps-input")
                         }
@@ -423,20 +423,20 @@ struct PhoneContentView: View {
                             ForEach([5, 8, 10, 12, 15], id: \.self) { reps in
                                 Button("\(reps)") { inputReps = String(reps) }
                                     .buttonStyle(.bordered).frame(maxWidth: .infinity)
-                                    .accessibilityLabel("填入 \(reps) 次")
+                                    .accessibilityLabel(String(localized: "填入 \(reps) 次"))
                             }
                         }
                     }
                 } footer: {
-                    Text("重量支持 0–500 公斤，自重动作可填 0。次数支持 0–999。")
+                    Text(String(localized: "重量支持 0–500 公斤，自重动作可填 0。次数支持 0–999。"))
                 }
             }
-            .navigationTitle(store.session == nil ? "输入重量" : "快速录入本组")
+            .navigationTitle(store.session == nil ? String(localized: "输入重量") : String(localized: "快速录入本组"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { editingSet = false } }
+                ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { editingSet = false } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("确认") {
+                    Button(String(localized: "确认")) {
                         guard let parsedWeight else { return }
                         if store.session != nil, let parsedReps {
                             store.setWeight(parsedWeight)
@@ -466,15 +466,15 @@ struct PhoneContentView: View {
                             HStack {
                                 Text(item.exercises.map(name).joined(separator: " · ")).font(.headline)
                                 Spacer()
-                                Text("\(item.totalReps) 次").font(.headline).foregroundStyle(Studio.accent)
+                                Text(String(localized: "\(item.totalReps) 次")).font(.headline).foregroundStyle(Studio.accent)
                             }
-                            Text(item.startTime.formatted(.dateTime.month().day().hour().minute().locale(Locale(identifier: "zh_CN"))))
+                            Text(item.startTime.formatted(.dateTime.month().day().hour().minute()))
                             if item.watchSummary != nil {
                                 Text("Apple Watch · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))")
                             } else if item.legacySummary != nil {
-                                Text("旧版记录 · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))")
+                                Text(String(localized: "旧版记录 · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))"))
                             } else {
-                                Text("\(item.sets.filter { !$0.imported }.count) 组 · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))")
+                                Text(String(localized: "\(item.sets.filter { !$0.imported }.count) 组 · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))"))
                             }
                         }.font(Studio.detail).foregroundStyle(Studio.muted).padding(.vertical, 8)
                     }.listRowBackground(Studio.surface).listRowSeparatorTint(Studio.line)
@@ -484,11 +484,11 @@ struct PhoneContentView: View {
             .overlay {
                 if store.history.isEmpty && store.storageError == nil {
                     ContentUnavailableView {
-                        Label("还没有训练记录", systemImage: "clock")
+                        Label(String(localized: "还没有训练记录"), systemImage: "clock")
                     } description: {
-                        Text("完成一次训练后，可以在这里查看每个动作和每组表现。")
+                        Text(String(localized: "完成一次训练后，可以在这里查看每个动作和每组表现。"))
                     } actions: {
-                        Button(store.session == nil ? "开始训练" : "继续训练") {
+                        Button(store.session == nil ? String(localized: "开始训练") : String(localized: "继续训练")) {
                             historyEditMode = .inactive
                             tab = 0
                         }
@@ -498,16 +498,16 @@ struct PhoneContentView: View {
                     }
                 }
             }
-            .navigationTitle("训练记录")
+            .navigationTitle(String(localized: "训练记录"))
             .navigationBarTitleDisplayMode(.inline)
             .environment(\.editMode, $historyEditMode)
             .toolbar {
                 #if GYMCOUNT_SYNC
                 Button { capture.requestWorkoutHistory(force: true) } label: {
                     Image(systemName: "arrow.clockwise")
-                }.accessibilityLabel("同步手表记录").disabled(store.storageError != nil)
+                }.accessibilityLabel(String(localized: "同步手表记录")).disabled(store.storageError != nil)
                 #endif
-                Button(historyEditMode == .active ? "完成" : "编辑") {
+                Button(historyEditMode == .active ? String(localized: "完成") : String(localized: "编辑")) {
                     withAnimation { historyEditMode = historyEditMode == .active ? .inactive : .active }
                 }.disabled(store.storageError != nil)
             }
@@ -517,20 +517,20 @@ struct PhoneContentView: View {
 
     private func historyDetail(_ item: PhoneTrainingSession) -> some View {
         List {
-            Section("训练总结") {
-                LabeledContent("开始时间", value: item.startTime.formatted(date: .abbreviated, time: .shortened))
-                LabeledContent("训练时长", value: Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))
-                LabeledContent("总次数", value: "\(item.totalReps) 次")
+            Section(String(localized: "训练总结")) {
+                LabeledContent(String(localized: "开始时间"), value: item.startTime.formatted(date: .abbreviated, time: .shortened))
+                LabeledContent(String(localized: "训练时长"), value: Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))
+                LabeledContent(String(localized: "总次数"), value: String(localized: "\(item.totalReps) 次"))
                 if let volume = item.volume {
-                    LabeledContent("总训练量", value: "\(volume.formatted(.number.precision(.fractionLength(0...1)))) 公斤")
-                    Text("训练量 = 各组重量 × 次数之和").font(.caption).foregroundStyle(Studio.muted)
+                    LabeledContent(String(localized: "总训练量"), value: String(localized: "\(volume.formatted(.number.precision(.fractionLength(0...1)))) 公斤"))
+                    Text(String(localized: "训练量 = 各组重量 × 次数之和")).font(.caption).foregroundStyle(Studio.muted)
                 }
             }.listRowBackground(Studio.surface)
             if let old = item.watchSummary ?? item.legacySummary {
-                Section(item.watchSummary != nil ? "Apple Watch 训练记录" : "旧版训练记录") {
-                    LabeledContent("动作", value: name(old.exerciseType))
-                    LabeledContent("最大重量", value: "\(old.maxWeight.formatted()) 公斤")
-                    Text(item.watchSummary != nil ? "来自 Apple Watch 的训练汇总，没有各组明细。" : "旧版仅保存汇总信息，没有各组明细。")
+                Section(item.watchSummary != nil ? String(localized: "Apple Watch 训练记录") : String(localized: "旧版训练记录")) {
+                    LabeledContent(String(localized: "动作"), value: name(old.exerciseType))
+                    LabeledContent(String(localized: "最大重量"), value: String(localized: "\(old.maxWeight.formatted()) 公斤"))
+                    Text(item.watchSummary != nil ? String(localized: "来自 Apple Watch 的训练汇总，没有各组明细。") : String(localized: "旧版仅保存汇总信息，没有各组明细。"))
                         .font(.footnote).foregroundStyle(Studio.muted)
                 }.listRowBackground(Studio.surface)
             } else {
@@ -541,58 +541,58 @@ struct PhoneContentView: View {
                 }
             }
         }.scrollContentBackground(.hidden).background(Studio.background)
-            .navigationTitle("训练详情").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(String(localized: "训练详情")).navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Studio.background, for: .navigationBar)
     }
 
     private var settings: some View {
         NavigationStack {
             Form {
-                Section("训练偏好") {
+                Section(String(localized: "训练偏好")) {
                     Stepper(value: $weight, in: 0...500, step: 2.5) {
                         Text("默认重量：\(weight, specifier: "%.1f") 公斤")
                     }
                 }.listRowBackground(Studio.surface)
-                Section("组间休息") {
+                Section(String(localized: "组间休息")) {
                     Stepper(value: Binding(get: { store.restSeconds }, set: { store.setRestSeconds($0) }), in: 0...600, step: 15) {
-                        Text(store.restSeconds == 0 ? "完成本组后不自动休息" : "休息时长：\(store.restSeconds) 秒")
+                        Text(store.restSeconds == 0 ? String(localized: "完成本组后不自动休息") : String(localized: "休息时长：\(store.restSeconds) 秒"))
                     }.accessibilityIdentifier("rest-duration")
-                    Toggle("后台休息提醒", isOn: Binding(get: { store.remindersEnabled }, set: { enabled in
+                    Toggle(String(localized: "后台休息提醒"), isOn: Binding(get: { store.remindersEnabled }, set: { enabled in
                         Task { await store.setRemindersEnabled(enabled) }
                     }))
-                    Text("完成一组后自动倒计时。开启通知后，锁屏或切到其他应用也能收到提醒。")
+                    Text(String(localized: "完成一组后自动倒计时。开启通知后，锁屏或切到其他应用也能收到提醒。"))
                         .font(.footnote).foregroundStyle(Studio.muted)
                     if let message = store.reminderMessage {
                         Text(message).font(.footnote).foregroundStyle(Studio.accent)
                     }
                 }.listRowBackground(Studio.surface)
-                Section("权限与帮助") {
-                    NavigationLink("手表健康权限") {
+                Section(String(localized: "权限与帮助")) {
+                    NavigationLink(String(localized: "手表健康权限")) {
                         Form {
-                            Section("在手表本机操作") {
-                                Text("设置 → 健康 → 数据来源、App 和服务 → 健身计数器")
-                                Text("开启「允许写入」中的「体能训练」。")
+                            Section(String(localized: "在手表本机操作")) {
+                                Text(String(localized: "设置 → 健康 → 数据来源、App 和服务 → 健身计数器"))
+                                Text(String(localized: "开启「允许写入」中的「体能训练」。"))
                             }.listRowBackground(Studio.surface)
                             Section {
-                                Text("应用也可能显示为 PowerReps。")
-                                Text("开启后，回到手表采集页点「检查同步权限」。")
+                                Text(String(localized: "应用也可能显示为 PowerReps。"))
+                                Text(String(localized: "开启后，回到手表采集页点「检查同步权限」。"))
                             }.listRowBackground(Studio.surface)
                         }
                         .scrollContentBackground(.hidden).background(Studio.background)
-                        .navigationTitle("手表健康权限").navigationBarTitleDisplayMode(.inline)
+                        .navigationTitle(String(localized: "手表健康权限")).navigationBarTitleDisplayMode(.inline)
                         .toolbarBackground(Studio.background, for: .navigationBar)
                     }
                 }.listRowBackground(Studio.surface)
                 #if GYMCOUNT_SYNC
                 Section {
-                    NavigationLink("开发者工具") { PhoneDeveloperToolsView() }
+                    NavigationLink(String(localized: "开发者工具")) { PhoneDeveloperToolsView() }
                 }.listRowBackground(Studio.surface)
                 #endif
                 Section {
-                    LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")
+                    LabeledContent(String(localized: "版本"), value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")
                 }.listRowBackground(Studio.surface)
             }.scrollContentBackground(.hidden).background(Studio.background)
-                .navigationTitle("设置")
+                .navigationTitle(String(localized: "设置"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbarBackground(Studio.background, for: .navigationBar)
         }
@@ -600,9 +600,9 @@ struct PhoneContentView: View {
 
     private var tabBar: some View {
         HStack(spacing: 0) {
-            tabButton(0, title: "训练", icon: "dumbbell.fill")
-            tabButton(1, title: "历史", icon: "clock")
-            tabButton(2, title: "设置", icon: "gearshape")
+            tabButton(0, title: String(localized: "训练"), icon: "dumbbell.fill")
+            tabButton(1, title: String(localized: "历史"), icon: "clock")
+            tabButton(2, title: String(localized: "设置"), icon: "gearshape")
         }.padding(.top, 5).padding(.bottom, 3)
             .background(Studio.background.ignoresSafeArea(edges: .bottom))
             .overlay(alignment: .top) { Rectangle().fill(Studio.line).frame(height: 0.5) }

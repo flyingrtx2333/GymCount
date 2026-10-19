@@ -65,7 +65,7 @@ struct CounterPanel: View {
                         .lineLimit(1).minimumScaleFactor(0.8)
                     Spacer(minLength: 0)
                     Button(action: onWeight) {
-                        Text(weight.formatted(.number.precision(.fractionLength(0...1))) + " 公斤")
+                        Text(weight.formatted(.number.precision(.fractionLength(0...1))) + String(localized: " 公斤"))
                             .font(GymStyle.caption)
                             .foregroundStyle(GymStyle.muted)
                             .padding(.horizontal, 6)
@@ -73,14 +73,14 @@ struct CounterPanel: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("修改器械重量")
+                    .accessibilityLabel(String(localized: "修改器械重量"))
                 }
 
                 .frame(height: 28)
 
                 HStack(spacing: 2) {
                     CircleButton(icon: "minus", color: GymStyle.mint, size: 44, disabled: count == 0, action: onMinus)
-                        .accessibilityLabel("减少次数")
+                        .accessibilityLabel(String(localized: "减少次数"))
                     Text("\(count)")
                         .font(GymStyle.trainingCounter)
                         .monospacedDigit()
@@ -88,14 +88,14 @@ struct CounterPanel: View {
                         .frame(maxWidth: .infinity)
                         .contentTransition(.numericText())
                     CircleButton(icon: "plus", color: GymStyle.mint, size: 44, action: onPlus)
-                        .accessibilityLabel("增加次数")
+                        .accessibilityLabel(String(localized: "增加次数"))
                 }
                 HStack(spacing: 5) {
                     Circle().fill(GymStyle.mint).frame(width: 5, height: 5)
                     Text(countingMessage)
                         .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
                 }
-                Button("结束", action: onEnd).buttonStyle(GymActionStyle())
+                Button(String(localized: "结束"), action: onEnd).buttonStyle(GymActionStyle())
             }
             .gymPageContent(fullWidthHeader: true)
         }
@@ -143,7 +143,7 @@ struct WeightInputView: View {
         ScrollView {
         VStack(spacing: GymStyle.spacing) {
 
-            GymHeader(title: "器械重量", back: { presentationMode.wrappedValue.dismiss() })
+            GymHeader(title: String(localized: "器械重量"), back: { presentationMode.wrappedValue.dismiss() })
 
             // 大号重量显示
             HStack(alignment: .lastTextBaseline, spacing: 3) {
@@ -152,7 +152,7 @@ struct WeightInputView: View {
                     .foregroundColor(.white)
                     .contentTransition(.numericText())
                     .animation(.spring(duration: 0.2), value: weight)
-                Text("公斤")
+                Text(String(localized: "公斤"))
                     .font(GymStyle.body)
                     .foregroundColor(.secondary)
             }
@@ -177,7 +177,7 @@ struct WeightInputView: View {
                 }
             }
 
-            Button("保存") {
+            Button(String(localized: "保存")) {
                 onSave(weight)
                 presentationMode.wrappedValue.dismiss()
             }

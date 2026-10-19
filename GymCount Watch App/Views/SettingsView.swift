@@ -10,10 +10,10 @@ import HealthKit
 import Intents
 
 enum WatchHealthPermissionGuide {
-    static let path = "设置 → 健康 → 数据来源、App 和服务 → 健身计数器"
-    static let instruction = "开启「允许写入」中的「体能训练」。"
-    static let alternateName = "应用也可能显示为 PowerReps。"
-    static let message = "在手表本机打开：\n" + path + "\n" + instruction + "\n" + alternateName
+    static let path = String(localized: "设置 → 健康 → 数据来源、App 和服务 → 健身计数器")
+    static let instruction = String(localized: "开启「允许写入」中的「体能训练」。")
+    static let alternateName = String(localized: "应用也可能显示为 PowerReps。")
+    static let message = String(localized: "在手表本机打开：\n") + path + "\n" + instruction + "\n" + alternateName
 }
 
 struct SettingsView: View {
@@ -41,8 +41,8 @@ struct SettingsView: View {
             ScrollView {
             VStack(spacing: GymStyle.spacing) {
                 HStack(spacing: 0) {
-                    GymHeader(title: "设置", back: { presentationMode.wrappedValue.dismiss() })
-                    Button("保存") {
+                    GymHeader(title: String(localized: "设置"), back: { presentationMode.wrappedValue.dismiss() })
+                    Button(String(localized: "保存")) {
                         dataManager.updateSettings(tempSettings)
                         presentationMode.wrappedValue.dismiss()
                     }
@@ -81,7 +81,7 @@ struct SettingsView: View {
                 #if DEBUG || GYMCOUNT_CAPTURE
                 Section {
                     NavigationLink { CollectionView() } label: {
-                        Label("采集测试", systemImage: "waveform.path")
+                        Label(String(localized: "采集测试"), systemImage: "waveform.path")
                             .font(GymStyle.body)
                             .frame(maxWidth: .infinity, minHeight: 44)
                             .background(GymStyle.surface, in: RoundedRectangle(cornerRadius: 12))
@@ -91,9 +91,9 @@ struct SettingsView: View {
                 #endif
 
                 // MARK: 运动圆环
-                Section(header: Text("运动圆环")) {
+                Section(header: Text(String(localized: "运动圆环"))) {
                     Button { showingHealthGuide = true } label: {
-                        Label("健康权限怎么开", systemImage: "questionmark.circle")
+                        Label(String(localized: "健康权限怎么开"), systemImage: "questionmark.circle")
                             .font(GymStyle.body)
                             .frame(maxWidth: .infinity, minHeight: GymStyle.buttonHeight, alignment: .leading)
                     }
@@ -215,16 +215,16 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showingHealthGuide) {
             VStack(spacing: GymStyle.spacing) {
-                GymHeader(title: "健康权限")
+                GymHeader(title: String(localized: "健康权限"))
                     .padding(.horizontal, GymStyle.inset)
                     .padding(.top, 44)
                 ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("在手表本机操作").font(GymStyle.body.bold())
+                    Text(String(localized: "在手表本机操作")).font(GymStyle.body.bold())
                     Text(WatchHealthPermissionGuide.path)
                     Text(WatchHealthPermissionGuide.instruction)
                     Text(WatchHealthPermissionGuide.alternateName).font(GymStyle.detail).foregroundStyle(GymStyle.muted)
-                    Text("开启后，回到采集页点「检查同步权限」。").font(GymStyle.detail).foregroundStyle(GymStyle.muted)
+                    Text(String(localized: "开启后，回到采集页点「检查同步权限」。")).font(GymStyle.detail).foregroundStyle(GymStyle.muted)
                 }
                 .padding(.horizontal, GymStyle.inset)
                 .padding(.bottom, 12)
@@ -304,7 +304,7 @@ struct WeightRow: View {
                     .lineLimit(1).minimumScaleFactor(0.8)
                     .layoutPriority(1)
                 Spacer(minLength: 2)
-                Text(formatValue(value) + " 公斤")
+                Text(formatValue(value) + String(localized: " 公斤"))
                     .font(GymStyle.caption).foregroundStyle(.white)
                     .lineLimit(1).minimumScaleFactor(0.8)
                     .monospacedDigit()
@@ -342,17 +342,17 @@ struct WeightAdjustmentView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text(value.formatted(.number.precision(.fractionLength(0...1))))
                         .font(GymStyle.counter).monospacedDigit()
-                    Text("公斤").font(GymStyle.body).foregroundStyle(GymStyle.muted)
+                    Text(String(localized: "公斤")).font(GymStyle.body).foregroundStyle(GymStyle.muted)
                 }
                 HStack(spacing: 20) {
                     CircleButton(icon: "minus", color: GymStyle.mint, size: 44,
                                  disabled: value - step < minValue) { value -= step }
-                        .accessibilityLabel("减少重量")
+                        .accessibilityLabel(String(localized: "减少重量"))
                     CircleButton(icon: "plus", color: GymStyle.mint, size: 44,
                                  disabled: value + step > maxValue) { value += step }
-                        .accessibilityLabel("增加重量")
+                        .accessibilityLabel(String(localized: "增加重量"))
                 }
-                Button("完成") { dismiss() }.buttonStyle(GymActionStyle(primary: true))
+                Button(String(localized: "完成")) { dismiss() }.buttonStyle(GymActionStyle(primary: true))
             }
             .gymPageContent(fullWidthHeader: true)
         }

@@ -201,21 +201,21 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
 
     func handle(_ message: [String: Any], reply: @escaping ([String: Any]) -> Void) async {
         let received = Date().timeIntervalSince1970
-        guard let command = message["command"] as? String else { reply(["error": "无效指令"]); return }
+        guard let command = message["command"] as? String else { reply(["error": String(localized: "无效指令")]); return }
         let store = CollectionStore.shared
         if command == "ping" {
             reply(["received": received, "sent": Date().timeIntervalSince1970]); return
         }
         if command == "prepare" {
-            guard !store.recording, store.draft == nil else { reply(["error": "请先保存手表上的当前采集"]); return }
-            guard DataManager.shared.currentSession == nil else { reply(["error": "请先结束手表上的当前训练"]); return }
+            guard !store.recording, store.draft == nil else { reply(["error": String(localized: "请先保存手表上的当前采集")]); return }
+            guard DataManager.shared.currentSession == nil else { reply(["error": String(localized: "请先结束手表上的当前训练")]); return }
             showCapturePage(exercise: message["exercise"] as? String)
             if authorizing {
                 reply(["authorizationPending": true]); return
             }
             refreshAuthorization()
             if attemptedInitialAuthorization && needsAuthorization {
-                reply(["error": "手表尚未授权，请在手表检查同步权限"]); return
+                reply(["error": String(localized: "手表尚未授权，请在手表检查同步权限")]); return
             }
             WKInterfaceDevice.current().play(.click)
             // A transport reply must never wait for a human to dismiss a permission sheet.
@@ -224,17 +224,17 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
                 // The foreground capture view presents authorization after it is visible.
                 return
             }
-            self.message = "正在准备采集…"
+            self.message = String(localized: "正在准备采集…")
             reply(["ready": true])
             return
         }
-        guard let text = message["id"] as? String, let id = UUID(uuidString: text) else { reply(["error": "采集编号无效"]); return }
+        guard let text = message["id"] as? String, let id = UUID(uuidString: text) else { reply(["error": String(localized: "采集编号无效")]); return }
         if command == "start" {
             if activeID == id, store.recording { reply(["started": true]); return }
             guard activeID == nil, !startingCapture, workout == nil, !store.recording, store.draft == nil,
                   let exercise = message["exercise"] as? String,
                   ["squat", "bench_press", "deadlift", "bicep_curl", "rest", "walking", "other"].contains(exercise) else {
-                reply(["error": "手表未就绪或动作无效"]); return
+                reply(["error": String(localized: "手表未就绪或动作无效")]); return
             }
             showCapturePage(exercise: exercise)
             do {
@@ -258,12 +258,12 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
                     let origin = (try? Data(contentsOf: timingURL)).flatMap { try? JSONDecoder().decode(Double.self, from: $0) } ?? 0
                     WCSession.default.transferFile(url, metadata: ["id": text, "sample_origin": origin]); reply(["stopped": true]); return
                 }
-                reply(["error": "未找到本组采集"]); return
+                reply(["error": String(localized: "未找到本组采集")]); return
             }
             sampleOrigin = store.sampleOriginWallTime ?? sampleOrigin
             store.finish()
             reply(["stopped": true])
-        } else { reply(["error": "未知指令"]) }
+        } else { reply(["error": String(localized: "未知指令")]) }
     }
 
     func startStandaloneCapture(exercise: String, notes: String) async {
@@ -290,7 +290,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             NSError(domain: "Capture", code: 1, userInfo: [NSLocalizedDescriptionKey: text])
         }
         guard !startingCapture, workout == nil, !store.recording, store.draft == nil,
-              DataManager.shared.currentSession == nil else { throw failure("请先结束或保存当前采集") }
+              DataManager.shared.currentSession == nil else { throw failure(String(localized: "请先结束或保存当前采集")) }
         startingCapture = true
         let startToken = UUID()
         if !remote { pendingStandaloneStart = startToken }
@@ -298,10 +298,10 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             startingCapture = false
             if pendingStandaloneStart == startToken { pendingStandaloneStart = nil }
         }
-        guard await authorizeCapture() else { throw failure("请先允许体能训练权限") }
+        guard await authorizeCapture() else { throw failure(String(localized: "请先允许体能训练权限")) }
         if !remote && pendingStandaloneStart != startToken { throw CancellationError() }
         guard !store.recording, store.draft == nil, DataManager.shared.currentSession == nil else {
-            throw failure("请先结束或保存当前采集")
+            throw failure(String(localized: "请先结束或保存当前采集"))
         }
         let config = HKWorkoutConfiguration()
         config.activityType = .traditionalStrengthTraining
@@ -316,7 +316,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             while session.state != .running {
                 if !remote && pendingStandaloneStart != startToken { throw CancellationError() }
                 guard workout === session, ContinuousClock.now < deadline else {
-                    throw failure("训练会话启动失败，请重试")
+                    throw failure(String(localized: "训练会话启动失败，请重试"))
                 }
                 try await Task.sleep(for: .milliseconds(50))
             }
@@ -326,7 +326,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             sampleOrigin = nil
             captureLog.info("Capture workout running; remote=\(remote)")
             store.begin(exercise, pace: "normal", notes: notes, sessionID: id)
-            guard store.recording else { throw failure("加速度计不可用") }
+            guard store.recording else { throw failure(String(localized: "加速度计不可用")) }
         } catch {
             workout = nil
             session.end()
@@ -366,7 +366,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
 
     func authorizeCapture() async -> Bool {
         guard authorization.available() else {
-            authorizationMessage = "健康功能暂不可用"; showingAuthorizationHelp = true; return false
+            authorizationMessage = String(localized: "健康功能暂不可用"); showingAuthorizationHelp = true; return false
         }
         refreshAuthorization()
         if !needsAuthorization { return true }
@@ -380,7 +380,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             if requestStatus != .unnecessary { try await authorization.request() }
             refreshAuthorization()
             guard !needsAuthorization else {
-                authorizationMessage = "手表尚未获得体能训练权限"
+                authorizationMessage = String(localized: "手表尚未获得体能训练权限")
                 showingAuthorizationHelp = true
                 WKInterfaceDevice.current().play(.failure)
                 return false
@@ -389,7 +389,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
         } catch {
             let failure = error as NSError
             authorizationLog.error("Authorization failed: \(failure.domain, privacy: .public) / \(failure.code)")
-            authorizationMessage = "权限检查失败（\(failure.code)），请重试"
+            authorizationMessage = String(localized: "权限检查失败（\(failure.code)），请重试")
             showingAuthorizationHelp = true
             WKInterfaceDevice.current().play(.failure)
             return false
@@ -400,16 +400,16 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
         WKInterfaceDevice.current().play(.click)
         guard await authorizeCapture() else { return }
         guard !requestingPhone, WCSession.default.activationState == .activated, WCSession.default.isReachable else {
-            message = "请先打开手机同步采集页"; WKInterfaceDevice.current().play(.failure); return
+            message = String(localized: "请先打开手机同步采集页"); WKInterfaceDevice.current().play(.failure); return
         }
-        requestingPhone = true; message = "正在连接手机相机…"
+        requestingPhone = true; message = String(localized: "正在连接手机相机…")
         let requestID = UUID()
         phoneRequestID = requestID
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 15_000_000_000)
             guard self.phoneRequestID == requestID, self.requestingPhone else { return }
             self.phoneRequestID = nil; self.requestingPhone = false
-            self.message = "手机响应超时，请打开同步采集页后重试"
+            self.message = String(localized: "手机响应超时，请打开同步采集页后重试")
             WKInterfaceDevice.current().play(.failure)
         }
         WCSession.default.sendMessage(["command": "startFromWatch", "exercise": exercise], replyHandler: { response in
@@ -417,14 +417,14 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
                 guard self.phoneRequestID == requestID else { return }
                 self.phoneRequestID = nil
                 self.requestingPhone = false
-                self.message = response["error"] as? String ?? "正在准备采集…"
+                self.message = response["error"] as? String ?? String(localized: "正在准备采集…")
                 if response["error"] != nil { WKInterfaceDevice.current().play(.failure) }
             }
         }, errorHandler: { _ in
             Task { @MainActor in
                 guard self.phoneRequestID == requestID else { return }
                 self.phoneRequestID = nil; self.requestingPhone = false
-                self.message = "手机未响应，请打开同步采集页"
+                self.message = String(localized: "手机未响应，请打开同步采集页")
                 WKInterfaceDevice.current().play(.failure)
             }
         })
@@ -453,8 +453,8 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             WCSession.default.transferFile(url, metadata: ["id": id.uuidString, "sample_origin": sampleOrigin ?? 0])
             try WCSession.default.updateApplicationContext(["id": id.uuidString, "recording": false, "count": store.detected, "sample_origin": sampleOrigin ?? 0])
             store.discard()
-            message = "请在手机核对并上传"
-        } catch { store.message = "同步文件保存失败，数据仍在本页" }
+            message = String(localized: "请在手机核对并上传")
+        } catch { store.message = String(localized: "同步文件保存失败，数据仍在本页") }
     }
 
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState, from fromState: HKWorkoutSessionState, date: Date) {
@@ -462,7 +462,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             self.captureLog.info("Workout state changed: \(fromState.rawValue) -> \(toState.rawValue)")
             if self.workout === workoutSession, toState == .ended || toState == .paused {
                 if CollectionStore.shared.recording {
-                    CollectionStore.shared.finish(interruption: "训练会话中断")
+                    CollectionStore.shared.finish(interruption: String(localized: "训练会话中断"))
                 } else { self.workout = nil }
             }
         }
@@ -473,7 +473,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             self.captureLog.error("Workout failed: \(failure.domain, privacy: .public) / \(failure.code)")
             guard self.workout === workoutSession else { return }
             if CollectionStore.shared.recording {
-                CollectionStore.shared.finish(interruption: "训练会话中断")
+                CollectionStore.shared.finish(interruption: String(localized: "训练会话中断"))
             } else { self.workout = nil }
         }
     }

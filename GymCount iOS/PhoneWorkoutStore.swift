@@ -97,7 +97,7 @@ final class PhoneWorkoutStore: ObservableObject {
             mergeWatchHistory()
             save()
         } catch {
-            storageError = "无法读取本地训练记录，请勿删除应用。"
+            storageError = String(localized: "无法读取本地训练记录，请勿删除应用。")
         }
     }
 
@@ -211,10 +211,10 @@ final class PhoneWorkoutStore: ObservableObject {
         if enabled {
             do {
                 remindersEnabled = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
-                reminderMessage = remindersEnabled ? nil : "通知未开启，可在系统设置中允许通知。"
+                reminderMessage = remindersEnabled ? nil : String(localized: "通知未开启，可在系统设置中允许通知。")
             } catch {
                 remindersEnabled = false
-                reminderMessage = "无法开启提醒，请稍后重试。"
+                reminderMessage = String(localized: "无法开启提醒，请稍后重试。")
             }
         } else {
             remindersEnabled = false
@@ -253,7 +253,7 @@ final class PhoneWorkoutStore: ObservableObject {
         let watchIDs = Set(offsets.compactMap { history.indices.contains($0) ? history[$0].watchSummary?.id : nil })
         if !watchIDs.isEmpty {
             do { try watchArchive?.remove(watchIDs) }
-            catch { storageError = "删除记录失败，原记录已保留。"; return }
+            catch { storageError = String(localized: "删除记录失败，原记录已保留。"); return }
         }
         for index in offsets.sorted(by: >) where history.indices.contains(index) { history.remove(at: index) }
         save()
@@ -296,7 +296,7 @@ final class PhoneWorkoutStore: ObservableObject {
             let data = try JSONEncoder().encode(State(session: session, history: history, restSeconds: restSeconds, remindersEnabled: remindersEnabled))
             defaults.set(data, forKey: stateKey)
         } catch {
-            storageError = "训练记录保存失败。"
+            storageError = String(localized: "训练记录保存失败。")
         }
     }
 
@@ -309,14 +309,14 @@ final class PhoneWorkoutStore: ObservableObject {
         cancelReminder()
         guard remindersEnabled, let end = session?.restEndsAt, end > Date() else { return }
         let content = UNMutableNotificationContent()
-        content.title = "休息结束"
-        content.body = "准备好后，开始下一组训练。"
+        content.title = String(localized: "休息结束")
+        content.body = String(localized: "准备好后，开始下一组训练。")
         content.sound = .default
         let request = UNNotificationRequest(identifier: reminderID, content: content,
             trigger: UNTimeIntervalNotificationTrigger(timeInterval: max(1, end.timeIntervalSinceNow), repeats: false))
         UNUserNotificationCenter.current().add(request) { [weak self] error in
             if error != nil {
-                Task { @MainActor in self?.reminderMessage = "休息提醒未能设置，请留意页面倒计时。" }
+                Task { @MainActor in self?.reminderMessage = String(localized: "休息提醒未能设置，请留意页面倒计时。") }
             }
         }
     }

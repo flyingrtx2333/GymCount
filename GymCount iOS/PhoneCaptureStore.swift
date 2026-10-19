@@ -47,32 +47,32 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         guard connectivityEnabled, workoutStore != nil, WCSession.isSupported() else { return }
         let session = WCSession.default
         guard session.activationState == .activated else {
-            workoutSyncMessage = "正在连接手表…"; session.activate(); return
+            workoutSyncMessage = String(localized: "正在连接手表…"); session.activate(); return
         }
         guard session.isPaired, session.isWatchAppInstalled else {
-            workoutSyncMessage = "请先安装并打开配套手表应用"; return
+            workoutSyncMessage = String(localized: "请先安装并打开配套手表应用"); return
         }
         let payload: [String: Any] = ["kind": WorkoutSync.requestKind,
                                       "receiver_id": workoutReceiverID, "force": force]
         let pending = session.outstandingUserInfoTransfers.filter { $0.userInfo["kind"] as? String == WorkoutSync.requestKind }
         if force { pending.forEach { $0.cancel() } }
         if force || pending.isEmpty { session.transferUserInfo(payload) }
-        workoutSyncMessage = session.isReachable ? "正在接收手表记录…" : "等待手表连接，连接后自动补传"
+        workoutSyncMessage = session.isReachable ? String(localized: "正在接收手表记录…") : String(localized: "等待手表连接，连接后自动补传")
         if session.isReachable {
             let generation = UUID(); workoutRequestGeneration = generation
             session.sendMessage(payload, replyHandler: { [weak self] reply in
                 Task { @MainActor in
                     guard let self, self.workoutRequestGeneration == generation else { return }
                     if reply["workout_history_ready"] as? Bool != true {
-                        self.workoutSyncMessage = "请先更新手表应用，再同步训练记录"
+                        self.workoutSyncMessage = String(localized: "请先更新手表应用，再同步训练记录")
                     } else if reply["workout_history_pending"] as? Int == 0 {
-                        self.workoutSyncMessage = reply["workout_history_count"] as? Int == 0 ? "手表暂无训练记录" : "手表记录已核对"
+                        self.workoutSyncMessage = reply["workout_history_count"] as? Int == 0 ? String(localized: "手表暂无训练记录") : String(localized: "手表记录已核对")
                     }
                 }
             }, errorHandler: { [weak self] _ in
                 Task { @MainActor in
                     guard let self, self.workoutRequestGeneration == generation else { return }
-                    self.workoutSyncMessage = "等待手表连接，连接后自动补传"
+                    self.workoutSyncMessage = String(localized: "等待手表连接，连接后自动补传")
                 }
             })
         }
@@ -85,11 +85,11 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             let records = try WorkoutSync.decode(payload)
             try workoutStore.acceptWatchHistory(records)
             workoutRequestGeneration = UUID()
-            workoutSyncMessage = "已接收 \(records.count) 条手表记录"
+            workoutSyncMessage = String(localized: "已接收 \(records.count) 条手表记录")
             return ["kind": WorkoutSync.receiptKind, "receiver_id": workoutReceiverID,
                     "ids": records.map { $0.id.uuidString }]
         } catch {
-            workoutSyncMessage = "手表记录保存失败，原记录仍保留在手表，请稍后重试"
+            workoutSyncMessage = String(localized: "手表记录保存失败，原记录仍保留在手表，请稍后重试")
             return ["error": workoutSyncMessage]
         }
     }
@@ -135,7 +135,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             try FileManager.default.createDirectory(at: folder(manifest.id), withIntermediateDirectories: true)
             try JSONEncoder().encode(manifest).write(to: folder(manifest.id).appendingPathComponent("manifest.json"), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             reload()
-        } catch { message = "记录保存失败，请保留应用并检查存储空间" }
+        } catch { message = String(localized: "记录保存失败，请保留应用并检查存储空间") }
     }
     private func reload() {
         let directories = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
@@ -164,7 +164,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         let session = camera
         cameraQueue.async { session.stopRunning() }
         Task {
-            await stop(reason: "已离开采集工具，本组采集结束")
+            await stop(reason: String(localized: "已离开采集工具，本组采集结束"))
         }
     }
 
@@ -179,9 +179,9 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         configuring = true; defer { configuring = false }
         let permitted = await AVCaptureDevice.requestAccess(for: .video)
         guard captureScreenToken == token else { return }
-        guard permitted else { message = "请在系统设置中允许相机权限"; return }
+        guard permitted else { message = String(localized: "请在系统设置中允许相机权限"); return }
         do {
-            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else { throw CaptureError.text("相机不可用") }
+            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else { throw CaptureError.text(String(localized: "相机不可用")) }
             let input = try AVCaptureDeviceInput(device: device)
             let session = camera, output = movie
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -192,7 +192,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
                     session.beginConfiguration()
                     session.sessionPreset = .hd1280x720
                     guard session.canAddInput(input), session.canAddOutput(output) else {
-                        session.commitConfiguration(); continuation.resume(throwing: CaptureError.text("无法配置录像")); return
+                        session.commitConfiguration(); continuation.resume(throwing: CaptureError.text(String(localized: "无法配置录像"))); return
                     }
                     session.addInput(input); session.addOutput(output)
                     if let connection = output.connection(with: .video), connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
@@ -212,7 +212,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
 
     func start(exercise: String) async {
         guard !busy, !recording, cameraReady, captureScreenToken != nil else { return }
-        busy = true; starting = true; message = "正在连接手表…"
+        busy = true; starting = true; message = String(localized: "正在连接手表…")
         let generation = UUID(); commandGeneration = generation
         watchdog?.invalidate()
         do {
@@ -226,7 +226,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         watchdog = Timer.scheduledTimer(withTimeInterval: startTimeout, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 guard let self, self.commandGeneration == generation, self.starting else { return }
-                await self.cancelStart(reason: "连接超时，请打开手表采集页后重试")
+                await self.cancelStart(reason: String(localized: "连接超时，请打开手表采集页后重试"))
             }
         }
         do {
@@ -236,7 +236,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             if ready["authorizationPending"] as? Bool == true {
                 // Human authorization has its own bounded wait, outside the connection deadline.
                 watchdog?.invalidate(); watchdog = nil
-                message = "请在手机或手表上授权"
+                message = String(localized: "请在手机或手表上授权")
                 for _ in 0..<60 {
                     try await Task.sleep(nanoseconds: 1_000_000_000)
                     guard generation == commandGeneration, captureScreenToken != nil else { return }
@@ -244,36 +244,36 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
                     if ready["ready"] as? Bool == true { break }
                 }
                 guard generation == commandGeneration, captureScreenToken != nil else { return }
-                guard ready["ready"] as? Bool == true else { throw CaptureError.text("授权未完成，请确认系统授权后重试") }
+                guard ready["ready"] as? Bool == true else { throw CaptureError.text(String(localized: "授权未完成，请确认系统授权后重试")) }
                 watchdog = Timer.scheduledTimer(withTimeInterval: startTimeout, repeats: false) { [weak self] _ in
                     Task { @MainActor in
                         guard let self, self.commandGeneration == generation, self.starting else { return }
-                        await self.cancelStart(reason: "连接超时，请重试")
+                        await self.cancelStart(reason: String(localized: "连接超时，请重试"))
                     }
                 }
             }
             guard generation == commandGeneration, captureScreenToken != nil else { return }
-            guard ready["ready"] as? Bool == true else { throw CaptureError.text("手表未就绪，请打开手表采集页后重试") }
+            guard ready["ready"] as? Bool == true else { throw CaptureError.text(String(localized: "手表未就绪，请打开手表采集页后重试")) }
             var best: (offset: Double, rtt: Double)?
-            message = "正在准备采集…"
+            message = String(localized: "正在准备采集…")
             for _ in 0..<5 {
                 let sent = Date().timeIntervalSince1970
                 let response = try await request(["command": "ping"])
                 guard generation == commandGeneration, captureScreenToken != nil else { return }
                 let received = Date().timeIntervalSince1970
-                guard let watchReceived = response["received"] as? Double, let watchSent = response["sent"] as? Double else { throw CaptureError.text("手表校时失败") }
+                guard let watchReceived = response["received"] as? Double, let watchSent = response["sent"] as? Double else { throw CaptureError.text(String(localized: "手表校时失败")) }
                 let reading = CaptureClockReading(phoneSent: sent, watchReceived: watchReceived, watchSent: watchSent, phoneReceived: received)
                 let rtt = reading.roundTrip
                 let offset = reading.offset
                 if best == nil || rtt < best!.rtt { best = (offset, rtt) }
             }
             guard generation == commandGeneration, captureScreenToken != nil else { return }
-            guard let best, best.rtt < 1 else { throw CaptureError.text("手表连接延迟过高，请靠近手机后重试") }
+            guard let best, best.rtt < 1 else { throw CaptureError.text(String(localized: "手表连接延迟过高，请靠近手机后重试")) }
             let id = UUID()
             active = VideoCaptureManifest(id: id, exercise: exercise, createdAt: Date(), watchClockOffset: best.offset, clockRoundTrip: best.rtt)
             count = 0; save(active!)
             UIApplication.shared.isIdleTimerDisabled = true
-            message = "正在准备采集…"
+            message = String(localized: "正在准备采集…")
             movie.startRecording(to: videoURL(id), recordingDelegate: self)
         } catch {
             if generation == commandGeneration {
@@ -291,7 +291,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         return 25
     }
 
-    func cancelStart(reason: String = "已取消，可重新开始") async {
+    func cancelStart(reason: String = String(localized: "已取消，可重新开始")) async {
         guard starting, !recording else { return }
         if active != nil { await stop(reason: reason); return }
         commandGeneration = UUID()
@@ -303,14 +303,14 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
 
     func stop(reason: String? = nil) async {
         guard let current = active, recording || busy else {
-            if starting { await cancelStart(reason: reason ?? "已取消，可重新开始") }
+            if starting { await cancelStart(reason: reason ?? String(localized: "已取消，可重新开始")) }
             return
         }
         starting = false
         commandGeneration = UUID(); busy = true; watchdog?.invalidate(); watchdog = nil
         // Keep recording through the Watch stop acknowledgement so its final samples are on video.
         do { _ = try await request(["command": "stop", "id": current.id.uuidString]) }
-        catch { active?.error = "手表结束未确认；可在记录页重试接收数据" }
+        catch { active?.error = String(localized: "手表结束未确认；可在记录页重试接收数据") }
         if let reason { active?.error = reason }
         if let active { save(active) }
         if movie.isRecording { movie.stopRecording() }
@@ -318,7 +318,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
     }
 
     func receiveAgain(_ id: UUID) async {
-        do { _ = try await request(["command": "stop", "id": id.uuidString]); message = "正在接收采样…" }
+        do { _ = try await request(["command": "stop", "id": id.uuidString]); message = String(localized: "正在接收采样…") }
         catch { message = error.localizedDescription }
     }
     func markReference(_ id: UUID, at seconds: Double) {
@@ -350,12 +350,12 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
     func upload(_ id: UUID) async {
         guard !uploading else { return }
         guard var item = history.first(where: { $0.id == id }), item.sensorComplete, item.actualCount != nil else {
-            message = "请先收到采样并填写实际次数"; return
+            message = String(localized: "请先收到采样并填写实际次数"); return
         }
         uploading = true
         UIApplication.shared.isIdleTimerDisabled = true
         defer { uploading = false; UIApplication.shared.isIdleTimerDisabled = recording }
-        message = "正在上传采样…"
+        message = String(localized: "正在上传采样…")
         watchFeedback("upload", message: message)
         do {
             let confirmedSensor = folder(id).appendingPathComponent("uploaded-motion.json")
@@ -363,17 +363,17 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             let uploadedCount = ((try JSONSerialization.jsonObject(with: sensorData)) as? [String: Any])?["actual_count"] as? Int
             let data = try await CaptureCloudUpload.post("sessions", body: sensorData)
             let reply = try JSONDecoder().decode(CaptureCloudUpload.SensorReply.self, from: data)
-            guard reply.session_id == id else { throw CaptureError.text("采样关联失败，请重试") }
+            guard reply.session_id == id else { throw CaptureError.text(String(localized: "采样关联失败，请重试")) }
             try sensorData.write(to: confirmedSensor, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             item.cloudRecordID = reply.id; save(item)
-            guard item.videoComplete else { throw CaptureError.text("采样已上传，录像尚未保存完整") }
-            message = "正在上传录像…"
+            guard item.videoComplete else { throw CaptureError.text(String(localized: "采样已上传，录像尚未保存完整")) }
+            message = String(localized: "正在上传录像…")
             try await CaptureCloudUpload.uploadVideo(file: videoURL(id), manifest: item, sensor: reply)
             item.cloudVideoUploadedAt = Date(); save(item)
-            message = uploadedCount == item.actualCount ? "上传成功" : "已上传；请在网站将次数改为 \(item.actualCount ?? 0)"
-            watchFeedback("success", message: "上传完成")
+            message = uploadedCount == item.actualCount ? String(localized: "上传成功") : String(localized: "已上传；请在网站将次数改为 \(item.actualCount ?? 0)")
+            watchFeedback("success", message: String(localized: "上传完成"))
         } catch {
-            message = item.cloudRecordID == nil ? error.localizedDescription : "采样已上传，录像未完成：\(error.localizedDescription)"
+            message = item.cloudRecordID == nil ? error.localizedDescription : String(localized: "采样已上传，录像未完成：\(error.localizedDescription)")
             watchFeedback("failure", message: message)
         }
     }
@@ -389,13 +389,13 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         #if targetEnvironment(simulator)
         if ProcessInfo.processInfo.arguments.contains("--capture-start-timeout-test") { return }
         #endif
-        guard HKHealthStore.isHealthDataAvailable() else { throw CaptureError.text("这台手机无法使用健康权限") }
+        guard HKHealthStore.isHealthDataAvailable() else { throw CaptureError.text(String(localized: "这台手机无法使用健康权限")) }
         let workout = HKObjectType.workoutType()
         if health.authorizationStatus(for: workout) == .sharingAuthorized { return }
-        message = "请确认体能训练授权…"
+        message = String(localized: "请确认体能训练授权…")
         try await health.requestAuthorization(toShare: [workout], read: [])
         guard health.authorizationStatus(for: workout) == .sharingAuthorized else {
-            throw CaptureError.text("体能训练未获授权；若此前拒绝，请在健康中开启体能训练写入")
+            throw CaptureError.text(String(localized: "体能训练未获授权；若此前拒绝，请在健康中开启体能训练写入"))
         }
     }
 
@@ -404,7 +404,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         if ProcessInfo.processInfo.arguments.contains("--capture-start-timeout-test") { return }
         #endif
         if WCSession.default.activationState == .activated, WCSession.default.isReachable { return }
-        message = "正在打开手表采集页…"
+        message = String(localized: "正在打开手表采集页…")
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .traditionalStrengthTraining
         configuration.locationType = .indoor
@@ -412,10 +412,10 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             let gate = ReplyGate(continuation)
             health.startWatchApp(with: configuration) { success, _ in
                 if success { gate.finish(.success([:])) }
-                else { gate.finish(.failure(CaptureError.text("未能打开手表应用，请确认已安装并完成体能训练授权"))) }
+                else { gate.finish(.failure(CaptureError.text(String(localized: "未能打开手表应用，请确认已安装并完成体能训练授权")))) }
             }
             DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
-                gate.finish(.failure(CaptureError.text("打开手表超时，请抬腕查看后重试")))
+                gate.finish(.failure(CaptureError.text(String(localized: "打开手表超时，请抬腕查看后重试"))))
             }
         }
         for _ in 0..<50 {
@@ -423,7 +423,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             if WCSession.default.activationState == .activated, WCSession.default.isReachable { return }
             try await Task.sleep(nanoseconds: 100_000_000)
         }
-        throw CaptureError.text("手表已收到打开请求，但连接尚未就绪，请重试")
+        throw CaptureError.text(String(localized: "手表已收到打开请求，但连接尚未就绪，请重试"))
     }
 
     private func request(_ payload: [String: Any]) async throws -> [String: Any] {
@@ -434,14 +434,14 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             return ["ready": true]
         }
         #endif
-        guard WCSession.default.activationState == .activated, WCSession.default.isReachable else { throw CaptureError.text("请打开配套手表应用，并让手机与手表保持连接") }
+        guard WCSession.default.activationState == .activated, WCSession.default.isReachable else { throw CaptureError.text(String(localized: "请打开配套手表应用，并让手机与手表保持连接")) }
         return try await withCheckedThrowingContinuation { continuation in
             let gate = ReplyGate(continuation)
             WCSession.default.sendMessage(payload, replyHandler: { response in
                 if let error = response["error"] as? String { gate.finish(.failure(CaptureError.text(error))) }
                 else { gate.finish(.success(response)) }
             }, errorHandler: { gate.finish(.failure($0)) })
-            DispatchQueue.global().asyncAfter(deadline: .now() + 15) { gate.finish(.failure(CaptureError.text("手表响应超时"))) }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 15) { gate.finish(.failure(CaptureError.text(String(localized: "手表响应超时")))) }
         }
     }
 
@@ -453,13 +453,13 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             let generation = self.commandGeneration
             item.videoStartedAt = estimatedStart; self.active = item; self.save(item)
             do {
-                self.message = "正在准备采集…"
+                self.message = String(localized: "正在准备采集…")
                 _ = try await self.request(["command": "start", "id": item.id.uuidString, "exercise": item.exercise])
                 guard self.active?.id == item.id, self.commandGeneration == generation, self.movie.isRecording else {
                     _ = try? await self.request(["command": "stop", "id": item.id.uuidString]); return
                 }
                 self.busy = false; self.starting = false; self.recording = true; self.watchdog?.invalidate()
-                self.message = "采集中"
+                self.message = String(localized: "采集中")
                 self.watchdog = Timer.scheduledTimer(withTimeInterval: 180, repeats: false) { [weak self] _ in
                     Task { @MainActor in await self?.stop() }
                 }
@@ -473,13 +473,13 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             guard var item = self.active, outputFileURL == self.videoURL(item.id) else { return }
             item.videoDuration = duration.flatMap { $0.isFinite ? $0 : nil }
             item.videoComplete = successful
-            if !successful { item.error = "录像未完整保存，请检查空间或相机中断" }
+            if !successful { item.error = String(localized: "录像未完整保存，请检查空间或相机中断") }
             self.active = item; self.save(item)
             self.recording = false; self.busy = true; self.watchdog?.invalidate()
             UIApplication.shared.isIdleTimerDisabled = false
             // Camera/system termination must also stop Watch sampling.
             _ = try? await self.request(["command": "stop", "id": item.id.uuidString])
-            self.message = item.error ?? "录像已保存，等待采样"
+            self.message = item.error ?? String(localized: "录像已保存，等待采样")
             self.active = nil
             self.busy = false
         }
@@ -520,7 +520,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             guard message["command"] as? String == "startFromWatch", let exercise = message["exercise"] as? String,
                   ["squat", "bench_press", "deadlift", "bicep_curl", "rest", "walking", "other"].contains(exercise),
                   self.captureScreenToken != nil, self.cameraReady, UIApplication.shared.applicationState == .active, !self.busy, !self.recording else {
-                replyHandler(["error": "请先在手机打开设置 → 开发者工具 → 同步录像与采样"]); return
+                replyHandler(["error": String(localized: "请先在手机打开设置 → 开发者工具 → 同步录像与采样")]); return
             }
             // Reply immediately: start() performs its own readiness/clock/start handshake.
             replyHandler(["accepted": true])
@@ -554,9 +554,9 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
                 if let origin = metadata["sample_origin"] as? Double, origin > 0 { item.sampleOriginOnPhone = origin - item.watchClockOffset }
                 if let detected = json["detected_count"] as? Int { item.detectedCount = detected }
                 if self.active?.id == id { self.active = item }
-                self.save(item); self.message = "已保存"
+                self.save(item); self.message = String(localized: "已保存")
                 await self.reviewBench(id)
-            } catch { self.message = "手表采样保存失败，请重试接收" }
+            } catch { self.message = String(localized: "手表采样保存失败，请重试接收") }
         }
     }
 }

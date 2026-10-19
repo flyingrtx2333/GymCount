@@ -18,7 +18,7 @@ struct HistoryView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: GymStyle.spacing) {
-                GymHeader(title: "历史", back: { showingHistory = false })
+                GymHeader(title: String(localized: "历史"), back: { showingHistory = false })
 
                 // MARK: 运动类型选择器
                 ExerciseTypePicker(selected: $selectedExercise)
@@ -220,7 +220,7 @@ struct StatCard: View {
                     .foregroundColor(.secondary)
             }
 
-            Text("上周 \(change >= 0 ? "+" : "−")\(abs(change))")
+            Text(String(localized: "上周 \(change >= 0 ? "+" : "−")\(abs(change))"))
                 .font(GymStyle.detail)
                 .foregroundStyle(GymStyle.muted)
                 .lineLimit(1)

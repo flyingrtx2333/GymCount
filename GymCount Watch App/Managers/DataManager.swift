@@ -17,7 +17,7 @@ class DataManager: ObservableObject {
     @Published var workoutHistory: [WorkoutHistory] = []
     @Published var settings = AppSettings.shared
     @Published var isFirstLaunch = true
-    @Published var countingMessage = "检测中"
+    @Published var countingMessage = String(localized: "检测中")
     private var automaticBenchCycles: [UUID: BenchCycle] = [:]
     private var removedBenchIDs: Set<UUID> = []
     
@@ -50,7 +50,7 @@ class DataManager: ObservableObject {
 
     private func applyBenchAnalysis(_ result: BenchAnalysis) {
         guard var session = currentSession, session.exerciseType == .benchPress else { return }
-        countingMessage = result.status == "insufficient_data" ? "采样中断，请手动核对" : "估计中 · 结束时核准"
+        countingMessage = result.status == "insufficient_data" ? String(localized: "采样中断，请手动核对") : String(localized: "估计中 · 结束时核准")
         guard result.status != "insufficient_data" else { return }
         let oldCount = session.totalReps
         var activeIDs: Set<UUID> = []
@@ -129,7 +129,7 @@ class DataManager: ObservableObject {
     // MARK: - 锻炼会话管理
     func startWorkout(exerciseType: ExerciseType, weight: Double = 0.0) {
         automaticBenchCycles = [:]; removedBenchIDs = []
-        countingMessage = exerciseType == .benchPress ? "估计中 · 前两次一起确认" : "检测中"
+        countingMessage = exerciseType == .benchPress ? String(localized: "估计中 · 前两次一起确认") : String(localized: "检测中")
         WKInterfaceDevice.current().play(.click)
         currentSession = WorkoutSession(
             exerciseType: exerciseType,
@@ -366,7 +366,7 @@ class DataManager: ObservableObject {
     }
     
     func getWeekDays() -> [String] {
-        return ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+        return [String(localized: "周一"), String(localized: "周二"), String(localized: "周三"), String(localized: "周四"), String(localized: "周五"), String(localized: "周六"), String(localized: "周日")]
     }
     
     // MARK: - 按具体日期获取周数据

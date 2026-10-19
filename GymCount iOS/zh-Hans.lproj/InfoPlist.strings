@@ -1,0 +1,4 @@
+"CFBundleDisplayName" = "健身计数器";
+"NSCameraUsageDescription" = "录像与手表运动采样同步保存，用于核对训练次数。";
+"NSHealthShareUsageDescription" = "处理配套手表的训练与健康数据授权。";
+"NSHealthUpdateUsageDescription" = "允许手表启动体能训练会话，保持运动采样。";

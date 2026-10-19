@@ -15,18 +15,18 @@ struct PhoneCaptureView: View {
                         if !capture.cameraReady {
                             VStack(spacing: 12) {
                                 Image(systemName: "video").font(.system(size: 32, weight: .light))
-                                Text("相机预览").font(.subheadline)
+                                Text(String(localized: "相机预览")).font(.subheadline)
                             }.foregroundStyle(Studio.muted)
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 20))
                     .overlay(RoundedRectangle(cornerRadius: 20).stroke(Studio.line, lineWidth: 0.5))
-                Picker("动作", selection: $exercise) {
-                    Text("杠铃深蹲").tag("squat")
-                    Text("卧推").tag("bench_press")
-                    Text("硬拉").tag("deadlift")
-                    Text("弯举").tag("bicep_curl")
-                    Text("非训练动作").tag("other")
+                Picker(String(localized: "动作"), selection: $exercise) {
+                    Text(String(localized: "杠铃深蹲")).tag("squat")
+                    Text(String(localized: "卧推")).tag("bench_press")
+                    Text(String(localized: "硬拉")).tag("deadlift")
+                    Text(String(localized: "弯举")).tag("bicep_curl")
+                    Text(String(localized: "非训练动作")).tag("other")
                 }
                 .pickerStyle(.menu)
                 .padding(.horizontal, 16).frame(maxWidth: .infinity, minHeight: 52)
@@ -35,26 +35,26 @@ struct PhoneCaptureView: View {
                 if capture.recording {
                     Text("\(capture.count)").font(.system(size: 64, weight: .bold, design: .rounded)).monospacedDigit()
                     if exercise == "bench_press" {
-                        Text("手表估计 · 前两次一起确认，结束时核准").font(.caption).foregroundStyle(Studio.muted)
+                        Text(String(localized: "手表估计 · 前两次一起确认，结束时核准")).font(.caption).foregroundStyle(Studio.muted)
                     }
                 }
-                if !capture.message.isEmpty, capture.message != "正在准备采集…", capture.message != "采集中" {
+                if !capture.message.isEmpty, capture.message != String(localized: "正在准备采集…"), capture.message != String(localized: "采集中") {
                     Text(capture.message).font(.callout)
                 }
-                Button(capture.recording ? "结束采集" : capture.busy ? "正在准备采集…" : "开始采集") {
+                Button(capture.recording ? String(localized: "结束采集") : capture.busy ? String(localized: "正在准备采集…") : String(localized: "开始采集")) {
                     Task { if capture.recording { await capture.stop() } else { await capture.start(exercise: exercise) } }
                 }
                 .buttonStyle(StudioPrimaryButton())
                 .disabled(capture.busy || !capture.cameraReady)
                 if capture.starting {
-                    Button("取消启动") { Task { await capture.cancelStart() } }
+                    Button(String(localized: "取消启动")) { Task { await capture.cancelStart() } }
                         .buttonStyle(StudioSecondaryButton())
                 }
-                NavigationLink("采集记录") { VideoCaptureHistoryView() }
+                NavigationLink(String(localized: "采集记录")) { VideoCaptureHistoryView() }
                     .buttonStyle(StudioSecondaryButton())
             }.padding(Studio.inset)
         }
-        .navigationTitle("同步采集")
+        .navigationTitle(String(localized: "同步采集"))
         .navigationBarTitleDisplayMode(.inline)
         .background(Studio.background)
         .toolbarBackground(Studio.background, for: .navigationBar)
@@ -62,7 +62,7 @@ struct PhoneCaptureView: View {
         .task { await capture.enterCaptureScreen() }
         .onDisappear { capture.leaveCaptureScreen() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { Task { await capture.stop(reason: "进入后台，采集已结束") } }
+            if phase == .background { Task { await capture.stop(reason: String(localized: "进入后台，采集已结束")) } }
         }
     }
 }
@@ -88,13 +88,13 @@ struct VideoCaptureHistoryView: View {
             NavigationLink { VideoCaptureDetailView(id: item.id) } label: {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(item.createdAt.formatted(.dateTime.month().day().hour().minute().locale(Locale(identifier: "zh_CN"))))
+                        Text(item.createdAt.formatted(.dateTime.month().day().hour().minute()))
                         Spacer(minLength: 8)
                         Text(item.uploadStatusTitle)
                             .font(.caption)
                             .foregroundStyle(item.cloudUploadComplete ? Studio.accent : Studio.muted)
                     }
-                    Text("\(item.videoComplete ? "录像已保存" : "录像未完成") · \(item.sensorComplete ? "采样已接收" : "等待采样")")
+                    Text("\(item.videoComplete ? String(localized: "录像已保存") : String(localized: "录像未完成")) · \(item.sensorComplete ? String(localized: "采样已接收") : String(localized: "等待采样"))")
                         .font(.caption).foregroundStyle(.secondary)
                     if let error = item.error { Text(error).font(.caption).foregroundStyle(.red) }
                 }
@@ -106,10 +106,10 @@ struct VideoCaptureHistoryView: View {
         .background(Studio.background)
         .overlay {
             if capture.history.isEmpty {
-                ContentUnavailableView("还没有采集记录", systemImage: "video")
+                ContentUnavailableView(String(localized: "还没有采集记录"), systemImage: "video")
             }
         }
-        .navigationTitle("采集记录")
+        .navigationTitle(String(localized: "采集记录"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Studio.background, for: .navigationBar)
     }
@@ -127,14 +127,14 @@ struct VideoCaptureDetailView: View {
             if let item = capture.history.first(where: { $0.id == id }) {
                 VStack(spacing: Studio.spacing) {
                     if let player { VideoPlayer(player: player).frame(height: 360).clipShape(RoundedRectangle(cornerRadius: 20)) }
-                    Text("手表计数：\(item.detectedCount) 次")
+                    Text(String(localized: "手表计数：\(item.detectedCount) 次"))
                     if let review = capture.benchReviews[id] {
-                        Text(review.count.map { "本机复核：\($0) 次（实验）" } ?? "本机复核：数据不足，需人工核对")
+                        Text(review.count.map { String(localized: "本机复核：\($0) 次（实验）") } ?? String(localized: "本机复核：数据不足，需人工核对"))
                             .font(.callout).foregroundStyle(Studio.muted)
-                        Text("按推起回到顶端识别，仍请结合视频核对。")
+                        Text(String(localized: "按推起回到顶端识别，仍请结合视频核对。"))
                             .font(.caption).foregroundStyle(Studio.muted)
                     }
-                    Button("标记一次") {
+                    Button(String(localized: "标记一次")) {
                         if let player {
                             player.pause()
                             capture.markReference(id, at: CMTimeGetSeconds(player.currentTime()))
@@ -143,34 +143,34 @@ struct VideoCaptureDetailView: View {
                     }
                     .buttonStyle(StudioPrimaryButton())
                     .disabled(capture.uploading)
-                    Text("已标记 \(item.referenceEvents.count) 次").font(.caption)
-                    Button("撤销标记") {
+                    Text(String(localized: "已标记 \(item.referenceEvents.count) 次")).font(.caption)
+                    Button(String(localized: "撤销标记")) {
                         capture.undoReference(id)
                         actual = capture.history.first(where: { $0.id == id })?.actualCount ?? actual
                     }.buttonStyle(StudioSecondaryButton()).disabled(capture.uploading || item.referenceEvents.isEmpty)
-                    Stepper("实际次数：\(actual) 次", value: $actual, in: 0...500)
+                    Stepper(String(localized: "实际次数：\(actual) 次"), value: $actual, in: 0...500)
                         .disabled(capture.uploading)
                         .onChange(of: actual) { _, value in capture.setActual(value, for: id) }
                         .padding(16).background(Studio.surface, in: RoundedRectangle(cornerRadius: 16))
                     if let offset = item.sensorOffsetInVideo {
                         Text("采样起点约 \(offset, specifier: "%.2f") 秒").font(.caption)
                         HStack {
-                            Button("对齐 −0.1 秒") { capture.adjustAlignment(id, by: -0.1) }
-                            Button("对齐 +0.1 秒") { capture.adjustAlignment(id, by: 0.1) }
+                            Button(String(localized: "对齐 −0.1 秒")) { capture.adjustAlignment(id, by: -0.1) }
+                            Button(String(localized: "对齐 +0.1 秒")) { capture.adjustAlignment(id, by: 0.1) }
                         }.buttonStyle(StudioSecondaryButton()).font(.caption).disabled(capture.uploading)
                     }
                     if !item.sensorComplete {
-                        Button("重试接收采样") { Task { await capture.receiveAgain(id) } }
+                        Button(String(localized: "重试接收采样")) { Task { await capture.receiveAgain(id) } }
                             .buttonStyle(StudioSecondaryButton())
                     }
-                    Button(capture.uploading ? "正在上传…" : "上传录像与采样") { confirmingUpload = true }
+                    Button(capture.uploading ? String(localized: "正在上传…") : String(localized: "上传录像与采样")) { confirmingUpload = true }
                         .buttonStyle(StudioPrimaryButton())
                         .disabled(capture.uploading || !item.sensorComplete || item.actualCount == nil)
-                    Button("分享文件") { sharing = true }
+                    Button(String(localized: "分享文件")) { sharing = true }
                         .buttonStyle(StudioSecondaryButton()).disabled(!item.videoComplete)
                     if let error = item.error {
                         Text(error).foregroundStyle(.red)
-                    } else if !capture.message.isEmpty, !capture.message.hasPrefix("正在上传") {
+                    } else if !capture.message.isEmpty, !capture.message.hasPrefix(String(localized: "正在上传")) {
                         Text(capture.message).font(.footnote)
                     }
                 }.padding(Studio.inset)
@@ -182,17 +182,17 @@ struct VideoCaptureDetailView: View {
                 .sheet(isPresented: $sharing) {
                     FileShareView(files: [capture.videoURL(id), capture.sensorURL(id), capture.folder(id).appendingPathComponent("manifest.json")].filter { FileManager.default.fileExists(atPath: $0.path) })
                 }
-                .confirmationDialog("实际 \(actual) 次，确认上传？", isPresented: $confirmingUpload, titleVisibility: .visible) {
-                    Button("上传 \(actual) 次") {
+                .confirmationDialog(String(localized: "实际 \(actual) 次，确认上传？"), isPresented: $confirmingUpload, titleVisibility: .visible) {
+                    Button(String(localized: "上传 \(actual) 次")) {
                         capture.setActual(actual, for: id)
                         Task { await capture.upload(id) }
                     }
-                    Button("继续修改", role: .cancel) {}
+                    Button(String(localized: "继续修改"), role: .cancel) {}
                 }
             }
         }
         .background(Studio.background)
-        .navigationTitle("录像核对")
+        .navigationTitle(String(localized: "录像核对"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Studio.background, for: .navigationBar)
         .onDisappear { player?.pause() }
