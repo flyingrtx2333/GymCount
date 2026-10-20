@@ -1,3 +1,15 @@
+## 2026-10-20：白金 A 款图标，1.1.3 (31) 已发布
+
+iPhone 与 Apple Watch 同时换用用户选定的白金 A 款（本组第一款、原设计 W「流动金线」），抽象运动线条中融入腕表。训练、历史与同步行为沿用 30 版；工作区其他未提交修改保留，没有纳入此次发布。
+
+- 双端 Aqua 签名归档、导出及 IPA 版本、签名、HealthKit、配套关系核验通过；403 个源码快照文件 SHA-256 一致。
+- 手机安装包图标与所选图标编译结果的解码像素完全相同，Watch AppIcon 的 rendition 摘要一致，已确认两端打包使用所选图标。
+- Apple：`BUILD-STATUS: VALID` / `IN_BETA_TESTING`，内部测试组 `flyingrtx` 可用，中英文测试说明已更新。
+- Delivery UUID / ASC Build ID：`b84755dc-7bdb-470f-a558-7482b6c88323`；发布源码：`07a3c8c`。
+- IPA SHA-256：`cb218716dc8d8738053b217c5e308328386982e3023255cfff0e10f13cbad4f0`。
+- 外置卷空间不足，完整产物保存在本机：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.3-31/`。旧发布包与训练数据未删除。
+- 两端真机均不可连接，未执行桌面及 App 列表的真实图标显示验收。请同时更新 iPhone 与 Watch 至 31 版。
+
 ## 2026-10-19：名称与界面本地化，1.1.3 (30) 已发布
 
 手机与 Apple Watch 的名称跟随应用语言：简体中文“健身计数器”、英文 PowerReps。手机训练、历史、设置、休息与同步提示补齐英文；空历史页可进入开始/继续训练，记录日期跟随语言。

@@ -22,7 +22,18 @@
 
 详细证据见 [iPhone 多组训练完善记录](docs/phone-training-flow.md)。
 
-## 最新 TestFlight 发布：2026-10-19（30）
+## 最新 TestFlight 发布：2026-10-20（31）
+
+- 版本：1.1.3 (31)，iPhone 与 Watch 一致；发布源码：`07a3c8c`。
+- Delivery UUID / ASC Build ID：`b84755dc-7bdb-470f-a558-7482b6c88323`。
+- 苹果状态：`BUILD-STATUS: VALID` / `IN_BETA_TESTING`，已核对内部测试组 `flyingrtx` 可用，中英文测试说明已更新。
+- 用户选择白金组第一款作为 A（原设计标号 W「流动金线」），已更新两端 AppIcon。使用已提交的 30 版应用源码加两张图标、两个工程构建号打包，工作区未提交的训练逻辑与其他设计文件未混入安装包。
+- 双端 Aqua 签名归档、导出、IPA 版本/签名/HealthKit/配套关系核验通过；403 个源码快照文件 SHA-256 核对一致。手机实际打包图标与所选图标的资源编译结果解码后像素完全一致；Watch 图标 rendition 摘要一致。
+- 源图 SHA-256：`29d267252ee3f59ac7b51556fe357009b322890e4be0e4e40c4870cf98ec8e5d`；IPA SHA-256：`cb218716dc8d8738053b217c5e308328386982e3023255cfff0e10f13cbad4f0`。
+- 外置卷空间不足，完整发布产物保存在本机：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.3-31/`，含归档、IPA、源码归档、范围/签名/图标核验、上传和苹果状态记录。旧发布产物及用户训练记录保留。
+- 两端真机均为 unavailable，未执行 31 版桌面或 Watch App 列表图标显示验收；本次仅图标与构建号更新，训练与同步行为沿用 30 版。保留既有 HealthKit 弃用、捕获引用及 AppIntents 警告。
+
+## 历史 TestFlight 发布：2026-10-19（30）
 
 - 版本：1.1.3 (30)，手机与 Watch 一致；发布应用源码：`e696632`，含空历史页开始/继续训练入口 `fe31a44`。
 - Delivery UUID / ASC Build ID：`caa47e53-b166-4cd8-8561-a01065f92317`。
