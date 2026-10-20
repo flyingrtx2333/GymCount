@@ -444,6 +444,11 @@ struct CollectionView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden)
         .tint(GymStyle.mint)
+        .alert(String(localized: "请在手机核对并上传"), isPresented: $link.showingPhoneReview) {
+            Button(String(localized: "知道了"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "同步采集的实际次数在手机调整，确认后再上传录像与采样。"))
+        }
         .alert(String(localized: "同步权限"), isPresented: $link.showingAuthorizationHelp) {
             Button(String(localized: "知道了"), role: .cancel) {}
         } message: {

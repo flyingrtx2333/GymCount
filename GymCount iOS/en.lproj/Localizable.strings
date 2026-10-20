@@ -200,3 +200,22 @@
 "重量（公斤）" = "Weight (kg)";
 "非训练动作" = "Non-workout Activity";
 "默认重量：%.1f 公斤" = "Default weight: %.1f kg";
+
+/* Local capture history deletion */
+"删除" = "Delete";
+"删除这条采集记录？" = "Delete this capture?";
+"将删除此手机上的录像、采样和标注。已上传的云端记录会保留。" = "This removes the video, motion samples, and annotations from this iPhone. Uploaded cloud records will be kept.";
+"无法删除采集记录" = "Could Not Delete Capture";
+"确定" = "OK";
+"请在采集或上传结束后再删除" = "Wait until capture or upload has finished before deleting.";
+"删除采集记录失败，请稍后重试" = "Could not delete the capture. Try again later.";
+
+/* Capture upload progress modal */
+"正在准备录像…" = "Preparing video…";
+"正在确认云端保存…" = "Confirming cloud save…";
+"重试上传" = "Retry Upload";
+"上传期间请保持应用打开" = "Keep the app open while uploading.";
+
+/* Synchronized capture review handoff */
+"录像与采样已保存，请核对实际次数后上传" = "Video and samples saved. Review the actual count before uploading.";
+"请在此核对实际次数，再上传录像与采样。" = "Review the actual count here, then upload the video and samples.";

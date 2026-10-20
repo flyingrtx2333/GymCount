@@ -59,6 +59,9 @@ struct PhoneCaptureView: View {
         .background(Studio.background)
         .toolbarBackground(Studio.background, for: .navigationBar)
         .tint(Studio.accent)
+        .navigationDestination(item: $capture.completedCaptureID) { id in
+            VideoCaptureDetailView(id: id)
+        }
         .task { await capture.enterCaptureScreen() }
         .onDisappear { capture.leaveCaptureScreen() }
         .onChange(of: scenePhase) { _, phase in
@@ -83,6 +86,9 @@ private struct CameraPreview: UIViewRepresentable {
 
 struct VideoCaptureHistoryView: View {
     @EnvironmentObject var capture: PhoneCaptureStore
+    @State private var deletionCandidate: VideoCaptureManifest?
+    @State private var confirmingDeletion = false
+    @State private var deletionError: String?
     var body: some View {
         List(capture.history) { item in
             NavigationLink { VideoCaptureDetailView(id: item.id) } label: {
@@ -99,6 +105,16 @@ struct VideoCaptureHistoryView: View {
                     if let error = item.error { Text(error).font(.caption).foregroundStyle(.red) }
                 }
             }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button {
+                    deletionCandidate = item
+                    confirmingDeletion = true
+                } label: {
+                    Label(String(localized: "删除"), systemImage: "trash")
+                }
+                .tint(.red)
+                .disabled(!capture.canDeleteCapture(item.id))
+            }
             .listRowBackground(Studio.surface)
             .listRowSeparatorTint(Studio.line)
         }
@@ -112,6 +128,23 @@ struct VideoCaptureHistoryView: View {
         .navigationTitle(String(localized: "采集记录"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Studio.background, for: .navigationBar)
+        .confirmationDialog(String(localized: "删除这条采集记录？"), isPresented: $confirmingDeletion, titleVisibility: .visible, presenting: deletionCandidate) { item in
+            Button(String(localized: "删除"), role: .destructive) {
+                do { try capture.deleteCapture(item.id) }
+                catch { deletionError = error.localizedDescription }
+            }
+            Button(String(localized: "取消"), role: .cancel) {}
+        } message: { _ in
+            Text(String(localized: "将删除此手机上的录像、采样和标注。已上传的云端记录会保留。"))
+        }
+        .alert(String(localized: "无法删除采集记录"), isPresented: Binding(
+            get: { deletionError != nil },
+            set: { if !$0 { deletionError = nil } }
+        )) {
+            Button(String(localized: "确定"), role: .cancel) {}
+        } message: {
+            Text(deletionError ?? "")
+        }
     }
 }
 
@@ -126,6 +159,8 @@ struct VideoCaptureDetailView: View {
         ScrollView {
             if let item = capture.history.first(where: { $0.id == id }) {
                 VStack(spacing: Studio.spacing) {
+                    Text(String(localized: "请在此核对实际次数，再上传录像与采样。"))
+                        .font(.callout).foregroundStyle(Studio.muted)
                     if let player { VideoPlayer(player: player).frame(height: 360).clipShape(RoundedRectangle(cornerRadius: 20)) }
                     Text(String(localized: "手表计数：\(item.detectedCount) 次"))
                     if let review = capture.benchReviews[id] {
@@ -195,7 +230,56 @@ struct VideoCaptureDetailView: View {
         .navigationTitle(String(localized: "录像核对"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Studio.background, for: .navigationBar)
+        .sheet(isPresented: Binding(
+            get: { capture.uploadStatus?.id == id },
+            set: { if !$0 { capture.dismissUploadStatus(id) } }
+        )) {
+            CaptureUploadProgressView(id: id)
+                .environmentObject(capture)
+                .presentationDetents([.medium])
+                .interactiveDismissDisabled(capture.uploading)
+        }
         .onDisappear { player?.pause() }
+    }
+}
+
+private struct CaptureUploadProgressView: View {
+    @EnvironmentObject var capture: PhoneCaptureStore
+    let id: UUID
+    var body: some View {
+        VStack(spacing: 20) {
+            if let status = capture.uploadStatus, status.id == id {
+                Image(systemName: status.stage == .succeeded ? "checkmark.circle.fill" : status.stage == .failed ? "exclamationmark.triangle.fill" : "arrow.up.circle")
+                    .font(.system(size: 40))
+                    .foregroundStyle(status.stage == .failed ? Color.orange : Studio.accent)
+                    .accessibilityHidden(true)
+                Text(status.stage.title).font(.title3.weight(.semibold))
+                if status.finished {
+                    Text(status.detail).font(.callout).foregroundStyle(Studio.muted)
+                    if status.stage == .failed {
+                        Button(String(localized: "重试上传")) { Task { await capture.upload(id) } }
+                            .buttonStyle(StudioPrimaryButton())
+                    }
+                    Button(String(localized: "完成")) { capture.dismissUploadStatus(id) }
+                        .buttonStyle(StudioSecondaryButton())
+                } else {
+                    ProgressView(value: status.progress)
+                        .progressViewStyle(.linear)
+                        .tint(Studio.accent)
+                        .accessibilityLabel(Text(status.stage.title))
+                    if let progress = status.progress {
+                        Text(progress, format: .percent.precision(.fractionLength(0)))
+                            .font(.headline.monospacedDigit())
+                    }
+                    Text(String(localized: "上传期间请保持应用打开"))
+                        .font(.footnote).foregroundStyle(Studio.muted)
+                }
+            }
+        }
+        .multilineTextAlignment(.center)
+        .padding(Studio.inset * 2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Studio.background)
     }
 }
 

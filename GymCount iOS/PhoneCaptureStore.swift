@@ -9,6 +9,8 @@ import HealthKit
 final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AVCaptureFileOutputRecordingDelegate {
     @Published private(set) var busy = false
     @Published private(set) var uploading = false
+    @Published private(set) var uploadStatus: CaptureUploadStatus?
+    @Published var completedCaptureID: UUID?
     @Published private(set) var recording = false
     @Published private(set) var starting = false
     @Published private(set) var count = 0
@@ -107,6 +109,20 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
     func folder(_ id: UUID) -> URL { root.appendingPathComponent(id.uuidString, isDirectory: true) }
     func videoURL(_ id: UUID) -> URL { folder(id).appendingPathComponent("video.mov") }
     func sensorURL(_ id: UUID) -> URL { folder(id).appendingPathComponent("motion.json") }
+    func canDeleteCapture(_ id: UUID) -> Bool { !uploading && active?.id != id }
+    func deleteCapture(_ id: UUID) throws {
+        guard history.contains(where: { $0.id == id }) else { return }
+        guard canDeleteCapture(id) else {
+            throw CaptureError.text(String(localized: "请在采集或上传结束后再删除"))
+        }
+        do { try FileManager.default.removeItem(at: folder(id)) }
+        catch {
+            reload()
+            throw CaptureError.text(String(localized: "删除采集记录失败，请稍后重试"))
+        }
+        benchReviews.removeValue(forKey: id)
+        reload()
+    }
     func reviewBench(_ id: UUID) async {
         guard history.first(where: { $0.id == id })?.exercise == "bench_press" else { return }
         let url = sensorURL(id)
@@ -128,6 +144,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         }.value
         // A separate local review never rewrites the original Watch result,
         // video labels, uploaded payload/hash, or historical actual_count.
+        guard history.contains(where: { $0.id == id }) else { return }
         benchReviews[id] = result
     }
     private func save(_ manifest: VideoCaptureManifest) {
@@ -349,8 +366,13 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
     }
     func upload(_ id: UUID) async {
         guard !uploading else { return }
+        let status = CaptureUploadStatus(id: id, stage: .samples)
+        uploadStatus = status
+        let attemptID = status.attemptID
         guard var item = history.first(where: { $0.id == id }), item.sensorComplete, item.actualCount != nil else {
-            message = String(localized: "请先收到采样并填写实际次数"); return
+            message = String(localized: "请先收到采样并填写实际次数")
+            uploadStatus?.stage = .failed; uploadStatus?.detail = message
+            return
         }
         uploading = true
         UIApplication.shared.isIdleTimerDisabled = true
@@ -368,14 +390,32 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             item.cloudRecordID = reply.id; save(item)
             guard item.videoComplete else { throw CaptureError.text(String(localized: "采样已上传，录像尚未保存完整")) }
             message = String(localized: "正在上传录像…")
-            try await CaptureCloudUpload.uploadVideo(file: videoURL(id), manifest: item, sensor: reply)
+            try await CaptureCloudUpload.uploadVideo(file: videoURL(id), manifest: item, sensor: reply,
+                onStage: { [weak self] stage in
+                    guard let self, self.uploading, var status = self.uploadStatus,
+                          status.attemptID == attemptID else { return }
+                    status.stage = stage; status.progress = stage == .video ? 0 : nil
+                    self.uploadStatus = status
+                }, onProgress: { [weak self] fraction in
+                    guard let self, self.uploading, var status = self.uploadStatus,
+                          status.attemptID == attemptID, status.stage == .video else { return }
+                    status.progress = max(status.progress ?? 0, fraction)
+                    self.uploadStatus = status
+                })
             item.cloudVideoUploadedAt = Date(); save(item)
             message = uploadedCount == item.actualCount ? String(localized: "上传成功") : String(localized: "已上传；请在网站将次数改为 \(item.actualCount ?? 0)")
+            uploadStatus?.stage = .succeeded; uploadStatus?.progress = 1; uploadStatus?.detail = message
             watchFeedback("success", message: String(localized: "上传完成"))
         } catch {
             message = item.cloudRecordID == nil ? error.localizedDescription : String(localized: "采样已上传，录像未完成：\(error.localizedDescription)")
+            uploadStatus?.stage = .failed; uploadStatus?.progress = nil; uploadStatus?.detail = message
             watchFeedback("failure", message: message)
         }
+    }
+
+    func dismissUploadStatus(_ id: UUID) {
+        guard !uploading, uploadStatus?.id == id else { return }
+        uploadStatus = nil
     }
 
     private func watchFeedback(_ event: String, message: String? = nil) {
@@ -479,9 +519,11 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             UIApplication.shared.isIdleTimerDisabled = false
             // Camera/system termination must also stop Watch sampling.
             _ = try? await self.request(["command": "stop", "id": item.id.uuidString])
-            self.message = item.error ?? String(localized: "录像已保存，等待采样")
+            let saved = self.history.first(where: { $0.id == item.id }) ?? item
+            self.message = saved.error ?? (saved.sensorComplete ? String(localized: "录像与采样已保存，请核对实际次数后上传") : String(localized: "录像已保存，等待采样"))
             self.active = nil
             self.busy = false
+            if self.captureScreenToken != nil { self.completedCaptureID = item.id }
         }
     }
 

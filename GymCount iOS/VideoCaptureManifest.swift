@@ -41,6 +41,39 @@ struct VideoCaptureManifest: Codable, Identifiable {
     }
 }
 
+struct CaptureUploadStatus: Identifiable {
+    enum Stage: Sendable {
+        case samples, preparingVideo, video, confirming, succeeded, failed
+        var title: String {
+            switch self {
+            case .samples: String(localized: "正在上传采样…")
+            case .preparingVideo: String(localized: "正在准备录像…")
+            case .video: String(localized: "正在上传录像…")
+            case .confirming: String(localized: "正在确认云端保存…")
+            case .succeeded: String(localized: "上传完成")
+            case .failed: String(localized: "上传失败")
+            }
+        }
+    }
+    let id: UUID
+    let attemptID = UUID()
+    var stage: Stage
+    var progress: Double?
+    var detail = ""
+    var finished: Bool { stage == .succeeded || stage == .failed }
+}
+
+private final class CaptureUploadProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    let progress: @MainActor @Sendable (Double) -> Void
+    init(_ progress: @escaping @MainActor @Sendable (Double) -> Void) { self.progress = progress }
+    func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64,
+                    totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+        guard totalBytesExpectedToSend > 0 else { return }
+        let fraction = min(1, max(0, Double(totalBytesSent) / Double(totalBytesExpectedToSend)))
+        Task { @MainActor in self.progress(fraction) }
+    }
+}
+
 enum CaptureCloudUpload {
     struct SensorReply: Decodable {
         let id: Int
@@ -96,18 +129,25 @@ enum CaptureCloudUpload {
         if let offset = manifest.sensorOffsetInVideo { body["sensor_offset_seconds"] = offset }
         return try JSONSerialization.data(withJSONObject: body)
     }
-    static func uploadVideo(file: URL, manifest: VideoCaptureManifest, sensor: SensorReply) async throws {
+    static func uploadVideo(file: URL, manifest: VideoCaptureManifest, sensor: SensorReply,
+                            onStage: @escaping @MainActor @Sendable (CaptureUploadStatus.Stage) -> Void,
+                            onProgress: @escaping @MainActor @Sendable (Double) -> Void) async throws {
+        await onStage(.preparingVideo)
         let body = try await Task.detached(priority: .utility) { try descriptor(file: file, manifest: manifest) }.value
         let ticket = try JSONDecoder().decode(VideoTicket.self, from: await post("videos/prepare", body: body, token: sensor.video_upload_token))
         // A previous PUT may have completed even if its response was lost.
+        await onStage(.confirming)
         if let data = try? await post("videos/complete", token: ticket.receipt),
            let completion = try? JSONDecoder().decode(Completion.self, from: data),
            completion.id == sensor.id, completion.session_id == manifest.id, completion.video_complete { return }
         var request = URLRequest(url: ticket.upload_url)
         request.httpMethod = "PUT"; request.timeoutInterval = 600
         for (key, value) in ticket.headers { request.setValue(value, forHTTPHeaderField: key) }
-        let (_, response) = try await URLSession.shared.upload(for: request, fromFile: file)
+        await onStage(.video)
+        let (_, response) = try await URLSession.shared.upload(for: request, fromFile: file,
+                                                               delegate: CaptureUploadProgressDelegate(onProgress))
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw UploadError(text: String(localized: "录像上传失败，请重试")) }
+        await onStage(.confirming)
         let data = try await post("videos/complete", token: ticket.receipt)
         let completion = try JSONDecoder().decode(Completion.self, from: data)
         guard completion.id == sensor.id, completion.session_id == manifest.id, completion.video_complete else {

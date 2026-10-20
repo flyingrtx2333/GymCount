@@ -319,3 +319,6 @@
 "这是一条测试通知，5秒后显示" = "This test notification appears after 5 seconds";
 "当前没有活跃的锻炼" = "No workout in progress";
 "正在记录%@，已完成%lld次，已进行%lld分钟" = "Recording %@: %lld reps completed, %lld minutes elapsed";
+
+/* Synchronized capture review handoff */
+"同步采集的实际次数在手机调整，确认后再上传录像与采样。" = "Adjust the actual count on your iPhone, then confirm and upload the video and samples.";

@@ -27,6 +27,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
     @Published var showingCapture = false
     @Published private(set) var requestedExercise = "squat"
     @Published var remoteSession = false
+    @Published var showingPhoneReview = false
     @Published var requestingPhone = false
     @Published private(set) var startingCapture = false
     @Published var message = "" {
@@ -454,6 +455,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             try WCSession.default.updateApplicationContext(["id": id.uuidString, "recording": false, "count": store.detected, "sample_origin": sampleOrigin ?? 0])
             store.discard()
             message = String(localized: "请在手机核对并上传")
+            showingPhoneReview = true
         } catch { store.message = String(localized: "同步文件保存失败，数据仍在本页") }
     }
 
