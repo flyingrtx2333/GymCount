@@ -227,3 +227,6 @@
 "时长未记录" = "Duration unavailable";
 "静止" = "Rest";
 "走动" = "Walking";
+
+/* Capture review controls */
+"采样对齐" = "Sample Alignment";

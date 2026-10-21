@@ -173,55 +173,88 @@ struct VideoCaptureDetailView: View {
     var body: some View {
         ScrollView {
             if let item = capture.history.first(where: { $0.id == id }) {
-                VStack(spacing: Studio.spacing) {
-                    Text(String(localized: "请在此核对实际次数，再上传录像与采样。"))
-                        .font(.callout).foregroundStyle(Studio.muted)
-                    if let player { VideoPlayer(player: player).frame(height: 360).clipShape(RoundedRectangle(cornerRadius: 20)) }
-                    Text(String(localized: "手表计数：\(item.detectedCount) 次"))
-                    if let review = capture.benchReviews[id] {
-                        Text(review.count.map { String(localized: "本机复核：\($0) 次（实验）") } ?? String(localized: "本机复核：数据不足，需人工核对"))
-                            .font(.callout).foregroundStyle(Studio.muted)
-                        Text(String(localized: "按推起回到顶端识别，仍请结合视频核对。"))
-                            .font(.caption).foregroundStyle(Studio.muted)
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Text(item.exerciseTitle).font(.headline)
+                        Spacer()
+                        Text(item.uploadStatusTitle)
+                            .font(.caption)
+                            .foregroundStyle(item.cloudUploadComplete ? Studio.accent : Studio.muted)
                     }
-                    Button(String(localized: "标记一次")) {
-                        if let player {
-                            player.pause()
-                            capture.markReference(id, at: CMTimeGetSeconds(player.currentTime()))
-                            actual = capture.history.first(where: { $0.id == id })?.actualCount ?? actual
-                        }
+                    if let player {
+                        VideoPlayer(player: player)
+                            .frame(height: 300)
+                            .background(Studio.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
                     }
-                    .buttonStyle(StudioPrimaryButton())
-                    .disabled(capture.uploading)
-                    Text(String(localized: "已标记 \(item.referenceEvents.count) 次")).font(.caption)
-                    Button(String(localized: "撤销标记")) {
-                        capture.undoReference(id)
-                        actual = capture.history.first(where: { $0.id == id })?.actualCount ?? actual
-                    }.buttonStyle(StudioSecondaryButton()).disabled(capture.uploading || item.referenceEvents.isEmpty)
-                    Stepper(String(localized: "实际次数：\(actual) 次"), value: $actual, in: 0...500)
-                        .disabled(capture.uploading)
-                        .onChange(of: actual) { _, value in capture.setActual(value, for: id) }
-                        .padding(16).background(Studio.surface, in: RoundedRectangle(cornerRadius: 16))
-                    if let offset = item.sensorOffsetInVideo {
-                        Text("采样起点约 \(offset, specifier: "%.2f") 秒").font(.caption)
+                    VStack(alignment: .leading, spacing: 14) {
+                        Stepper(String(localized: "实际次数：\(actual) 次"), value: $actual, in: 0...500)
+                            .font(.headline)
+                            .disabled(capture.uploading)
+                            .onChange(of: actual) { _, value in capture.setActual(value, for: id) }
                         HStack {
-                            Button(String(localized: "对齐 −0.1 秒")) { capture.adjustAlignment(id, by: -0.1) }
-                            Button(String(localized: "对齐 +0.1 秒")) { capture.adjustAlignment(id, by: 0.1) }
-                        }.buttonStyle(StudioSecondaryButton()).font(.caption).disabled(capture.uploading)
+                            Text(String(localized: "手表计数：\(item.detectedCount) 次"))
+                            Spacer(minLength: 8)
+                            Text(String(localized: "已标记 \(item.referenceEvents.count) 次"))
+                        }
+                        .font(.caption).monospacedDigit().foregroundStyle(Studio.muted)
+                        if let review = capture.benchReviews[id] {
+                            Text(review.count.map { String(localized: "本机复核：\($0) 次（实验）") } ?? String(localized: "本机复核：数据不足，需人工核对"))
+                                .font(.caption).foregroundStyle(Studio.muted)
+                        }
+                        Divider().overlay(Studio.line)
+                        HStack(spacing: 12) {
+                            Button(String(localized: "标记一次")) {
+                                if let player {
+                                    player.pause()
+                                    capture.markReference(id, at: CMTimeGetSeconds(player.currentTime()))
+                                    actual = capture.history.first(where: { $0.id == id })?.actualCount ?? actual
+                                }
+                            }
+                            .buttonStyle(.borderedProminent).tint(Studio.accent).foregroundStyle(.black)
+                            .disabled(capture.uploading)
+                            Button(String(localized: "撤销标记")) {
+                                capture.undoReference(id)
+                                actual = capture.history.first(where: { $0.id == id })?.actualCount ?? actual
+                            }
+                            .buttonStyle(.bordered).tint(Studio.accent)
+                            .disabled(capture.uploading || item.referenceEvents.isEmpty)
+                            Spacer(minLength: 0)
+                        }
+                        .controlSize(.large)
+                    }
+                    .padding(16)
+                    .background(Studio.surface, in: RoundedRectangle(cornerRadius: 20))
+                    if let offset = item.sensorOffsetInVideo {
+                        DisclosureGroup {
+                            HStack(spacing: 12) {
+                                Button(String(localized: "对齐 −0.1 秒")) { capture.adjustAlignment(id, by: -0.1) }
+                                Button(String(localized: "对齐 +0.1 秒")) { capture.adjustAlignment(id, by: 0.1) }
+                                Spacer(minLength: 0)
+                            }
+                            .buttonStyle(.bordered).controlSize(.large)
+                            .disabled(capture.uploading)
+                            .padding(.top, 12)
+                        } label: {
+                            HStack {
+                                Text(String(localized: "采样对齐"))
+                                Spacer()
+                                Text(offset.formatted(.number.precision(.fractionLength(2))) + " s")
+                                    .monospacedDigit().foregroundStyle(Studio.muted)
+                            }
+                            .font(.subheadline)
+                            .frame(minHeight: 28)
+                        }
+                        .tint(Studio.accent)
+                        .padding(16)
+                        .background(Studio.surface, in: RoundedRectangle(cornerRadius: 16))
                     }
                     if !item.sensorComplete {
                         Button(String(localized: "重试接收采样")) { Task { await capture.receiveAgain(id) } }
-                            .buttonStyle(StudioSecondaryButton())
+                            .buttonStyle(.bordered).tint(Studio.accent).controlSize(.large)
                     }
-                    Button(capture.uploading ? String(localized: "正在上传…") : String(localized: "上传录像与采样")) { confirmingUpload = true }
-                        .buttonStyle(StudioPrimaryButton())
-                        .disabled(capture.uploading || !item.sensorComplete || item.actualCount == nil)
-                    Button(String(localized: "分享文件")) { sharing = true }
-                        .buttonStyle(StudioSecondaryButton()).disabled(!item.videoComplete)
                     if let error = item.error {
-                        Text(error).foregroundStyle(.red)
-                    } else if !capture.message.isEmpty, !capture.message.hasPrefix(String(localized: "正在上传")) {
-                        Text(capture.message).font(.footnote)
+                        Text(error).font(.footnote).foregroundStyle(.red)
                     }
                 }.padding(Studio.inset)
                 .task(id: id) { await capture.reviewBench(id) }
@@ -245,6 +278,27 @@ struct VideoCaptureDetailView: View {
         .navigationTitle(String(localized: "录像核对"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Studio.background, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { sharing = true } label: {
+                    Label(String(localized: "分享文件"), systemImage: "square.and.arrow.up")
+                }
+                .disabled(!(capture.history.first(where: { $0.id == id })?.videoComplete ?? false))
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let item = capture.history.first(where: { $0.id == id }) {
+                Button(capture.uploading ? String(localized: "正在上传…") : String(localized: "上传录像与采样")) {
+                    player?.pause()
+                    confirmingUpload = true
+                }
+                .buttonStyle(StudioPrimaryButton())
+                .disabled(capture.uploading || !item.sensorComplete || item.actualCount == nil)
+                .padding(.horizontal, Studio.inset).padding(.vertical, 12)
+                .background(Studio.background)
+                .overlay(alignment: .top) { Rectangle().fill(Studio.line).frame(height: 0.5) }
+            }
+        }
         .sheet(isPresented: Binding(
             get: { capture.uploadStatus?.id == id },
             set: { if !$0 { capture.dismissUploadStatus(id) } }

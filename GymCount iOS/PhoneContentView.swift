@@ -470,9 +470,9 @@ struct PhoneContentView: View {
                             }
                             Text(item.startTime.formatted(.dateTime.month().day().hour().minute()))
                             if item.watchSummary != nil {
-                                Text("Apple Watch · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))")
+                                Text(String(localized: "训练时长")) + Text(" " + Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))
                             } else if item.legacySummary != nil {
-                                Text(String(localized: "旧版记录 · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))"))
+                                Text(String(localized: "训练时长")) + Text(" " + Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))
                             } else {
                                 Text(String(localized: "\(item.sets.filter { !$0.imported }.count) 组 · \(Duration.seconds(item.duration).formatted(.time(pattern: .minuteSecond)))"))
                             }
@@ -486,7 +486,6 @@ struct PhoneContentView: View {
                     ContentUnavailableView {
                         Label(String(localized: "还没有训练记录"), systemImage: "clock")
                     } description: {
-                        Text(String(localized: "完成一次训练后，可以在这里查看每个动作和每组表现。"))
                     } actions: {
                         Button(store.session == nil ? String(localized: "开始训练") : String(localized: "继续训练")) {
                             historyEditMode = .inactive
@@ -523,15 +522,11 @@ struct PhoneContentView: View {
                 LabeledContent(String(localized: "总次数"), value: String(localized: "\(item.totalReps) 次"))
                 if let volume = item.volume {
                     LabeledContent(String(localized: "总训练量"), value: String(localized: "\(volume.formatted(.number.precision(.fractionLength(0...1)))) 公斤"))
-                    Text(String(localized: "训练量 = 各组重量 × 次数之和")).font(.caption).foregroundStyle(Studio.muted)
                 }
             }.listRowBackground(Studio.surface)
             if let old = item.watchSummary ?? item.legacySummary {
-                Section(item.watchSummary != nil ? String(localized: "Apple Watch 训练记录") : String(localized: "旧版训练记录")) {
-                    LabeledContent(String(localized: "动作"), value: name(old.exerciseType))
+                Section(name(old.exerciseType)) {
                     LabeledContent(String(localized: "最大重量"), value: String(localized: "\(old.maxWeight.formatted()) 公斤"))
-                    Text(item.watchSummary != nil ? String(localized: "来自 Apple Watch 的训练汇总，没有各组明细。") : String(localized: "旧版仅保存汇总信息，没有各组明细。"))
-                        .font(.footnote).foregroundStyle(Studio.muted)
                 }.listRowBackground(Studio.surface)
             } else {
                 ForEach(item.exercises, id: \.self) { exercise in
@@ -560,8 +555,6 @@ struct PhoneContentView: View {
                     Toggle(String(localized: "后台休息提醒"), isOn: Binding(get: { store.remindersEnabled }, set: { enabled in
                         Task { await store.setRemindersEnabled(enabled) }
                     }))
-                    Text(String(localized: "完成一组后自动倒计时。开启通知后，锁屏或切到其他应用也能收到提醒。"))
-                        .font(.footnote).foregroundStyle(Studio.muted)
                     if let message = store.reminderMessage {
                         Text(message).font(.footnote).foregroundStyle(Studio.accent)
                     }
