@@ -22,7 +22,19 @@
 
 详细证据见 [iPhone 多组训练完善记录](docs/phone-training-flow.md)。
 
-## 最新 TestFlight 发布：2026-10-21（33）
+## 最新 TestFlight 发布：2026-10-21（34）
+
+- 版本：1.1.3 (34)，iPhone 与 Watch 一致；发布应用源码：`7740691`。
+- Delivery UUID / ASC Build ID：`99e52d73-a0de-4519-8ff4-7a63764d4787`。
+- 苹果状态：`BUILD-STATUS: VALID` / `IN_BETA_TESTING`，内部测试组 `flyingrtx` 可用，中英文测试说明已更新。
+- 录像核对页调整为录像、次数与标注卡片、可展开的采样对齐控件；分享移至右上角，上传固定底部。辅助按钮改用紧凑样式，移除重复说明、来源与无明细文字。
+- 只发布本次布局和文案清理；PhoneContentView 仅选取文案改动，其他未提交训练时长、模型和手机训练流程修改保留，未纳入安装包。没有改变采集、计数、上传协议或数据存储。
+- 双端 Aqua 签名归档、导出及 IPA 版本、签名、HealthKit、配套关系核验通过；独立 iPhone 工程无签名编译通过。403 个源码文件与发布提交 SHA-256 一致。
+- IPA SHA-256：`d4e425c42dd33df723f886b06438ad359d9aa3004384d5145d3ee07407464e3c`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.3-34/`。
+- 未覆盖安装用户当前应用，新布局尚未真机界面验收；既有录像、采样、标注和训练数据保留。沿用既有 HealthKit、捕获引用及 AppIntents 警告。请同时更新手机与 Watch 至 34 版。
+
+## 历史 TestFlight 发布：2026-10-21（33）
 
 - 版本：1.1.3 (33)，iPhone 与 Watch 一致；发布应用源码：`9955721`。
 - Delivery UUID / ASC Build ID：`6772d378-cdbe-4da4-b2c4-c0666428c407`。
