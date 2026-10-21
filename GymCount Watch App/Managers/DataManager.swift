@@ -44,6 +44,14 @@ class DataManager: ObservableObject {
         motionDetector.onRepDetected = { [weak self] in
             self?.addRep()
         }
+        motionDetector.onSquatCompletion = { [weak self] in
+            guard self?.currentSession?.exerciseType == .squat else { return }
+            WKInterfaceDevice.current().play(.directionUp)
+        }
+        motionDetector.onBenchCompletion = { [weak self] in
+            guard self?.currentSession?.exerciseType == .benchPress else { return }
+            WKInterfaceDevice.current().play(.directionUp)
+        }
         motionDetector.onBenchAnalysis = { [weak self] in self?.applyBenchAnalysis($0) }
         motionDetector.onCountingError = { [weak self] in self?.countingMessage = $0 }
     }
@@ -52,7 +60,6 @@ class DataManager: ObservableObject {
         guard var session = currentSession, session.exerciseType == .benchPress else { return }
         countingMessage = result.status == "insufficient_data" ? String(localized: "采样中断，请手动核对") : String(localized: "估计中 · 结束时核准")
         guard result.status != "insufficient_data" else { return }
-        let oldCount = session.totalReps
         var activeIDs: Set<UUID> = []
         let anchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
         for cycle in result.cycles {
@@ -75,7 +82,6 @@ class DataManager: ObservableObject {
         session.repRecords.removeAll { automaticBenchCycles[$0.id] != nil && !activeIDs.contains($0.id) }
         session.repRecords.sort { $0.timestamp < $1.timestamp }
         currentSession = session
-        if session.totalReps > oldCount { WKInterfaceDevice.current().play(.directionUp) }
     }
     
     private func setupHealthKit() {
@@ -130,7 +136,7 @@ class DataManager: ObservableObject {
     func startWorkout(exerciseType: ExerciseType, weight: Double = 0.0) {
         automaticBenchCycles = [:]; removedBenchIDs = []
         countingMessage = exerciseType == .benchPress ? String(localized: "估计中 · 前两次一起确认") : String(localized: "检测中")
-        WKInterfaceDevice.current().play(.click)
+        if exerciseType == .deadlift { WKInterfaceDevice.current().play(.click) }
         currentSession = WorkoutSession(
             exerciseType: exerciseType,
             startTime: Date(),

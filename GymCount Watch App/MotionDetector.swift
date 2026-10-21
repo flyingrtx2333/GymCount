@@ -19,7 +19,7 @@ class MotionDetector: ObservableObject {
     }()
     #if DEBUG || GYMCOUNT_CAPTURE
     var onRawAcceleration: ((CMAccelerometerData) -> Void)?
-    var onRawRepDetected: (() -> Void)?
+    var onRawRepDetected: ((Double?) -> Void)?
     var onRawDeviceMotion: ((CMDeviceMotion) -> Void)?
     var onRawBenchAnalysis: ((BenchAnalysis) -> Void)?
     #endif
@@ -43,6 +43,8 @@ class MotionDetector: ObservableObject {
     private let sampleRate = 40.0 // 采样率
     private let dataUpdateInterval = 0.05 // 数据更新间隔（50ms）
     
+    var onBenchCompletion: (() -> Void)?
+    var onSquatCompletion: (() -> Void)?
     var onBenchAnalysis: ((BenchAnalysis) -> Void)?
     var onCountingError: ((String) -> Void)?
     var onRepDetected: (() -> Void)?
@@ -69,10 +71,15 @@ class MotionDetector: ObservableObject {
             self?.publishBenchAnalysis(result)
         }
         
+        benchPressDetector?.onCompletion = { [weak self] time in
+            self?.publishCompletion(time, exercise: .benchPress)
+        }
+
         // 初始化深蹲检测器
         squatDetector = SquatDetector()
-        squatDetector?.onRepDetected = { [weak self] in
-            self?.handleRepDetected()
+        squatDetector?.onRepDetected = { [weak self] time in
+            self?.handleRepDetected(sensorTime: time)
+            self?.publishCompletion(time, exercise: .squat)
         }
         
         // 初始化硬拉检测器
@@ -89,7 +96,7 @@ class MotionDetector: ObservableObject {
             return
         }
         
-        guard !countRepetitions || currentExerciseType != .benchPress || motionManager.isDeviceMotionAvailable else {
+        guard !countRepetitions || currentExerciseType == .deadlift || motionManager.isDeviceMotionAvailable else {
             onCountingError?("融合运动不可用，请手动计数")
             return
         }
@@ -120,12 +127,13 @@ class MotionDetector: ObservableObject {
             self.processAccelerometerData(data)
         }
         
-        if countRepetitions && currentExerciseType == .benchPress {
+        if countRepetitions && currentExerciseType != .deadlift {
             motionManager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: motionQueue) { [weak self] data, error in
                 guard let self else { return }
                 guard let data else {
                     if error != nil {
-                        self.benchPressDetector?.markInterrupted()
+                        if self.currentExerciseType == .benchPress { self.benchPressDetector?.markInterrupted() }
+                        else { self.squatDetector?.markInterrupted() }
                         let token = self.generation
                         DispatchQueue.main.async {
                             guard self.generation == token, self.isDetecting else { return }
@@ -137,7 +145,8 @@ class MotionDetector: ObservableObject {
                 #if DEBUG || GYMCOUNT_CAPTURE
                 self.onRawDeviceMotion?(data)
                 #endif
-                self.benchPressDetector?.processMotion(data)
+                if self.currentExerciseType == .benchPress { self.benchPressDetector?.processMotion(data) }
+                else { self.squatDetector?.processMotion(data) }
             }
         }
         print("🏃‍♂️ 运动检测已启动（后台模式）")
@@ -181,7 +190,7 @@ class MotionDetector: ObservableObject {
         case .benchPress:
             break // Bench press uses fused motion, never raw X-axis stability.
         case .squat:
-            squatDetector?.processAccelerometerData(data)
+            break // Squat uses the same fused stream in training and collection.
         case .deadlift:
             deadliftDetector?.processAccelerometerData(data)
         }
@@ -229,9 +238,20 @@ class MotionDetector: ObservableObject {
         onBenchAnalysis?(result)
     }
 
-    private func handleRepDetected() {
+    private func publishCompletion(_ time: Double, exercise: ExerciseType) {
+        let token = generation
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.generation == token, self.isDetecting,
+                  self.currentExerciseType == exercise,
+                  (0...0.25).contains(ProcessInfo.processInfo.systemUptime - time) else { return }
+            if exercise == .benchPress { self.onBenchCompletion?() }
+            else { self.onSquatCompletion?() }
+        }
+    }
+
+    private func handleRepDetected(sensorTime: Double? = nil) {
         #if DEBUG || GYMCOUNT_CAPTURE
-        onRawRepDetected?()
+        onRawRepDetected?(sensorTime)
         #endif
         let count: Int
         let time: Date?

@@ -31,7 +31,11 @@ struct CounterView: View {
             },
             onMinus: { dataManager.removeRep(); WKInterfaceDevice.current().play(.click) },
             onPlus: { dataManager.addRep(); WKInterfaceDevice.current().play(.click) },
-            onEnd: { dataManager.endWorkout(); WKInterfaceDevice.current().play(.success) }
+            onEnd: {
+                let hasCompletionFeedback = dataManager.currentSession?.exerciseType != .deadlift
+                dataManager.endWorkout()
+                if !hasCompletionFeedback { WKInterfaceDevice.current().play(.success) }
+            }
         )
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden)

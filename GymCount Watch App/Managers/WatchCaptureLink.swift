@@ -218,7 +218,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             if attemptedInitialAuthorization && needsAuthorization {
                 reply(["error": String(localized: "手表尚未授权，请在手表检查同步权限")]); return
             }
-            WKInterfaceDevice.current().play(.click)
+            if !["bench_press", "squat"].contains(message["exercise"] as? String ?? "") { WKInterfaceDevice.current().play(.click) }
             // A transport reply must never wait for a human to dismiss a permission sheet.
             guard !needsAuthorization else {
                 reply(["authorizationPending": true])
@@ -398,7 +398,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
     }
 
     func startFromWatch(exercise: String) async {
-        WKInterfaceDevice.current().play(.click)
+        if !["bench_press", "squat"].contains(exercise) { WKInterfaceDevice.current().play(.click) }
         guard await authorizeCapture() else { return }
         guard !requestingPhone, WCSession.default.activationState == .activated, WCSession.default.isReachable else {
             message = String(localized: "请先打开手机同步采集页"); WKInterfaceDevice.current().play(.failure); return
