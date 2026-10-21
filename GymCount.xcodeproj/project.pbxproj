@@ -463,7 +463,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "GymCount Watch App/GymCount Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_ASSET_PATHS = "\"GymCount Watch App/Preview Content\"";
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				ENABLE_PREVIEWS = YES;
@@ -501,7 +501,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "GymCount Watch App/GymCount Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_ASSET_PATHS = "\"GymCount Watch App/Preview Content\"";
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				ENABLE_PREVIEWS = YES;
@@ -543,7 +543,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				INFOPLIST_KEY_CFBundleDisplayName = PowerReps;
 				MARKETING_VERSION = 1.1.3;
@@ -564,7 +564,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				INFOPLIST_KEY_CFBundleDisplayName = PowerReps;
 				MARKETING_VERSION = 1.1.3;
@@ -581,7 +581,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
@@ -602,7 +602,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
@@ -623,7 +623,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
@@ -643,7 +643,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;

@@ -100,6 +100,21 @@ struct VideoCaptureHistoryView: View {
                             .font(.caption)
                             .foregroundStyle(item.cloudUploadComplete ? Studio.accent : Studio.muted)
                     }
+                    Text(item.exerciseTitle).font(.subheadline.weight(.medium))
+                    HStack(alignment: .firstTextBaseline) {
+                        if let actual = item.actualCount {
+                            Text(String(localized: "实际 \(actual) 次"))
+                        } else {
+                            Text(String(localized: "手表 \(item.detectedCount) 次 · 待核对"))
+                        }
+                        Spacer(minLength: 8)
+                        if let duration = item.videoDuration, duration.isFinite, duration >= 0 {
+                            Text(String(localized: "录像 \(Duration.seconds(duration).formatted(.time(pattern: .minuteSecond)))"))
+                        } else {
+                            Text(String(localized: "时长未记录"))
+                        }
+                    }
+                    .font(.caption).monospacedDigit().foregroundStyle(Studio.muted)
                     Text("\(item.videoComplete ? String(localized: "录像已保存") : String(localized: "录像未完成")) · \(item.sensorComplete ? String(localized: "采样已接收") : String(localized: "等待采样"))")
                         .font(.caption).foregroundStyle(.secondary)
                     if let error = item.error { Text(error).font(.caption).foregroundStyle(.red) }
@@ -128,14 +143,14 @@ struct VideoCaptureHistoryView: View {
         .navigationTitle(String(localized: "采集记录"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Studio.background, for: .navigationBar)
-        .confirmationDialog(String(localized: "删除这条采集记录？"), isPresented: $confirmingDeletion, titleVisibility: .visible, presenting: deletionCandidate) { item in
+        .alert(String(localized: "删除这条采集记录？"), isPresented: $confirmingDeletion, presenting: deletionCandidate) { item in
             Button(String(localized: "删除"), role: .destructive) {
                 do { try capture.deleteCapture(item.id) }
                 catch { deletionError = error.localizedDescription }
             }
             Button(String(localized: "取消"), role: .cancel) {}
-        } message: { _ in
-            Text(String(localized: "将删除此手机上的录像、采样和标注。已上传的云端记录会保留。"))
+        } message: { item in
+            Text(item.exerciseTitle + " · " + item.createdAt.formatted(.dateTime.month().day().hour().minute()) + "\n\n" + String(localized: "将删除此手机上的录像、采样和标注。已上传的云端记录会保留。"))
         }
         .alert(String(localized: "无法删除采集记录"), isPresented: Binding(
             get: { deletionError != nil },

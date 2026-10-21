@@ -32,6 +32,18 @@ struct VideoCaptureManifest: Codable, Identifiable {
     var cloudRecordID: Int?
     var cloudVideoUploadedAt: Date?
     var cloudUploadComplete: Bool { cloudRecordID != nil && cloudVideoUploadedAt != nil }
+    var exerciseTitle: String {
+        switch exercise {
+        case "squat": String(localized: "杠铃深蹲")
+        case "bench_press": String(localized: "卧推")
+        case "deadlift": String(localized: "硬拉")
+        case "bicep_curl": String(localized: "弯举")
+        case "rest": String(localized: "静止")
+        case "walking": String(localized: "走动")
+        case "other": String(localized: "非训练动作")
+        default: exercise
+        }
+    }
     var uploadStatusTitle: String {
         cloudUploadComplete ? String(localized: "已上传") : cloudRecordID != nil ? String(localized: "仅采样已上传") : String(localized: "未上传")
     }

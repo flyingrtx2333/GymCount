@@ -219,3 +219,11 @@
 /* Synchronized capture review handoff */
 "录像与采样已保存，请核对实际次数后上传" = "Video and samples saved. Review the actual count before uploading.";
 "请在此核对实际次数，再上传录像与采样。" = "Review the actual count here, then upload the video and samples.";
+
+/* Capture list summary */
+"实际 %lld 次" = "Actual: %lld reps";
+"手表 %lld 次 · 待核对" = "Watch: %lld reps · Unreviewed";
+"录像 %@" = "Video %@";
+"时长未记录" = "Duration unavailable";
+"静止" = "Rest";
+"走动" = "Walking";
