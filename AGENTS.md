@@ -22,7 +22,19 @@
 
 详细证据见 [iPhone 多组训练完善记录](docs/phone-training-flow.md)。
 
-## 最新 TestFlight 发布：2026-10-20（32）
+## 最新 TestFlight 发布：2026-10-21（33）
+
+- 版本：1.1.3 (33)，iPhone 与 Watch 一致；发布应用源码：`9955721`。
+- Delivery UUID / ASC Build ID：`6772d378-cdbe-4da4-b2c4-c0666428c407`。
+- 苹果状态：`BUILD-STATUS: VALID` / `IN_BETA_TESTING`，内部测试组 `flyingrtx` 已确认可用，中英文测试说明已更新。
+- 采集列表增加动作、次数与录像时长；优先显示实际次数，未核对时明确显示手表计数与待核对状态，时长缺失时不伪造数值。删除改为居中确认弹窗，带本组动作及采集时间，保留取消与删除失败提示。
+- 只包含这次列表、弹窗及对应本地化修改；其他未提交的训练时长、训练历史等工作保留，未纳入安装包。既有录像、采样、标注、训练记录与云端数据未改写。
+- 双端 Aqua 签名归档、导出及 IPA 版本、签名、HealthKit、配套关系核验通过；独立 iPhone 工程无签名编译通过。403 个源码文件与发布提交逐文件 SHA-256 一致。
+- IPA SHA-256：`b2ac2fd32f93935380370b776a19132ac9d7697df280dec79c27a04dccdd708e`。
+- 完整发布产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.3-33/`。
+- 新列表排版及居中弹窗尚未完成真机界面验收；没有覆盖安装或删除用户真实记录来测试。沿用既有 HealthKit、捕获引用及 AppIntents 警告。请同时更新手机与 Watch 至 33 版。
+
+## 历史 TestFlight 发布：2026-10-20（32）
 
 - 版本：1.1.3 (32)，iPhone 与 Watch 一致；发布应用源码：`8b5db5c`。
 - Delivery UUID / ASC Build ID：`67d0f2c9-dc1d-4dbf-bf65-8b831162f7a1`。
