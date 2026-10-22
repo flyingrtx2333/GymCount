@@ -1,3 +1,15 @@
+## 2026-10-22：App Store 1.1.3 (36) 已提交审核
+
+- 版本：1.1.3 (36)，iPhone 与 Watch 一致；发布应用源码：`aaf117b3bc3dd82b0d640a591d633fec361f7e0a`。
+- Delivery UUID / ASC Build ID：`4fb1984d-82c3-4772-8736-dbcb6ee08d35`。
+- 双端 Aqua 签名归档和导出、签名/版本/HealthKit/配套关系核验通过，407 个源码文件 SHA-256 与发布提交一致。正式导出 `testFlightInternalTestingOnly=false`，苹果 `BUILD-STATUS: VALID` / `APP_STORE_ELIGIBLE`。
+- App Store Version ID：`839975af-cc43-4c17-9ee9-92b3274df5c4`；Review Submission ID：`fa1b1ee9-ef5b-4cf7-8e42-c4dbb37b9e07`。
+- 正式提交成功，版本和提交均为 `WAITING_FOR_REVIEW`；`AFTER_APPROVAL`，审核通过后自动发布。当前不是已上架状态，商店此前正式版为 1.1.2。
+- 功能源码沿用 35 版卧推反馈与深蹲算法，仅增加构建号。已更新简体中文商店介绍、更新说明及审核操作说明；保留既有审核联系人。iPhone 新增一张从本构建源码生成的 1320×2868 训练首页截图，无模拟训练记录；继承 5 张 Watch 截图。截图处理为 COMPLETE。
+- IPA SHA-256：`e96c6c58ac4ef5ff57a78984eea4248030c74f83d4ceeb7f70cba55e77b55f60`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/AppStore-1.1.3-36/`，包含归档、IPA、源码快照/哈希、苹果处理和审核提交凭证；排除可重建 DerivedData。
+- 用户设备应用和数据未覆盖安装。算法真实记录回放边界沿用 35 版；尚未执行新的实际佩戴验收。应用无需登录，运动自动计数须配对 Watch；既有 HealthKit、AppIntents 等编译警告保留。
+
 ## 2026-10-21：卧推完成反馈与杠铃深蹲，1.1.3 (35) 已发布
 
 - 版本：1.1.3 (35)，iPhone 与 Watch 一致；发布应用源码：`cecce23`。
