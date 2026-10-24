@@ -1,7 +1,7 @@
 import SwiftUI
 
-struct RecordFilter: Equatable {
-    enum Period: String, CaseIterable { case week, month, quarter, all, custom
+struct RecordFilter: Equatable, Codable {
+    enum Period: String, CaseIterable, Codable { case week, month, quarter, all, custom
         var title: String { switch self {
             case .week: String(localized: "近7天")
             case .month: String(localized: "近30天")
@@ -14,6 +14,9 @@ struct RecordFilter: Equatable {
     var period = Period.all
     var start = Calendar.current.startOfDay(for: Date())
     var end = Date()
+    mutating func select(_ interval: DateInterval) {
+        start = interval.start; end = min(interval.end.addingTimeInterval(-1), Date()); period = .custom
+    }
     func includes(_ item: PhoneTrainingSession) -> Bool {
         (exercise == nil || item.exercises.contains(exercise!)) && includes(item.startTime)
     }
@@ -85,8 +88,10 @@ struct PhoneContentView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("records.appearance") private var appearance = RecordAppearance.system.rawValue
+    @AppStorage("records.history") private var savedHistory = Data()
     @State private var tab = 1
     @State private var filter = RecordFilter()
+    @State private var restoredHistory = false
     @State private var path: [UUID] = []
     @State private var editor: RecordEditorDraft?
     @State private var selected: Set<UUID> = []
@@ -105,8 +110,8 @@ struct PhoneContentView: View {
     var body: some View {
         TabView(selection: $tab) {
             history.recordPage(active: tab == 1, reduced: reduceMotion).tag(1)
-            RecordTrendsView { exercise, day in
-                filter.exercise = exercise; filter.period = .custom; filter.start = day; filter.end = day
+            RecordTrendsView { exercise, interval in
+                filter.exercise = exercise; filter.select(interval)
                 path = []; tab = 1
             }.recordPage(active: tab == 3, reduced: reduceMotion).tag(3)
             RecordSettingsView(records: filtered, filter: filter)
@@ -117,12 +122,20 @@ struct PhoneContentView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { tabs }
         .tint(Studio.accent).foregroundStyle(Studio.ink)
         .preferredColorScheme(RecordAppearance(rawValue: appearance)?.scheme)
+        .onAppear {
+            guard !restoredHistory else { return }
+            filter = RecordViewPreferences.decode(savedHistory, fallback: .init(filter: RecordFilter())).filter
+            restoredHistory = true
+        }
         .onChange(of: scenePhase) { _, phase in
             #if GYMCOUNT_SYNC
             if phase == .active { capture.requestWorkoutHistory() }
             #endif
         }
-        .onChange(of: filter) { _, _ in selected.formIntersection(filtered.map(\.id)) }
+        .onChange(of: filter) { _, _ in
+            selected.formIntersection(filtered.map(\.id))
+            if restoredHistory { savedHistory = RecordViewPreferences(filter: filter).data }
+        }
         .onChange(of: store.history.map(\.id)) { _, ids in
             selected.formIntersection(ids); path.removeAll { !ids.contains($0) }
         }
@@ -186,8 +199,15 @@ struct PhoneContentView: View {
                             .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 6, trailing: 20))
                             .id("record-overview").accessibilityIdentifier("record-summary")
                         if !filtered.isEmpty && !editMode.isEditing {
-                            RecordTimeChart(records: filtered, filter: filter) { day in
-                                withAnimation(RecordMotion.animation(reduced: reduceMotion)) { proxy.scrollTo(day, anchor: .top) }
+                            RecordTimeChart(records: filtered, filter: filter) { interval in
+                                withAnimation(RecordMotion.animation(reduced: reduceMotion)) {
+                                    if Calendar.current.dateComponents([.day], from: interval.start, to: interval.end).day == 1 {
+                                        proxy.scrollTo(Calendar.current.startOfDay(for: interval.start), anchor: .top)
+                                    } else {
+                                        filter.select(interval)
+                                        proxy.scrollTo("record-overview", anchor: .top)
+                                    }
+                                }
                             }
                             .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 16, trailing: 20))
                             .listRowSeparator(.hidden).listRowBackground(Color.clear)
@@ -415,6 +435,10 @@ struct RecordDetailView: View {
                                         Spacer()
                                         Text("\(set.weight.formatted()) 公斤 × \(set.reps) 次").monospacedDigit()
                                     }.frame(minHeight: 28)
+                                        .accessibilityElement(children: .ignore)
+                                        .accessibilityLabel(String(localized: "第 \(index + 1) 组"))
+                                        .accessibilityValue(String(localized: "\(set.weight.formatted()) 公斤 · \(set.reps) 次"))
+                                        .accessibilityIdentifier("record-set-\(index + 1)")
                                 }
                             } header: { RecordExerciseLabel(exercise: exercise, size: 20) }
                                 .listRowBackground(Studio.surface)

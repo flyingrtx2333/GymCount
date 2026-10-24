@@ -30,6 +30,23 @@ enum RecordAppearance: String, CaseIterable {
     var scheme: ColorScheme? { self == .system ? nil : self == .light ? .light : .dark }
 }
 
+// Stored in the app's selected defaults suite, independently of workout data.
+struct RecordViewPreferences: Codable {
+    var filter: RecordFilter
+    var metric: String = ""
+    var granularity: String = "automatic"
+    var collapsed = false
+
+    static func decode(_ data: Data, fallback: Self) -> Self {
+        guard let value = try? JSONDecoder().decode(Self.self, from: data),
+              value.filter.start.timeIntervalSinceReferenceDate.isFinite,
+              value.filter.end.timeIntervalSinceReferenceDate.isFinite,
+              value.filter.start <= value.filter.end else { return fallback }
+        return value
+    }
+    var data: Data { (try? JSONEncoder().encode(self)) ?? Data() }
+}
+
 extension ExerciseType {
     var recordName: String { switch self {
         case .benchPress: String(localized: "卧推")

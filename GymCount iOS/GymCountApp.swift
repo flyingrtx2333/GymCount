@@ -35,6 +35,9 @@ struct GymCountPhoneApp: App {
             let storageID = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--ui-test-storage-id=") })?
                 .replacingOccurrences(of: "--ui-test-storage-id=", with: "") ?? UUID().uuidString
             defaults = UserDefaults(suiteName: "GymCountUITest." + storageID)!
+            if ProcessInfo.processInfo.arguments.contains("--reset-record-view-preferences") {
+                for key in ["records.history", "records.time-chart", "records.trends"] { defaults.removeObject(forKey: key) }
+            }
             reminderID += ".uitest." + storageID
             watchArchiveURL = FileManager.default.temporaryDirectory.appendingPathComponent("GymCountUITest/\(storageID)/watch-history.json")
         }

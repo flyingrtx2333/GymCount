@@ -48,7 +48,7 @@ struct PhoneTrainingSession: Codable, Identifiable {
     }
 }
 
-enum RecordTimeMetric: CaseIterable, Hashable {
+enum RecordTimeMetric: String, CaseIterable, Hashable {
     case elapsed, active
 
     var title: String {
@@ -62,17 +62,78 @@ enum RecordTimeMetric: CaseIterable, Hashable {
     }
 }
 
+enum RecordChartGranularity: String, CaseIterable, Codable, Hashable {
+    case automatic, day, week, month
+
+    var title: String {
+        switch self {
+        case .automatic: String(localized: "自动汇总")
+        case .day: String(localized: "按日")
+        case .week: String(localized: "按周")
+        case .month: String(localized: "按月")
+        }
+    }
+
+    var recordsTitle: String {
+        switch self {
+        case .automatic, .day: String(localized: "每日记录")
+        case .week: String(localized: "每周记录")
+        case .month: String(localized: "每月记录")
+        }
+    }
+
+    func resolved(for dates: [Date], calendar: Calendar = .current) -> Self {
+        guard self == .automatic else { return self }
+        guard let first = dates.min(), let last = dates.max() else { return .day }
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: first), to: calendar.startOfDay(for: last)).day ?? 0
+        return days <= 45 ? .day : days <= 180 ? .week : .month
+    }
+
+    var component: Calendar.Component {
+        switch self {
+        case .automatic, .day: .day
+        case .week: .weekOfYear
+        case .month: .month
+        }
+    }
+
+    func interval(containing date: Date, calendar: Calendar = .current) -> DateInterval {
+        calendar.dateInterval(of: component, for: date)
+            ?? DateInterval(start: calendar.startOfDay(for: date), duration: 86400)
+    }
+}
+
 struct RecordDurationDay: Identifiable, Equatable {
     let id: Date
+    let range: DateInterval
     let seconds: TimeInterval
     let measuredRecords: Int
     let recordCount: Int
 
-    static func summarize(_ records: [PhoneTrainingSession], metric: RecordTimeMetric, calendar: Calendar = .current) -> [Self] {
-        Dictionary(grouping: records, by: { calendar.startOfDay(for: $0.startTime) }).compactMap { day, records in
+    static func summarize(_ records: [PhoneTrainingSession], metric: RecordTimeMetric, granularity: RecordChartGranularity = .day, calendar: Calendar = .current) -> [Self] {
+        let grouping = granularity.resolved(for: records.map(\.startTime), calendar: calendar)
+        return Dictionary(grouping: records, by: { grouping.interval(containing: $0.startTime, calendar: calendar).start }).compactMap { start, records in
             let values = records.compactMap { metric.seconds(in: $0) }
             guard !values.isEmpty else { return nil }
-            return Self(id: day, seconds: values.reduce(0, +), measuredRecords: values.count, recordCount: records.count)
+            return Self(id: start, range: grouping.interval(containing: start, calendar: calendar), seconds: values.reduce(0, +), measuredRecords: values.count, recordCount: records.count)
+        }.sorted { $0.id < $1.id }
+    }
+}
+
+struct RecordTrendBucket: Identifiable, Equatable {
+    let id: Date
+    let range: DateInterval
+    let sessions: Int
+    let reps: Int
+    let weight: Double
+
+    static func summarize(_ records: [PhoneTrainingSession], granularity: RecordChartGranularity,
+                          calendar: Calendar = .current, reps: (PhoneTrainingSession) -> Int,
+                          weight: (PhoneTrainingSession) -> Double) -> [Self] {
+        let grouping = granularity.resolved(for: records.map(\.startTime), calendar: calendar)
+        return Dictionary(grouping: records, by: { grouping.interval(containing: $0.startTime, calendar: calendar).start }).map { start, rows in
+            Self(id: start, range: grouping.interval(containing: start, calendar: calendar), sessions: rows.count,
+                 reps: rows.reduce(0) { $0 + reps($1) }, weight: rows.map(weight).max() ?? 0)
         }.sorted { $0.id < $1.id }
     }
 }

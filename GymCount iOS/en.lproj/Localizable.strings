@@ -148,6 +148,7 @@
 "硬拉" = "Deadlift";
 "确认" = "Confirm";
 "第 %lld 组 · %.1f 公斤 × %lld 次" = "Set %lld · %.1f kg × %lld reps";
+"第 %lld 组" = "Set %lld";
 "等待手表连接，连接后自动补传" = "Waiting for Apple Watch. Workouts will transfer when connected.";
 "等待采样" = "Waiting for samples";
 "组间休息" = "Rest Between Sets";
@@ -352,3 +353,17 @@
 "时长" = "Duration";
 "分钟" = "min";
 "秒" = "sec";
+
+"自动汇总" = "Automatic";
+"按日" = "Daily";
+"按周" = "Weekly";
+"按月" = "Monthly";
+"汇总方式" = "Group by";
+"每周记录" = "Weekly records";
+"每月记录" = "Monthly records";
+"展开图表" = "Show chart";
+"收起图表" = "Hide chart";
+"查看此范围记录" = "View records in this range";
+"运动时间趋势" = "Workout time trend";
+"次数趋势" = "Rep trend";
+"最高重量趋势" = "Best weight trend";

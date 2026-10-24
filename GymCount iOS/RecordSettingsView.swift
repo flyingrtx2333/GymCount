@@ -25,6 +25,11 @@ struct RecordSettingsView: View {
     @State private var preview: RecordRestorePreview?
     @State private var message: String?
     @State private var busy = false
+    private var hasExportableSets: Bool {
+        records.contains { record in
+            record.sets.contains { filter.exercise == nil || $0.exercise == filter.exercise }
+        }
+    }
     var body: some View {
         NavigationStack {
             Form {
@@ -44,8 +49,23 @@ struct RecordSettingsView: View {
                     Menu {
                         Button(String(localized: "训练汇总 CSV")) { exportCSV(sets: false) }
                         Button(String(localized: "组明细 CSV")) { exportCSV(sets: true) }
-                    } label: { Label(String(localized: "导出当前筛选记录"), systemImage: "square.and.arrow.up") }
+                            .disabled(!hasExportableSets)
+                            .accessibilityIdentifier("records-export-sets")
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(String(localized: "导出当前筛选记录"))
+                                Text((filter.exercise?.recordName ?? String(localized: "全部动作")) + " · " + filter.rangeTitle + " · " + String(localized: "\(records.count) 条记录"))
+                                    .font(.caption).foregroundStyle(Studio.muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("records-export-scope")
+                            }.padding(.vertical, 4)
+                        } icon: { Image(systemName: "square.and.arrow.up") }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
                         .disabled(records.isEmpty)
+                        .accessibilityIdentifier("records-export")
                     if FileManager.default.fileExists(atPath: store.snapshotURL.deletingLastPathComponent().appendingPathComponent("before-restore.json").path) {
                         Button(String(localized: "导出恢复前快照")) { exportBeforeRestore() }
                     }
@@ -126,6 +146,7 @@ struct RecordSettingsView: View {
         } catch { message = error.localizedDescription }
     }
     private func exportCSV(sets: Bool) {
+        guard !records.isEmpty, !sets || hasExportableSets else { return }
         present(Data(store.csv(records: records, sets: sets, exercise: filter.exercise).utf8), type: .commaSeparatedText, name: sets ? "PowerReps-Sets" : "PowerReps-Workouts")
     }
     private func present(_ data: Data, type: UTType, name: String) {

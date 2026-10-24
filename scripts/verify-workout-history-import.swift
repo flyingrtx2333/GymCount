@@ -83,6 +83,49 @@ enum VerifyWorkoutHistoryImport {
                 precondition(abs(day.seconds - values.reduce(0, +)) < 0.000001)
             }
         }
+        // Reconcile each displayed period with the unmodified Watch export.
+        // Calendar boundaries are computed independently of the UI helpers.
+        let calendar = Calendar.current
+        var periodCounts: [String: Int] = [:]
+        for granularity in [RecordChartGranularity.day, .week, .month] {
+            let component: Calendar.Component = granularity == .day ? .day : granularity == .week ? .weekOfYear : .month
+            let expected = Dictionary(grouping: histories) { calendar.dateInterval(of: component, for: $0.date)!.start }
+            let buckets = RecordTrendBucket.summarize(restored.history, granularity: granularity,
+                reps: { $0.totalReps }, weight: { $0.maxWeight })
+            periodCounts[granularity.rawValue] = buckets.count
+            precondition(buckets.count == expected.count)
+            precondition(buckets.reduce(0) { $0 + $1.sessions } == histories.count)
+            precondition(buckets.reduce(0) { $0 + $1.reps } == histories.reduce(0) { $0 + $1.totalReps })
+            precondition(buckets.map(\.weight).max() == histories.map(\.maxWeight).max())
+            for bucket in buckets {
+                let originals = expected[bucket.id]!
+                let interval = calendar.dateInterval(of: component, for: originals[0].date)!
+                precondition(bucket.range == interval && bucket.id == interval.start)
+                precondition(originals.allSatisfy { $0.date >= interval.start && $0.date < interval.end })
+                precondition(bucket.sessions == originals.count)
+                precondition(bucket.reps == originals.reduce(0) { $0 + $1.totalReps })
+                precondition(bucket.weight == originals.map(\.maxWeight).max())
+            }
+            for metric in RecordTimeMetric.allCases {
+                let measured = RecordDurationDay.summarize(restored.history, metric: metric, granularity: granularity)
+                let expectedMeasured = expected.compactMapValues { originals -> [TimeInterval]? in
+                    let values = originals.compactMap { metric == .elapsed ? $0.duration : $0.activeDuration }
+                    return values.isEmpty ? nil : values
+                }
+                precondition(measured.count == expectedMeasured.count)
+                for bucket in measured {
+                    let values = expectedMeasured[bucket.id]!
+                    precondition(bucket.range == calendar.dateInterval(of: component, for: bucket.id)!)
+                    precondition(bucket.recordCount == expected[bucket.id]!.count)
+                    precondition(bucket.measuredRecords == values.count)
+                    precondition(abs(bucket.seconds - values.reduce(0, +)) < 0.000001)
+                }
+            }
+        }
+        let sourceDates = histories.map(\.date)
+        let sourceSpan = calendar.dateComponents([.day], from: calendar.startOfDay(for: sourceDates.min()!), to: calendar.startOfDay(for: sourceDates.max()!)).day!
+        let expectedAutomatic: RecordChartGranularity = sourceSpan <= 45 ? .day : sourceSpan <= 180 ? .week : .month
+        precondition(RecordChartGranularity.automatic.resolved(for: sourceDates) == expectedAutomatic)
         // Exercise phone-only corrections against a real source summary. The
         // Watch source, group boundaries and duration must remain untouched.
         let target = incoming[0]
@@ -109,6 +152,12 @@ enum VerifyWorkoutHistoryImport {
         precondition(manual.displayDuration == nil && manual.totalReps == original.totalReps)
         precondition(RecordTimeMetric.elapsed.seconds(in: manual) == nil)
         precondition(RecordDurationDay.summarize([manual], metric: .elapsed).isEmpty)
+        for granularity in [RecordChartGranularity.week, .month] {
+            precondition(RecordDurationDay.summarize([manual], metric: .elapsed, granularity: granularity).isEmpty)
+            let partial = RecordDurationDay.summarize(store.history, metric: .elapsed, granularity: granularity)
+            precondition(partial.reduce(0) { $0 + $1.measuredRecords } == histories.count)
+            precondition(partial.contains { $0.recordCount > $0.measuredRecords })
+        }
         let measuredBeforeManualDuration = RecordDurationDay.summarize(store.history, metric: .elapsed)
         precondition(measuredBeforeManualDuration.reduce(0) { $0 + $1.measuredRecords } == histories.count)
         precondition(measuredBeforeManualDuration.contains { $0.recordCount > $0.measuredRecords })
@@ -206,6 +255,8 @@ enum VerifyWorkoutHistoryImport {
         let result: [String: Any] = ["sourceRecords": histories.count, "importedWatchRecords": incoming.count,
             "existingSummaryPreserved": true, "duplicatesSuppressed": true, "fieldsPreserved": true,
             "dailyDurationMatchesSource": true, "missingDurationsNotZero": true, "partialDurationCoverageCorrect": true,
+            "periodAggregationMatchesSource": true, "periodSelectionBoundsPreserved": true, "periodCounts": periodCounts,
+            "automaticGranularity": expectedAutomatic.rawValue, "sourceZeroDurationRecords": histories.filter { $0.duration == 0 }.count,
             "relaunchPreserved": true, "journalRecoveryPassed": true, "deletedRowNotResurrected": true,
             "phoneCorrectionsSurviveResync": true, "manualRecordEditingPreserved": true, "invalidEditsRejected": true,
             "backupRoundTripPassed": true, "restoreConflictRulesPassed": true, "invalidBackupsRejected": true,

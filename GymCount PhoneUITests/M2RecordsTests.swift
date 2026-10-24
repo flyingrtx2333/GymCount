@@ -4,11 +4,12 @@ final class M2RecordsTests: XCTestCase {
     @MainActor private func launch(_ id: String, dark: Bool = false, englishLarge: Bool = false, english: Bool = false) -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["--isolated-ui-test", "--ui-test-storage-id=" + id,
+        app.launchArguments = ["--isolated-ui-test", "--ui-test-storage-id=" + id, "--reset-record-view-preferences",
             "-AppleLanguages", englishLarge || english ? "(en)" : "(zh-Hans)", "-AppleLocale", englishLarge || english ? "en_US" : "zh_CN",
             "-records.appearance", dark ? "dark" : "light"]
         if englishLarge { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL", "-UIAccessibilityReduceMotionEnabled", "YES"] }
         app.launch()
+        app.launchArguments.removeAll { $0 == "--reset-record-view-preferences" }
         XCTAssertTrue(app.buttons["add-record"].waitForExistence(timeout: 15))
         return app
     }
@@ -85,6 +86,13 @@ final class M2RecordsTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["record-time-empty"].firstMatch.exists)
         app.buttons["history-record"].firstMatch.tap()
         XCTAssertEqual(app.descendants(matching: .any)["record-total-reps"].value as? String, "14 次")
+        let firstSet = app.descendants(matching: .any)["record-set-1"].firstMatch
+        XCTAssertEqual(firstSet.label, "第 1 组")
+        XCTAssertEqual(firstSet.value as? String, "42.5 公斤 · 8 次")
+        app.buttons["tab-2"].tap()
+        app.buttons["records-export"].tap()
+        XCTAssertTrue(app.buttons["records-export-sets"].isEnabled)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.1)).tap()
         app.buttons["tab-3"].tap()
         XCTAssertEqual(app.descendants(matching: .any)["trend-total-reps"].value as? String, "14 次")
         XCTAssertEqual(app.descendants(matching: .any)["trend-best-weight"].value as? String, "42.5 公斤")
@@ -174,6 +182,7 @@ final class M2RecordsTests: XCTestCase {
         let chart = app.descendants(matching: .any)["record-time-chart"].firstMatch
         XCTAssertTrue(chart.waitForExistence(timeout: 5))
         shot(app, "record-time-all-light")
+        app.buttons["record-time-metric"].tap(); app.buttons["record-time-granularity-day"].tap()
         chart.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
         XCTAssertTrue(app.buttons["record-time-open-day"].waitForExistence(timeout: 5))
         app.buttons["record-time-open-day"].tap()
@@ -189,6 +198,84 @@ final class M2RecordsTests: XCTestCase {
         shot(app, "record-time-unmeasured")
         app.buttons["record-time-metric"].tap(); app.buttons["训练总用时"].tap()
         XCTAssertTrue(chart.waitForExistence(timeout: 5))
+    }
+    @MainActor func testExportSummaryScope() {
+        let app = launch("m2-real-review")
+        app.buttons["record-exercise-filter"].tap(); app.buttons["卧推"].tap()
+        app.buttons["record-period-filter"].tap(); app.buttons["近7天"].tap()
+        XCTAssertTrue(app.staticTexts["4 条记录"].waitForExistence(timeout: 5))
+        app.buttons["tab-2"].tap()
+        let export = app.buttons["records-export"]
+        XCTAssertTrue(export.label.contains("卧推"))
+        XCTAssertTrue(export.label.contains("近7天"))
+        XCTAssertTrue(export.label.contains("4 条记录"))
+        shot(app, "workflow-export-scope")
+        export.tap()
+        let details = app.descendants(matching: .any)["records-export-sets"].firstMatch
+        let tree = XCTAttachment(string: app.debugDescription); tree.name = "disabled-export-menu-tree"; tree.lifetime = .keepAlways; add(tree)
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        XCTAssertFalse(details.isEnabled)
+        XCTAssertTrue(app.buttons["训练汇总 CSV"].isEnabled)
+        shot(app, "workflow-no-empty-set-export")
+    }
+    @MainActor func testChartPeriodNavigation() {
+        let app = launch("m2-real-review")
+        XCTAssertTrue(app.staticTexts["82 条记录"].exists)
+        let timeChart = app.descendants(matching: .any)["record-time-chart"].firstMatch
+        XCTAssertEqual(app.buttons["record-time-metric"].value as? String, "按月")
+        shot(app, "workflow-records-monthly")
+        timeChart.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        app.buttons["record-time-open-day"].tap()
+        XCTAssertTrue(app.staticTexts["6 条记录"].waitForExistence(timeout: 5), "A month opens every record in the month")
+        app.buttons["选择日期"].tap()
+        XCTAssertTrue(app.navigationBars["选择日期"].waitForExistence(timeout: 5))
+        app.buttons["取消"].tap()
+        app.buttons["tab-3"].tap()
+        app.buttons["trend-metric"].tap(); app.buttons["trend-granularity-week"].tap()
+        XCTAssertTrue(app.buttons["trend-open-day"].label.contains("70 公斤"))
+        shot(app, "workflow-trends-weekly")
+        app.buttons["trend-open-day"].tap()
+        XCTAssertTrue(app.staticTexts["4 条记录"].waitForExistence(timeout: 5), "A week opens every matching workout in that week")
+        app.buttons["tab-3"].tap()
+        app.buttons["trend-metric"].tap(); app.buttons["trend-granularity-month"].tap()
+        app.buttons["trend-open-day"].tap()
+        XCTAssertTrue(app.staticTexts["5 条记录"].waitForExistence(timeout: 5), "Month navigation preserves the exercise filter")
+    }
+    @MainActor func testRecordViewPreferences() {
+        let app = launch("m2-real-review")
+        app.buttons["record-exercise-filter"].tap(); app.buttons["卧推"].tap()
+        app.buttons["record-period-filter"].tap(); app.buttons["近30天"].tap()
+        app.buttons["record-time-metric"].tap(); app.buttons["动作时长（估计）"].tap()
+        app.buttons["record-time-metric"].tap(); app.buttons["record-time-granularity-week"].tap()
+        app.buttons["record-time-metric"].tap(); app.buttons["record-time-toggle-chart"].tap()
+        app.buttons["tab-3"].tap()
+        app.buttons["trend-exercise-filter"].tap(); app.buttons["深蹲"].tap()
+        app.buttons["trend-period-filter"].tap(); app.buttons["全部时间"].tap()
+        app.buttons["trend-metric"].tap(); app.buttons["次数"].firstMatch.tap()
+        app.buttons["trend-metric"].tap(); app.buttons["trend-granularity-month"].tap()
+        app.buttons["trend-metric"].tap(); app.buttons["trend-toggle-chart"].tap()
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["5 条记录"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["record-exercise-filter"].label.contains("卧推"))
+        XCTAssertTrue(app.buttons["record-period-filter"].label.contains("近30天"))
+        XCTAssertTrue(app.buttons["record-time-metric"].label.contains("动作时长"))
+        XCTAssertEqual(app.buttons["record-time-metric"].value as? String, "按周")
+        XCTAssertFalse(app.descendants(matching: .any)["record-time-chart"].firstMatch.exists)
+        XCTAssertFalse(app.descendants(matching: .any)["record-time-empty"].firstMatch.exists)
+        shot(app, "workflow-records-collapsed")
+        app.buttons["record-time-metric"].tap(); app.buttons["record-time-toggle-chart"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["record-time-empty"].firstMatch.exists)
+        app.buttons["record-time-metric"].tap(); app.buttons["训练总用时"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["record-time-chart"].firstMatch.exists)
+        app.buttons["tab-3"].tap()
+        XCTAssertTrue(app.buttons["trend-exercise-filter"].label.contains("深蹲"))
+        XCTAssertTrue(app.buttons["trend-period-filter"].label.contains("全部时间"))
+        XCTAssertTrue(app.buttons["trend-metric"].label.contains("次数"))
+        XCTAssertEqual(app.buttons["trend-metric"].value as? String, "按月")
+        XCTAssertFalse(app.descendants(matching: .any)["trend-chart"].firstMatch.exists)
+        app.buttons["trend-metric"].tap(); app.buttons["trend-toggle-chart"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trend-chart"].firstMatch.exists)
+        shot(app, "workflow-preferences-restored")
     }
     @MainActor func testM2NativeWalkthrough() {
         let app = launch("m2-tour-review")
