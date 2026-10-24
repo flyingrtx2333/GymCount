@@ -94,6 +94,9 @@ struct PhoneContentView: View {
     @State private var deletionIDs: Set<UUID> = []
     @State private var confirmingDelete = false
     @State private var dateRequest: RecordDateRequest?
+    #if GYMCOUNT_SYNC
+    @State private var showingSync = false
+    #endif
 
     private var filtered: [PhoneTrainingSession] { store.history.filter(filter.includes) }
     private var groups: [(Date, [PhoneTrainingSession])] {
@@ -165,9 +168,15 @@ struct PhoneContentView: View {
         NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 historyHeader
-                filters
+                if !typeSize.isAccessibilitySize { filters }
                 ScrollViewReader { proxy in
                     List(selection: editMode.isEditing ? $selected : nil) {
+                        if typeSize.isAccessibilitySize {
+                            filters
+                                .listRowInsets(EdgeInsets())
+                                .listRowSeparator(.hidden).listRowBackground(Color.clear)
+                                .id("record-filters")
+                        }
                         (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 4))) {
                             Text(String(localized: "\(filtered.count) 条记录"))
                             if !typeSize.isAccessibilitySize { Text("·") }
@@ -232,7 +241,9 @@ struct PhoneContentView: View {
                         .contentMargins(.top, 0, for: .scrollContent)
                         .animation(RecordMotion.animation(reduced: reduceMotion), value: filter)
                         .onChange(of: filter) { _, _ in
-                            withAnimation(RecordMotion.animation(reduced: reduceMotion)) { proxy.scrollTo("record-overview", anchor: .top) }
+                            withAnimation(RecordMotion.animation(reduced: reduceMotion)) {
+                                proxy.scrollTo(typeSize.isAccessibilitySize ? "record-filters" : "record-overview", anchor: .top)
+                            }
                         }
                         #if GYMCOUNT_SYNC
                         .refreshable { capture.requestWorkoutHistory(force: true) }
@@ -240,6 +251,11 @@ struct PhoneContentView: View {
                 }
             }.background(Studio.background)
                 .toolbar(.hidden, for: .navigationBar, .tabBar)
+                #if GYMCOUNT_SYNC
+                .navigationDestination(isPresented: $showingSync) {
+                    RecordSyncView().toolbar(.visible, for: .navigationBar)
+                }
+                #endif
                 .navigationDestination(for: UUID.self) { id in
                     RecordDetailView(id: id, edit: { openEditor($0) }, delete: { askDelete([$0.id]) })
                         .toolbar(.visible, for: .navigationBar)
@@ -247,37 +263,41 @@ struct PhoneContentView: View {
         }
     }
     private var historyHeader: some View {
-        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0)) : AnyLayout(HStackLayout(spacing: 8))
-        return layout {
+        HStack(spacing: 8) {
             Text(String(localized: "训练记录")).font(.title2.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-            if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
-            HStack(spacing: 8) {
-            if !filtered.isEmpty {
-                Button(editMode.isEditing ? String(localized: "完成") : String(localized: "选择")) {
-                    withAnimation(RecordMotion.animation(reduced: reduceMotion)) {
-                        editMode = editMode.isEditing ? .inactive : .active; selected = []
-                    }
-                }.frame(minHeight: 44).accessibilityIdentifier("record-select")
-            }
-            #if GYMCOUNT_SYNC
-            if !editMode.isEditing {
-                NavigationLink { RecordSyncView().toolbar(.visible, for: .navigationBar) } label: {
-                    Image(systemName: capture.workoutSyncState.symbol).font(.system(size: 20)).frame(width: 44, height: 44)
-                }.accessibilityLabel(capture.workoutSyncState.title).accessibilityIdentifier("history-sync-workouts")
-            }
-            #endif
+            Spacer(minLength: 8)
+            if !typeSize.isAccessibilitySize { historyActions }
             if !editMode.isEditing {
                 Button { openEditor() } label: {
                     Image(systemName: "plus").font(.system(size: 20, weight: .medium))
                         .frame(width: 44, height: 44)
                 }.accessibilityLabel(String(localized: "补记训练")).accessibilityIdentifier("add-record")
             }
-            }
         }.font(.subheadline).buttonStyle(RecordPressStyle()).padding(.horizontal, 20)
             .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading).fixedSize(horizontal: false, vertical: true)
     }
+    @ViewBuilder private var historyActions: some View {
+        if !filtered.isEmpty {
+            Button(editMode.isEditing ? String(localized: "完成") : String(localized: "选择")) {
+                withAnimation(RecordMotion.animation(reduced: reduceMotion)) {
+                    editMode = editMode.isEditing ? .inactive : .active; selected = []
+                }
+            }.frame(minHeight: 44).accessibilityIdentifier("record-select")
+        }
+        #if GYMCOUNT_SYNC
+        if !editMode.isEditing {
+            Button { showingSync = true } label: {
+                Image(systemName: capture.workoutSyncState.symbol).font(.system(size: 20)).frame(width: 44, height: 44)
+            }.accessibilityLabel(capture.workoutSyncState.title).accessibilityIdentifier("history-sync-workouts")
+        }
+        #endif
+    }
     private var filters: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if typeSize.isAccessibilitySize {
+                HStack(spacing: 8) { historyActions; Spacer(minLength: 0) }
+                    .font(.subheadline).padding(.horizontal, 20)
+            }
             if filter.period == .custom && !editMode.isEditing {
                 Text(filter.rangeTitle).font(.caption).foregroundStyle(Studio.muted).padding(.horizontal, 20).padding(.top, 6)
             }

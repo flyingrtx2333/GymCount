@@ -63,19 +63,21 @@ struct RecordEditorView: View {
                     }
                     if !summary && (record == nil || record?.manualEntry == true) {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(String(localized: "时长（分钟，可选）")).font(.subheadline).foregroundStyle(Studio.muted)
-                            compactEntry($draft.duration, key: "duration", decimal: true, label: String(localized: "时长（分钟，可选）"))
-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Studio.line, lineWidth: 0.5).allowsHitTesting(false))
+                            labeledField(String(localized: "时长（分钟，可选）"), text: $draft.duration, key: "duration", decimal: true)
+                                .font(.subheadline).padding(.horizontal, 12)
+                                .background(Studio.surface, in: RoundedRectangle(cornerRadius: 10))
                             if !validDuration { validation(String(localized: "时长应在 0–1440 分钟之间")) }
                         }
                     }
                     VStack(alignment: .leading, spacing: 8) {
                         Text(String(localized: "备注（可选）")).font(.subheadline).foregroundStyle(Studio.muted)
                         TextField("", text: $draft.note, axis: .vertical)
-                            .lineLimit(3...5).focused($focus, equals: "note").id("note")
-                            .padding(12).background(Studio.surface, in: RoundedRectangle(cornerRadius: 10))
+                            .lineLimit(1...5).focused($focus, equals: "note").id("note")
+                            .padding(12).frame(minHeight: 44)
+                            .background(Studio.surface, in: RoundedRectangle(cornerRadius: 10))
                             .modifier(RecordFocusOutline(focused: focus == "note", space: fieldSpace))
                             .accessibilityLabel(String(localized: "备注"))
+                            .accessibilityIdentifier("record-note-field")
                         if draft.note.count > 2000 { validation(String(localized: "备注最多 2000 字")) }
                     }
                 }.padding(.horizontal, 20).padding(.vertical, 12)
@@ -236,9 +238,10 @@ struct RecordEditorView: View {
     private func labeledField(_ title: String, text: Binding<String>, key: String, decimal: Bool) -> some View {
         let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
         return layout {
-            Text(title).fixedSize(horizontal: false, vertical: true)
+            Text(title).fixedSize(horizontal: false, vertical: true).layoutPriority(1)
             TextField("—", text: text).multilineTextAlignment(typeSize.isAccessibilitySize ? .leading : .trailing)
                 .keyboardType(decimal ? .decimalPad : .numberPad).focused($focus, equals: key).accessibilityLabel(title)
+                .accessibilityIdentifier("record-\(key)-field")
                 .frame(minHeight: 44).modifier(RecordFocusOutline(focused: focus == key, space: fieldSpace))
         }.id(key)
     }

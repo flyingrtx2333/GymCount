@@ -143,6 +143,16 @@ func recordDate(_ date: Date) -> String {
         ? .dateTime.month().day().weekday() : .dateTime.year().month().day())
 }
 
+func recordChartDateFormat(first: Date?, last: Date?) -> Date.FormatStyle {
+    guard let first, let last else { return .dateTime.month(.twoDigits).day(.twoDigits) }
+    let calendar = Calendar.current
+    let firstYear = calendar.component(.year, from: first)
+    let showYear = firstYear != calendar.component(.year, from: last) || firstYear != calendar.component(.year, from: Date())
+    guard showYear else { return .dateTime.month(.twoDigits).day(.twoDigits) }
+    if last.timeIntervalSince(first) > 180 * 86400 { return .dateTime.year(.twoDigits).month(.twoDigits) }
+    return .dateTime.year(.twoDigits).month(.twoDigits).day(.twoDigits)
+}
+
 // M2: one interruptible, non-bouncy motion policy for the records workspace.
 enum RecordMotion {
     static func animation(reduced: Bool) -> Animation? { reduced ? nil : .spring(duration: 0.32, bounce: 0) }

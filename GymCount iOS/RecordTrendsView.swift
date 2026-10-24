@@ -31,43 +31,43 @@ struct RecordTrendsView: View {
         let padding: TimeInterval = max(86400, last.timeIntervalSince(first) * 0.04)
         return first.addingTimeInterval(-padding)...last.addingTimeInterval(padding)
     }
+    private var axisDates: [Date] {
+        guard points.count > 2, let first = points.first?.id, let last = points.last?.id else { return points.map(\.id) }
+        return [first, first.addingTimeInterval(last.timeIntervalSince(first) / 2), last]
+    }
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 HStack { Text(String(localized: "趋势")).font(.title2.weight(.semibold)); Spacer() }
                     .padding(.horizontal, 20).frame(minHeight: 56)
-                filters
+                if !typeSize.isAccessibilitySize { filters }
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        if points.isEmpty {
-                            ContentUnavailableView(String(localized: "暂无记录"), systemImage: "chart.xyaxis.line")
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            if let selected { selectedDay(selected) }
-                            chart
-                            VStack(alignment: .leading, spacing: 14) {
-                                HStack(spacing: 8) {
-                                    if let exercise = filter.exercise { RecordExerciseIcon(exercise: exercise, size: 24) }
-                                    Text((filter.exercise?.recordName ?? "") + " · " + filter.rangeTitle)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }.font(.subheadline.weight(.medium))
+                    VStack(spacing: 0) {
+                        if typeSize.isAccessibilitySize { filters }
+                        VStack(alignment: .leading, spacing: 24) {
+                            if points.isEmpty {
+                                ContentUnavailableView(String(localized: "暂无记录"), systemImage: "chart.xyaxis.line")
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                if let selected { selectedDay(selected) }
+                                chart
                                 let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16)) : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
                                 layout { metrics }
-                            }
-                            Text(String(localized: "每日记录")).font(.headline)
-                            LazyVStack(spacing: 0) {
-                                ForEach(points.reversed()) { point in
-                                    Button { openDay(filter.exercise ?? .benchPress, point.id) } label: {
-                                        ViewThatFits(in: .horizontal) {
-                                            HStack { Text(recordDate(point.id)); Spacer(minLength: 8); dailyValue(point); Image(systemName: "chevron.right").font(.caption) }
-                                            VStack(alignment: .leading, spacing: 4) { Text(recordDate(point.id)); dailyValue(point) }
-                                        }.font(.subheadline).frame(minHeight: 56).contentShape(Rectangle()).foregroundStyle(Studio.ink)
-                                    }.buttonStyle(RecordPressStyle())
-                                        .overlay(alignment: .bottom) { Rectangle().fill(Studio.line).frame(height: 0.5) }
+                                Text(String(localized: "每日记录")).font(.headline)
+                                LazyVStack(spacing: 0) {
+                                    ForEach(points.reversed()) { point in
+                                        Button { openDay(filter.exercise ?? .benchPress, point.id) } label: {
+                                            ViewThatFits(in: .horizontal) {
+                                                HStack { Text(recordDate(point.id)); Spacer(minLength: 8); dailyValue(point); Image(systemName: "chevron.right").font(.caption) }
+                                                VStack(alignment: .leading, spacing: 4) { Text(recordDate(point.id)); dailyValue(point) }
+                                            }.font(.subheadline).frame(minHeight: 56).contentShape(Rectangle()).foregroundStyle(Studio.ink)
+                                        }.buttonStyle(RecordPressStyle())
+                                            .overlay(alignment: .bottom) { Rectangle().fill(Studio.line).frame(height: 0.5) }
+                                    }
                                 }
                             }
-                        }
-                    }.padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 20)
+                        }.padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 20)
+                    }
                 }
             }.background(Studio.background)
                 .toolbar(.hidden, for: .navigationBar, .tabBar)
@@ -80,26 +80,33 @@ struct RecordTrendsView: View {
     }
     private var filters: some View {
         let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
-        return layout {
-            Menu {
-                Picker(String(localized: "动作"), selection: $filter.exercise) {
-                    ForEach(ExerciseType.allCases, id: \.self) { Label($0.recordName, image: $0.icon).tag(Optional($0)) }
-                }
-            } label: { RecordFilterLabel(title: filter.exercise?.recordName ?? String(localized: "全部动作"), exercise: filter.exercise).frame(maxWidth: .infinity) }
-                .accessibilityIdentifier("trend-exercise-filter")
-            if !typeSize.isAccessibilitySize { Divider().frame(height: 20) }
-            Menu {
-                ForEach([RecordFilter.Period.month, .quarter, .all], id: \.self) { period in Button(period.title) { filter.period = period } }
-                Button(String(localized: "自定义日期")) { showDates = true }
-            } label: { RecordFilterLabel(title: filter.period.title).frame(maxWidth: .infinity) }
-                .accessibilityIdentifier("trend-period-filter")
-            if !typeSize.isAccessibilitySize { Divider().frame(height: 20) }
-            Menu {
-                Button(String(localized: "最大重量")) { showReps = false }
-                Button(String(localized: "次数")) { showReps = true }
-            } label: { RecordFilterLabel(title: showReps ? String(localized: "次数") : String(localized: "最大重量")).frame(maxWidth: .infinity) }
-                .accessibilityIdentifier("trend-metric")
-        }.buttonStyle(RecordPressStyle()).padding(.horizontal, 12).padding(.vertical, 5).background(Studio.background)
+        return VStack(alignment: .leading, spacing: 0) {
+            if filter.period == .custom {
+                Text(filter.rangeTitle).font(.caption).foregroundStyle(Studio.muted)
+                    .padding(.horizontal, 20).padding(.top, 6)
+                    .accessibilityIdentifier("trend-custom-range")
+            }
+            layout {
+                Menu {
+                    Picker(String(localized: "动作"), selection: $filter.exercise) {
+                        ForEach(ExerciseType.allCases, id: \.self) { Label($0.recordName, image: $0.icon).tag(Optional($0)) }
+                    }
+                } label: { RecordFilterLabel(title: filter.exercise?.recordName ?? String(localized: "全部动作"), exercise: filter.exercise).frame(maxWidth: .infinity) }
+                    .accessibilityIdentifier("trend-exercise-filter")
+                if !typeSize.isAccessibilitySize { Divider().frame(height: 20) }
+                Menu {
+                    ForEach([RecordFilter.Period.month, .quarter, .all], id: \.self) { period in Button(period.title) { filter.period = period } }
+                    Button(String(localized: "自定义日期")) { showDates = true }
+                } label: { RecordFilterLabel(title: filter.period.title).frame(maxWidth: .infinity) }
+                    .accessibilityIdentifier("trend-period-filter")
+                if !typeSize.isAccessibilitySize { Divider().frame(height: 20) }
+                Menu {
+                    Button(String(localized: "最大重量")) { showReps = false }
+                    Button(String(localized: "次数")) { showReps = true }
+                } label: { RecordFilterLabel(title: showReps ? String(localized: "次数") : String(localized: "最大重量")).frame(maxWidth: .infinity) }
+                    .accessibilityIdentifier("trend-metric")
+            }.padding(.horizontal, 12)
+        }.buttonStyle(RecordPressStyle()).padding(.vertical, 5).background(Studio.background)
             .overlay(alignment: .bottom) { Rectangle().fill(Studio.line).frame(height: 0.5) }
     }
     private func selectedDay(_ point: RecordTrendPoint) -> some View {
@@ -135,14 +142,17 @@ struct RecordTrendsView: View {
             .chartGesture { proxy in
                 SpatialTapGesture().onEnded { event in
                     withAnimation(RecordMotion.animation(reduced: reduceMotion)) { proxy.selectXValue(at: event.location.x) }
-                }.simultaneously(with: DragGesture(minimumDistance: 1).onChanged { proxy.selectXValue(at: $0.location.x) })
+                }.simultaneously(with: DragGesture(minimumDistance: 20).onChanged { value in
+                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                    proxy.selectXValue(at: value.location.x)
+                })
             }
             .chartXScale(domain: domain)
             .chartXAxis {
-                AxisMarks(values: [domain.lowerBound, domain.lowerBound.addingTimeInterval(domain.upperBound.timeIntervalSince(domain.lowerBound) / 2), domain.upperBound]) { value in
-                    AxisValueLabel(anchor: value.index == 0 ? .topLeading : value.index == 2 ? .topTrailing : .top) {
+                AxisMarks(values: axisDates) { value in
+                    AxisValueLabel(anchor: axisDates.count == 1 ? .top : value.index == 0 ? .topLeading : value.index == axisDates.count - 1 ? .topTrailing : .top) {
                         if let date = value.as(Date.self) {
-                            Text(date, format: Calendar.current.component(.year, from: domain.upperBound) != Calendar.current.component(.year, from: domain.lowerBound) ? .dateTime.year(.twoDigits).month(.twoDigits) : .dateTime.month(.twoDigits).day(.twoDigits)).fixedSize()
+                            Text(date, format: recordChartDateFormat(first: points.first?.id, last: points.last?.id)).fixedSize()
                         }
                     }
                 }

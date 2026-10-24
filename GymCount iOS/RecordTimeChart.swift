@@ -25,15 +25,24 @@ struct RecordTimeChart: View {
         let padding = max(86400, last.timeIntervalSince(first) * 0.04)
         return first.addingTimeInterval(-padding)...last.addingTimeInterval(padding)
     }
+    private var axisDates: [Date] {
+        guard points.count > 2, let first = points.first?.id, let last = points.last?.id else { return points.map(\.id) }
+        return [first, first.addingTimeInterval(last.timeIntervalSince(first) / 2), last]
+    }
     private func time(_ seconds: TimeInterval) -> String {
         Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .abbreviated, maximumUnitCount: 2))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0)) : AnyLayout(HStackLayout(spacing: 8))
+            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(alignment: .center, spacing: 8))
             layout {
-                Text(String(localized: "运动时间")).font(.headline)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(String(localized: "运动时间")).font(.caption).foregroundStyle(Studio.muted)
+                    Text(measured == 0 ? "—" : time(selected?.seconds ?? points.reduce(0) { $0 + $1.seconds }))
+                        .font(.title3.weight(.semibold)).monospacedDigit().foregroundStyle(Studio.ink)
+                        .accessibilityIdentifier("record-time-value")
+                }
                 if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
                 Menu {
                     ForEach(RecordTimeMetric.allCases, id: \.self) { value in
@@ -46,22 +55,14 @@ struct RecordTimeChart: View {
                     }.frame(minHeight: 44)
                 }.accessibilityIdentifier("record-time-metric")
             }
-            layout {
-                Text(measured == 0 ? "—" : time(selected?.seconds ?? points.reduce(0) { $0 + $1.seconds }))
-                    .font(.title3.weight(.semibold)).monospacedDigit().foregroundStyle(Studio.ink)
-                    .accessibilityIdentifier("record-time-value")
-                if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
-                if let selected {
-                    Button { openDay(selected.id) } label: {
-                        HStack(spacing: 4) {
-                            Text(recordDate(selected.id))
-                            Image(systemName: "chevron.right")
-                        }.font(.caption).frame(minHeight: 44)
-                    }.accessibilityHint(String(localized: "查看当天记录"))
-                        .accessibilityIdentifier("record-time-open-day")
-                } else {
-                    Text(String(localized: "累计时长")).font(.caption).foregroundStyle(Studio.muted)
-                }
+            if let selected {
+                Button { openDay(selected.id) } label: {
+                    HStack(spacing: 4) {
+                        Text(recordDate(selected.id))
+                        Image(systemName: "chevron.right")
+                    }.font(.caption).frame(minHeight: 44)
+                }.accessibilityHint(String(localized: "查看当天记录"))
+                    .accessibilityIdentifier("record-time-open-day")
             }
             if points.isEmpty {
                 Label(String(localized: "暂无时长数据"), systemImage: "clock")
@@ -102,11 +103,10 @@ struct RecordTimeChart: View {
         .chartYScale(domain: 0...max(1, (points.map(\.seconds).max() ?? 0) / scale * 1.1))
         .chartYAxisLabel(unit, position: .topLeading)
         .chartXAxis {
-            AxisMarks(values: [domain.lowerBound, domain.lowerBound.addingTimeInterval(domain.upperBound.timeIntervalSince(domain.lowerBound) / 2), domain.upperBound]) { value in
-                AxisValueLabel(anchor: value.index == 0 ? .topLeading : value.index == 2 ? .topTrailing : .top) {
+            AxisMarks(values: axisDates) { value in
+                AxisValueLabel(anchor: axisDates.count == 1 ? .top : value.index == 0 ? .topLeading : value.index == axisDates.count - 1 ? .topTrailing : .top) {
                     if let date = value.as(Date.self) {
-                        Text(date, format: Calendar.current.component(.year, from: domain.lowerBound) != Calendar.current.component(.year, from: domain.upperBound)
-                            ? .dateTime.year(.twoDigits).month(.twoDigits) : .dateTime.month(.twoDigits).day(.twoDigits))
+                        Text(date, format: recordChartDateFormat(first: points.first?.id, last: points.last?.id))
                     }
                 }
             }
@@ -124,7 +124,10 @@ struct RecordTimeChart: View {
         .chartXSelection(value: $selectedDate)
         .chartGesture { proxy in
             SpatialTapGesture().onEnded { proxy.selectXValue(at: $0.location.x) }
-                .simultaneously(with: DragGesture(minimumDistance: 1).onChanged { proxy.selectXValue(at: $0.location.x) })
+                .simultaneously(with: DragGesture(minimumDistance: 20).onChanged { value in
+                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                    proxy.selectXValue(at: value.location.x)
+                })
         }
         .frame(height: typeSize.isAccessibilitySize ? 260 : 150)
         .font(.caption2).accessibilityLabel(String(localized: "每日运动时间"))

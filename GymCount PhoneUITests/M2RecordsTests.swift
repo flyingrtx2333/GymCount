@@ -1,11 +1,11 @@
 import XCTest
 
 final class M2RecordsTests: XCTestCase {
-    @MainActor private func launch(_ id: String, dark: Bool = false, englishLarge: Bool = false) -> XCUIApplication {
+    @MainActor private func launch(_ id: String, dark: Bool = false, englishLarge: Bool = false, english: Bool = false) -> XCUIApplication {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--isolated-ui-test", "--ui-test-storage-id=" + id,
-            "-AppleLanguages", englishLarge ? "(en)" : "(zh-Hans)", "-AppleLocale", englishLarge ? "en_US" : "zh_CN",
+            "-AppleLanguages", englishLarge || english ? "(en)" : "(zh-Hans)", "-AppleLocale", englishLarge || english ? "en_US" : "zh_CN",
             "-records.appearance", dark ? "dark" : "light"]
         if englishLarge { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL", "-UIAccessibilityReduceMotionEnabled", "YES"] }
         app.launch()
@@ -107,12 +107,66 @@ final class M2RecordsTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(title.frame.minY, app.frame.minY)
         XCTAssertTrue(app.buttons["add-record"].isHittable)
         shot(app, "m2-integrated-records-large-english")
+        app.buttons["history-sync-workouts"].tap()
+        XCTAssertTrue(app.buttons["sync-now"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        let filter = app.buttons["record-exercise-filter"]
+        let filterTop = filter.frame.minY
+        app.swipeUp()
+        XCTAssertTrue(!filter.exists || !filter.isHittable || filter.frame.minY < filterTop - 40, "Large-text filters must scroll with records")
+        XCTAssertTrue(app.buttons["add-record"].isHittable)
+        shot(app, "records-large-english-scrolled")
         app.buttons["add-record"].tap()
         XCTAssertTrue(app.buttons["save-record"].waitForExistence(timeout: 5))
         shot(app, "m2-integrated-entry-large-english")
         app.buttons["Cancel"].tap()
         app.buttons["tab-3"].tap()
         shot(app, "m2-integrated-trends-large-english")
+        let trendFilter = app.buttons["trend-exercise-filter"]
+        let trendFilterTop = trendFilter.frame.minY
+        app.swipeUp()
+        XCTAssertTrue(!trendFilter.isHittable || trendFilter.frame.minY < trendFilterTop - 40, "Large-text trend filters must scroll")
+        shot(app, "trends-large-english-scrolled")
+    }
+    @MainActor func testOptionalRecordFields() {
+        let app = launch("compact-fields-" + UUID().uuidString)
+        app.buttons["add-record"].tap()
+        fill(app.textFields["重量（公斤）"].firstMatch, "42.5")
+        app.buttons["下一项"].tap(); app.typeText("8")
+        app.buttons["完成"].tap()
+        let duration = app.textFields["record-duration-field"]
+        let note = app.descendants(matching: .any)["record-note-field"].firstMatch
+        XCTAssertTrue(duration.exists)
+        XCTAssertLessThan(note.frame.height, 70, "An empty note should occupy one compact row")
+        fill(duration, "7.5")
+        app.buttons["下一项"].tap()
+        app.typeText("训练记录\n保留动作和重量")
+        app.buttons["完成"].tap()
+        XCTAssertGreaterThan(note.frame.height, 44)
+        shot(app, "entry-optional-fields-filled")
+        app.buttons["取消"].tap(); app.buttons["保留草稿"].tap()
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["resume-record-draft"].waitForExistence(timeout: 10))
+        app.buttons["resume-record-draft"].tap()
+        XCTAssertEqual(duration.value as? String, "7.5")
+        XCTAssertTrue((note.value as? String ?? "").contains("保留动作和重量"))
+        app.buttons["save-record"].tap()
+        XCTAssertTrue(app.buttons["history-record"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["history-record"].firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "7:30", "7:30")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "保留动作和重量")).firstMatch.waitForExistence(timeout: 5))
+    }
+    @MainActor func testCompactEnglishPresentation() {
+        let app = launch("m2-real-review", english: true)
+        XCTAssertTrue(app.buttons["record-time-metric"].isHittable)
+        shot(app, "records-english")
+        app.buttons["tab-3"].tap()
+        shot(app, "trends-english")
+        app.buttons["tab-1"].tap(); app.buttons["add-record"].tap()
+        XCTAssertTrue(app.buttons["save-record"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["save-record"].isHittable)
+        shot(app, "entry-english")
+        app.buttons["Cancel"].tap()
     }
     @MainActor func testRecordTimeChart() {
         let app = launch("m2-real-review")
