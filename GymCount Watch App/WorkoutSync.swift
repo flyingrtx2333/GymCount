@@ -14,11 +14,18 @@ enum WorkoutSync {
         let totalReps: Int
         let maxWeight: Double
         let duration: TimeInterval
+        var activeDuration: TimeInterval? = nil
 
         var valid: Bool {
             ["bench_press", "squat", "deadlift"].contains(exercise) &&
             date.timeIntervalSinceReferenceDate.isFinite && duration.isFinite && duration >= 0 &&
-            maxWeight.isFinite && maxWeight >= 0 && (0...1_000_000).contains(totalReps)
+            maxWeight.isFinite && maxWeight >= 0 && (0...1_000_000).contains(totalReps) &&
+            (activeDuration.map { $0.isFinite && $0 >= 0 && $0 <= duration } ?? true)
+        }
+
+        func sameSource(as other: Record) -> Bool {
+            id == other.id && date == other.date && exercise == other.exercise &&
+            totalReps == other.totalReps && maxWeight == other.maxWeight && duration == other.duration
         }
     }
 
@@ -78,8 +85,12 @@ final class WatchWorkoutArchive {
         var next = state
         for record in records {
             if next.deletedIDs.contains(record.id) { continue }
-            if let existing = next.records.first(where: { $0.id == record.id }) {
-                guard existing == record else { throw WorkoutSync.Failure.conflictingRecord }
+            if let index = next.records.firstIndex(where: { $0.id == record.id }) {
+                let existing = next.records[index]
+                guard existing.sameSource(as: record),
+                      existing.activeDuration == nil || record.activeDuration == nil ||
+                      existing.activeDuration == record.activeDuration else { throw WorkoutSync.Failure.conflictingRecord }
+                if existing.activeDuration == nil { next.records[index] = record }
             } else { next.records.append(record) }
         }
         try persist(next)

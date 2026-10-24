@@ -1,4 +1,3 @@
-#if DEBUG || GYMCOUNT_CAPTURE
 import SwiftUI
 import CoreMotion
 import WatchKit
@@ -74,11 +73,13 @@ struct CaptureRecord: Encodable {
     let magnetometer_samples: [CaptureSample]
     let sensor_availability: CaptureAvailability
     let detected_events: [Double]
+    var feedback_events: [Double]? = nil
+    var feedback_algorithm_version: String? = nil
     let reference_events_truncated: Bool
 }
 
 // Independent streams retain sensor timestamps; never align them by callback order.
-private final class RawCapture {
+final class RawCapture {
     private let lock = NSLock()
     private let motion = CMMotionManager()
     private let queue: OperationQueue = {
@@ -97,6 +98,7 @@ private final class RawCapture {
     private var deviceMotion: [CaptureMotion] = []
     private var magnetometer: [CaptureSample] = []
     private var events: [Double] = []
+    private var feedbackEvents: [Double] = []
     private var eventsTruncated = false
     private var overflow = false
     private var sensorFailed = false
@@ -197,11 +199,20 @@ private final class RawCapture {
                 max(accelerationContinuity.maximumDeliveryDelay, motionContinuity.maximumDeliveryDelay),
                 timestamps.min().map { max(0, now - $0) })
     }
-    func markRep() {
+    func markRep(at timestamp: Double? = nil) {
         lock.lock(); defer { lock.unlock() }
-        if let t = points.last?.t {
+        if let t = timestamp.flatMap({ time in origin.map { time - $0 } }) ?? points.last?.t, t >= 0 {
             if events.count < 500 { events.append(t) } else { eventsTruncated = true }
         }
+    }
+    func markFeedback(at time: Double) {
+        lock.lock(); defer { lock.unlock() }
+        guard let origin, time >= origin, feedbackEvents.count < 500 else { return }
+        feedbackEvents.append(time - origin)
+    }
+    var recordedFeedback: [Double] {
+        lock.lock(); defer { lock.unlock() }
+        return feedbackEvents
     }
     func setBenchAnalysis(_ analysis: BenchAnalysis) {
         lock.lock(); defer { lock.unlock() }
@@ -217,6 +228,7 @@ private final class RawCapture {
     }
 }
 
+#if DEBUG || GYMCOUNT_CAPTURE
 @MainActor
 final class CollectionStore: ObservableObject {
     static let shared = CollectionStore()
@@ -266,7 +278,7 @@ final class CollectionStore: ObservableObject {
             message = String(localized: "训练会话未启动，请重试")
             return
         }
-        WKInterfaceDevice.current().play(.click)
+        if !["bench_press", "squat"].contains(kind) { WKInterfaceDevice.current().play(.click) }
         continuityWarningShown = false
         let raw = RawCapture(); capture = raw; exercise = kind; self.pace = pace; captureNotes = String(notes.prefix(1000)); start = Date(); detected = 0; message = ""
         self.sessionID = sessionID
@@ -276,7 +288,17 @@ final class CollectionStore: ObservableObject {
         detector.onRawAcceleration = { raw.append($0) }
         detector.onRawDeviceMotion = { raw.appendMotion($0) }
         detector.onRawBenchAnalysis = { raw.setBenchAnalysis($0) }
-        detector.onRawRepDetected = { if hasWatchCounter && kind != "bench_press" { raw.markRep() } }
+        detector.onRawRepDetected = { time in if hasWatchCounter && kind != "bench_press" { raw.markRep(at: time) } }
+        detector.onSquatCompletion = {
+            guard kind == "squat" else { return }
+            raw.markFeedback(at: ProcessInfo.processInfo.systemUptime)
+            WKInterfaceDevice.current().play(.directionUp)
+        }
+        detector.onBenchCompletion = {
+            guard kind == "bench_press" else { return }
+            raw.markFeedback(at: ProcessInfo.processInfo.systemUptime)
+            WKInterfaceDevice.current().play(.directionUp)
+        }
         detector.onBenchAnalysis = { [weak self] analysis in
             self?.detected = analysis.cycles.count
             self?.benchNeedsReview = analysis.count == nil
@@ -287,7 +309,7 @@ final class CollectionStore: ObservableObject {
             Task { @MainActor in self?.detected = hasWatchCounter ? (self?.detector.repCount ?? 0) : 0 }
         }
         // Bench counting and capture share the very same fused motion stream.
-        raw.start(includeDeviceMotion: kind != "bench_press")
+        raw.start(includeDeviceMotion: !["bench_press", "squat"].contains(kind))
         detector.startDetection(countRepetitions: hasWatchCounter); recording = detector.isDetecting
         if !recording { raw.stop(); capture = nil; message = String(localized: "加速度计不可用"); WKInterfaceDevice.current().play(.failure); return }
         // Both entry points have already started an active HealthKit workout.
@@ -314,7 +336,7 @@ final class CollectionStore: ObservableObject {
     }
     func finish(interruption: String? = nil) {
         guard recording else { return }
-        WKInterfaceDevice.current().play(.click)
+        if !["bench_press", "squat"].contains(exercise) { WKInterfaceDevice.current().play(.click) }
         WatchCaptureLink.shared.noteSampleOrigin(sampleOriginWallTime)
         defer { WatchCaptureLink.shared.captureFinished() }
         detector.stopDetection(); capture?.stop(); timeout?.invalidate(); timeout = nil
@@ -344,9 +366,9 @@ final class CollectionStore: ObservableObject {
             watch_crown: WKInterfaceDevice.current().crownOrientation == .left ? "left" : "right", pace: pace,
             watch_model: hardwareModel(), os_version: WKInterfaceDevice.current().systemVersion,
             app_version: "\(info["CFBundleShortVersionString"] ?? "unknown") (\(info["CFBundleVersion"] ?? "unknown"))",
-            algorithm_version: exercise == "bench_press" ? BenchAnalysis.version : ["squat", "deadlift"].contains(exercise) ? "rules-20261007" : "capture-only-20261009",
+            algorithm_version: exercise == "bench_press" ? BenchAnalysis.version : exercise == "squat" ? SquatStream.version : exercise == "deadlift" ? "rules-20261007" : "capture-only-20261009",
             participant_id: saved, notes: captureNotes, samples: points, gyroscope_samples: result.gyro,
-            motion_samples: result.motion, magnetometer_samples: result.magnetic, sensor_availability: raw.availability, detected_events: events, reference_events_truncated: result.eventsTruncated)
+            motion_samples: result.motion, magnetometer_samples: result.magnetic, sensor_availability: raw.availability, detected_events: events, feedback_events: ["bench_press", "squat"].contains(exercise) ? raw.recordedFeedback : nil, feedback_algorithm_version: exercise == "bench_press" ? BenchPressFeedback.version : exercise == "squat" ? SquatStream.version : nil, reference_events_truncated: result.eventsTruncated)
         detected = events.count; capture = nil
     }
     func persist(_ actual: Int) async {

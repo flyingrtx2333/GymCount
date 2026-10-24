@@ -83,9 +83,11 @@ struct GymHeader: View {
 
 struct ContentView: View {
     @EnvironmentObject var dataManager: DataManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedExercise: ExerciseType = .benchPress
     @State private var showingHistory = false
     @State private var showingSettings = false
+    @State private var feedbackWorkout: WorkoutHistory?
 
     var body: some View {
         NavigationStack {
@@ -105,6 +107,26 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
+        .sheet(item: $feedbackWorkout) { WorkoutFeedbackView(workout: $0) }
+        .overlay(alignment: .center) {
+            if dataManager.currentSession == nil, let workout = dataManager.completedWorkout {
+                WorkoutSavedBanner(workout: workout, feedback: {
+                    dataManager.completedWorkout = nil
+                    feedbackWorkout = workout
+                }, close: { dataManager.completedWorkout = nil })
+                .transition(reduceMotion ? .identity : .opacity)
+                .task(id: workout.id) {
+                    do { try await Task.sleep(for: .seconds(5)) } catch { return }
+                    if dataManager.completedWorkout?.id == workout.id {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { dataManager.completedWorkout = nil }
+                    }
+                }
+            }
+        }
+        .alert(String(localized: "保存提示"), isPresented: Binding(
+            get: { dataManager.saveError != nil }, set: { if !$0 { dataManager.saveError = nil } })) {
+            Button(String(localized: "知道了"), role: .cancel) { dataManager.saveError = nil }
+        } message: { Text(dataManager.saveError ?? "") }
         .tint(GymStyle.mint)
     }
 }
@@ -143,7 +165,7 @@ struct MainMenuView: View {
                             exerciseType: exercise,
                             weight: dataManager.settings.defaultWeight
                         )
-                    }
+                    }.accessibilityIdentifier("workout.start." + exercise.rawValue)
                 }
             }
             .gymPageContent(fullWidthHeader: true)

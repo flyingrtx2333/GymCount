@@ -22,7 +22,58 @@
 
 详细证据见 [iPhone 多组训练完善记录](docs/phone-training-flow.md)。
 
-## 最新 TestFlight 发布：2026-10-21（34）
+## 最新 TestFlight 发布：2026-10-24（38）
+
+- 版本：1.1.4 (38)，iPhone 与 Watch 一致；源码以 37 版为基线，使用当前工作区逐文件核验的快照，421 个文件 SHA-256 已保存。
+- Delivery UUID / ASC Build ID：`9bfdfd35-51f1-4a28-9bac-708d5a286306`。
+- 苹果状态：`BUILD-STATUS: VALID` / `IN_BETA_TESTING` / `INTERNAL_ONLY`；已确认内部测试组 `flyingrtx` 包含本构建，中英文测试说明已更新。
+- iPhone 正式整合 F 布局与 M2 动效：紧凑记录、底部筛选及操作、趋势和多组补记布局；使用随键盘移动的原生安全区控件修复布局警告。记录、详情、趋势、补记及采集入口使用与 Watch 相同的运动图标，最终 IPA 已核对三种运动资源。
+- Watch 功能源代码与 37 版一致，配套构建号升至 38；保留保存成功提示与震动、失败重试及计数反馈。没有新增计数算法修改。
+- 双端 Aqua 签名归档、导出、IPA 签名/版本/HealthKit/配套关系核验通过。5 个 iOS 改动文件与此前原生验证的摘要一致；三个工程构建通过，原生记录/趋势与多组补记/键盘两项检查各 1 项通过、0 失败、无运行时布局警告。证据随发布保存。
+- 真机同步、文件导出恢复、VoiceOver/减弱动态效果、Watch 震动及反馈上传仍待补验；用户现有安装和数据未覆盖。沿用既有编译警告。本次仅发布 TestFlight，未提交正式版审核。
+- IPA SHA-256：`639985a44840d14ff5df25c65482b822de7b13229d4857cd4e217a4f61c512f9`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.4-38/`；隔离构建源码：`/private/tmp/GymCount-TestFlight-1.1.4-38-20261024/source`。无关设计和原工作区改动保留。
+
+## 历史 TestFlight 发布：2026-10-23（37）
+
+- 版本：1.1.4 (37)，iPhone 与 Watch 一致；发布应用源码：`be102aff09af4015c00de55dc58dd0c74ed1d39c`，功能提交 `a7b3f52`。
+- Delivery UUID / ASC Build ID：`15c3f407-f46c-47cb-b064-c7eeb801fa6a`。
+- 苹果状态：`BUILD-STATUS: VALID` / `IN_BETA_TESTING` / `INTERNAL_ONLY`；已确认内部测试组 `flyingrtx` 包含本构建，中英文测试说明已更新。
+- iPhone 白金记录界面：记录、趋势、设置，多组补记与编辑、日期及动作筛选、草稿、备份合并恢复、CSV 导出。手机修正和删除标记在重复同步后保留。
+- Watch 保存成功后返回首页、绿色提示与一次成功震动；保存失败保留训练并重试。支持核对真实次数后主动上传本次采样反馈，保留原自动计数与训练记录。
+- 双端 Aqua 签名归档、导出、IPA 版本/签名/HealthKit/配套关系通过。420 个构建源码文件摘要通过；其中 4 个与 Git 提交仅 CRLF/LF 规范化不同，明细保存在预上传核验中。
+- 发布源码复查 82 条真实历史的迁移、重复同步、修正/删除保留、重启、备份冲突及写入失败通过。此前原生 iPhone/Watch 界面、文件导出恢复、保存失败重试检查与两个 iPhone 工程构建通过，证据随发布保存。
+- 真机双端同步、文件导出恢复、VoiceOver/减弱动态效果、完成震动及反馈上传仍待补验；用户现有安装和数据未覆盖。沿用既有 HealthKit、捕获引用及 AppIntents 编译警告。
+- IPA SHA-256：`785b6277c37523aa6f3abb9fb7810d9798514bcc6afa33cfce92b22f7e306ba2`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.4-37/`。隔离发布源码位于 `/tmp/GymCount-TestFlight-1.1.4-37-20261023/source`，原工作区及无关设计改动保留。
+- 最初 1.1.3 (37) 上传被苹果拒绝（90062/90186）：1.1.3 已获批准并关闭追加构建。只升营销版本到 1.1.4 后重新归档上传成功，失败证据保留在 `TestFlight-1.1.3-37/`。本次没有提交正式版审核或修改已上架版本。
+
+## 最新 App Store 正式版：1.1.3（36）
+
+- 版本：1.1.3 (36)，iPhone 与 Watch 一致；发布应用源码：`aaf117b3bc3dd82b0d640a591d633fec361f7e0a`。
+- Delivery UUID / ASC Build ID：`4fb1984d-82c3-4772-8736-dbcb6ee08d35`。
+- 双端 Aqua 签名归档和导出、签名/版本/HealthKit/配套关系核验通过，407 个源码文件 SHA-256 与发布提交一致。正式导出 `testFlightInternalTestingOnly=false`，苹果 `BUILD-STATUS: VALID` / `APP_STORE_ELIGIBLE`。
+- App Store Version ID：`839975af-cc43-4c17-9ee9-92b3274df5c4`；Review Submission ID：`fa1b1ee9-ef5b-4cf7-8e42-c4dbb37b9e07`。
+- 2026-10-22 提交时为 `WAITING_FOR_REVIEW` / `AFTER_APPROVAL`；2026-10-23 发布 37 版前已通过 ASC 核实版本状态为 `READY_FOR_SALE`（已上架）。
+- 功能源码沿用 35 版卧推反馈与深蹲算法，仅增加构建号。已更新简体中文商店介绍、更新说明及审核操作说明；保留既有审核联系人。iPhone 新增一张从本构建源码生成的 1320×2868 训练首页截图，无模拟训练记录；继承 5 张 Watch 截图。截图处理为 COMPLETE。
+- IPA SHA-256：`e96c6c58ac4ef5ff57a78984eea4248030c74f83d4ceeb7f70cba55e77b55f60`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/AppStore-1.1.3-36/`，包含归档、IPA、源码快照/哈希、苹果处理和审核提交凭证；排除可重建 DerivedData。
+- 用户设备应用和数据未覆盖安装。算法真实记录回放边界沿用 35 版；尚未执行新的实际佩戴验收。应用无需登录，运动自动计数须配对 Watch；既有 HealthKit、AppIntents 等编译警告保留。
+
+## 历史 TestFlight 发布：2026-10-21（35）
+
+- 版本：1.1.3 (35)，iPhone 与 Watch 一致；发布应用源码：`cecce23`。
+- Delivery UUID / ASC Build ID：`489fe992-7ec8-41ca-b384-9b74b67653b4`。
+- 苹果状态：`BUILD-STATUS: VALID` / `IN_BETA_TESTING`，已确认内部测试组 `flyingrtx` 包含本构建，中英文测试说明已更新。
+- 卧推仅在确认推起顶部后请求震动；准备动作、迟到数据和结束补算不补震。杠铃深蹲训练与采集统一使用融合运动的下降、上升及站立确认规则。
+- 新采集保存震动请求时间；后台及看板已上线次数差、逐次时间差、平均/最大绝对时间差。后台代码 `7c7dbab4e69e9e3cdcc52b2ac0281206cc920cdb`；前端线上 `1e4e48f5d0743e0286a69b61eb52804a4a5d8286` 包含该提交。健康版本和登录后的列表/详情已验收。
+- 4 条视频深蹲已仅重算 cloud_analysis，结果 8/8/8/9，33/33 次匹配、32/33 在 ±0.5 秒内；原采样、视频、标注、人工次数及其他元数据保持。卧推 5 条视频反馈回放 25/25，19/25 在 ±0.5 秒内，超差保留。历史震动时间没有伪造。
+- 双端 Aqua 签名归档、导出和 IPA 版本/签名/HealthKit/配套关系通过；独立 iPhone Release 编译通过。407 个跟踪源码文件 SHA-256 与发布提交一致。未纳入其他未提交的时长、模型、历史和手机训练流程修改。
+- IPA SHA-256：`be4bbd153d427564f7ebc7a4954261c25d8d93c4f189e2e4afbd2e933fabd881`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.3-35/`。外置卷已满，发布使用本机隔离副本；原工作区和未提交工作保留。
+- 未覆盖安装用户当前应用，未执行新的佩戴验收。请同时更新手机和 Watch 至 35 版；回放结果不能替代实际训练确认，其他姿态及旧无视频深蹲仍待验证。沿用既有编译警告。
+
+## 历史 TestFlight 发布：2026-10-21（34）
 
 - 版本：1.1.3 (34)，iPhone 与 Watch 一致；发布应用源码：`7740691`。
 - Delivery UUID / ASC Build ID：`99e52d73-a0de-4519-8ff4-7a63764d4787`。

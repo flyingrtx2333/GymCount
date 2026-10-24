@@ -2,120 +2,239 @@ import XCTest
 
 final class PhoneNavigationTests: XCTestCase {
     @MainActor
-    func testWholeTrainingSetsRestRestoreAndReuse() {
+    func testProfessionalRecordsFlow() {
         let app = XCUIApplication()
-        app.launchArguments = ["--isolated-ui-test", "--ui-test-storage-id=" + UUID().uuidString]
+        app.launchArguments = ["--isolated-ui-test", "--ui-test-storage-id=" + UUID().uuidString,
+                               "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN", "-records.appearance", "light"]
         app.launch()
-        XCTAssertTrue(app.buttons["tab-2"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["add-record"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["开始训练"].exists)
+        app.buttons["add-record"].tap()
+        app.buttons["save-record"].tap()
+        XCTAssertTrue(app.staticTexts["重量 0–500 公斤，次数 1–999"].exists)
+        fill(app, app.textFields["重量（公斤）"], "42.5")
+        fill(app, app.textFields["次数"], "8")
+        app.buttons["完成"].tap()
+        app.buttons["添加一组"].tap()
+        fill(app, app.textFields.matching(identifier: "次数").element(boundBy: 1), "6")
+        app.buttons["完成"].tap()
+        snapshot(app, "pro-multiple-set-entry")
+        app.buttons["save-record"].tap()
+        XCTAssertTrue(app.buttons["record-select"].waitForExistence(timeout: 5))
+        let row = app.cells.containing(.staticText, identifier: "卧推").firstMatch
+        row.tap()
+        XCTAssertEqual(app.descendants(matching: .any)["record-total-reps"].value as? String, "14 次")
+        XCTAssertTrue(app.staticTexts["42.5 公斤 × 8 次"].exists)
+        XCTAssertTrue(app.staticTexts["42.5 公斤 × 6 次"].exists)
+        app.buttons["edit-record"].tap()
+        fill(app, app.textFields.matching(identifier: "重量（公斤）").firstMatch, "45")
+        fill(app, app.textFields.matching(identifier: "次数").firstMatch, "10")
+        app.buttons["完成"].tap()
+        app.buttons["取消"].tap()
+        app.buttons["保留草稿"].tap()
+        XCTAssertEqual(app.descendants(matching: .any)["record-total-reps"].value as? String, "14 次")
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["resume-record-draft"].waitForExistence(timeout: 10))
+        app.buttons["resume-record-draft"].tap()
+        XCTAssertEqual(app.textFields.matching(identifier: "次数").firstMatch.value as? String, "10")
+        app.buttons["save-record"].tap()
+        app.cells.containing(.staticText, identifier: "卧推").firstMatch.tap()
+        XCTAssertEqual(app.descendants(matching: .any)["record-total-reps"].value as? String, "16 次")
+        snapshot(app, "pro-record-detail")
+        app.buttons["tab-3"].tap()
+        XCTAssertEqual(app.descendants(matching: .any)["trend-best-weight"].value as? String, "45 公斤")
+        XCTAssertEqual(app.descendants(matching: .any)["trend-total-reps"].value as? String, "16 次")
+        snapshot(app, "pro-trend-detail")
+        app.buttons["tab-1"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["record-select"].waitForExistence(timeout: 5))
+        app.buttons["record-select"].tap(); app.buttons["全选"].tap()
+        app.buttons["删除所选记录"].tap()
+        app.alerts.buttons["取消"].tap()
+        XCTAssertTrue(app.cells.containing(.staticText, identifier: "卧推").firstMatch.exists)
+        app.buttons["删除所选记录"].tap(); app.alerts.buttons["删除"].tap()
+        XCTAssertFalse(app.cells.containing(.staticText, identifier: "卧推").firstMatch.exists)
+    }
+
+    @MainActor
+    func testRealRecordsPresentation() throws {
+        let app = XCUIApplication()
+        let base = ["--isolated-ui-test", "--ui-test-storage-id=pro-records-review", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        app.launchArguments = base + ["-records.appearance", "light"]
+        app.launch()
+        XCTAssertTrue(app.buttons["add-record"].waitForExistence(timeout: 15))
+        try requireRealHistory(app)
+        XCTAssertTrue(app.cells.containing(.staticText, identifier: "卧推").firstMatch.exists)
+        snapshot(app, "pro-real-history-light")
+        app.buttons["tab-3"].tap()
+        snapshot(app, "pro-real-trends-light")
         app.buttons["tab-2"].tap()
-        let duration = app.steppers["rest-duration"]
-        XCTAssertTrue(duration.waitForExistence(timeout: 5))
-        for _ in 0..<5 { duration.buttons.element(boundBy: 0).tap() }
-        XCTAssertTrue(app.staticTexts["休息时长：15 秒"].exists)
-        app.buttons["tab-0"].tap()
-        app.buttons["开始训练"].tap()
-        enterSet(app, weight: "60", reps: "10")
-        snapshot(app, "training-quick-entry")
-        tapVisible(app, "complete-set")
-        XCTAssertTrue(app.otherElements["rest-card"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["已保存 1 组 · 10 次"].exists)
-        snapshot(app, "training-rest-countdown")
-
-        // Relaunch the actual app with the same isolated storage: timer and sets survive.
+        snapshot(app, "pro-settings-light")
         app.terminate()
+        app.launchArguments = base + ["-records.appearance", "dark"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["已保存 1 组 · 10 次"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["休息结束，准备下一组"].waitForExistence(timeout: 22))
-        enterSet(app, weight: "62.5", reps: "8")
-        tapVisible(app, "complete-set")
-        tapVisible(app, "撤回上一组")
-        XCTAssertTrue(app.staticTexts["已完成 8 次"].exists)
-        tapVisible(app, "complete-set")
-        tapVisible(app, "active-exercise-squat")
-        enterSet(app, weight: "80", reps: "5")
-        tapVisible(app, "active-exercise-deadlift")
-        XCTAssertTrue(app.buttons["继续本组"].waitForExistence(timeout: 5))
-        app.buttons["继续本组"].tap()
-        XCTAssertTrue(app.staticTexts["已完成 5 次"].exists)
-        tapVisible(app, "complete-set")
-        tapVisible(app, "跳过休息")
-        XCTAssertFalse(app.otherElements["rest-card"].exists)
-        tapVisible(app, "finish-training")
-        app.buttons["confirm-finish"].tap()
-        XCTAssertTrue(app.staticTexts["23 次"].waitForExistence(timeout: 5))
-        app.buttons["tab-1"].tap()
-        app.cells.firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["训练详情"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["\(Double(1500).formatted(.number.precision(.fractionLength(0...1)))) 公斤"].exists)
-        snapshot(app, "training-multiple-exercise-summary")
-        app.navigationBars.buttons.firstMatch.tap()
-
-        app.buttons["tab-0"].tap()
-        tapVisible(app, "沿用上次开始")
-        XCTAssertTrue(app.staticTexts["已完成 10 次"].waitForExistence(timeout: 5))
-        snapshot(app, "training-reuse-last-session")
-        tapVisible(app, "complete-set")
-        enterSet(app, weight: "65", reps: "6")
-        tapVisible(app, "reuse-last-set")
-        XCTAssertTrue(app.alerts["替换当前组？"].waitForExistence(timeout: 5))
-        app.alerts.buttons["保留本组"].tap()
-        XCTAssertTrue(app.staticTexts["已完成 6 次"].exists)
+        XCTAssertTrue(app.buttons["add-record"].waitForExistence(timeout: 15))
+        snapshot(app, "pro-real-history-dark")
         app.terminate()
+        app.launchArguments = ["--isolated-ui-test", "--ui-test-storage-id=pro-records-review", "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-records.appearance", "light", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL", "-UIAccessibilityReduceMotionEnabled", "YES"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["已完成 6 次"].waitForExistence(timeout: 15))
-        tapVisible(app, "reuse-last-set")
-        app.alerts.buttons["替换本组"].tap()
-        XCTAssertTrue(app.staticTexts["已完成 8 次"].exists)
-        tapVisible(app, "finish-training")
-        app.buttons["confirm-finish"].tap()
-        XCTAssertTrue(app.staticTexts["18 次"].waitForExistence(timeout: 5))
-        app.terminate()
-        app.launch()
-        XCTAssertTrue(app.buttons["tab-1"].waitForExistence(timeout: 15))
-        app.buttons["tab-1"].tap()
-        XCTAssertTrue(app.staticTexts["18 次"].exists)
-        XCTAssertTrue(app.staticTexts["23 次"].exists)
-        snapshot(app, "training-history-after-relaunch")
+        XCTAssertTrue(app.buttons["add-record"].waitForExistence(timeout: 15))
+        snapshot(app, "pro-real-history-accessibility")
+        app.swipeUp()
+        snapshot(app, "pro-real-rows-accessibility")
+        app.buttons["add-record"].tap()
+        snapshot(app, "pro-editor-accessibility")
+        app.buttons["Cancel"].tap()
+        app.buttons["tab-3"].tap()
+        snapshot(app, "pro-trends-accessibility")
     }
 
     @MainActor
-    private func enterSet(_ app: XCUIApplication, weight: String, reps: String) {
-        tapVisible(app, "直接填次数")
-        let weightInput = app.textFields["set-weight-input"]
-        XCTAssertTrue(weightInput.waitForExistence(timeout: 5))
-        replaceText(weightInput, with: weight)
-        replaceText(app.textFields["set-reps-input"], with: reps)
-        app.buttons["confirm-set-input"].tap()
+    func testSystemFileDialogs() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--isolated-ui-test", "--ui-test-storage-id=pro-records-review", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN", "-records.appearance", "light"]
+        app.launch()
+        XCTAssertTrue(app.buttons["add-record"].waitForExistence(timeout: 15))
+        app.buttons["tab-2"].tap()
+        app.buttons["records-backup"].tap()
+        XCTAssertTrue(app.buttons["保存"].waitForExistence(timeout: 10))
+        snapshot(app, "pro-system-backup-dialog")
+        app.buttons["保存"].tap()
+        XCTAssertTrue(app.buttons["records-restore"].waitForExistence(timeout: 10))
+        app.buttons["records-restore"].tap()
+        let backup = app.cells.matching(NSPredicate(format: "label CONTAINS %@", "PowerReps-Records")).firstMatch
+        XCTAssertTrue(backup.waitForExistence(timeout: 10))
+        snapshot(app, "pro-system-restore-dialog")
+        let importTree = XCTAttachment(string: app.debugDescription); importTree.name = "restore-picker-tree"; importTree.lifetime = .keepAlways; add(importTree)
+        backup.tap()
+        XCTAssertTrue(app.buttons["confirm-restore"].waitForExistence(timeout: 10))
+        snapshot(app, "pro-restore-preview")
+        app.buttons["confirm-restore"].tap()
+        XCTAssertTrue(app.staticTexts["恢复完成"].waitForExistence(timeout: 5))
+        app.alerts.buttons["确定"].tap()
+
     }
 
     @MainActor
-    private func replaceText(_ field: XCUIElement, with text: String) {
-        field.tap()
-        let current = field.value as? String ?? ""
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count) + text)
+    func testRealRecordFiltersAndChartNavigation() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--isolated-ui-test", "--ui-test-storage-id=pro-records-review", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN", "-records.appearance", "light"]
+        app.launch()
+        XCTAssertTrue(app.buttons["record-exercise-filter"].waitForExistence(timeout: 15))
+        try requireRealHistory(app)
+        app.buttons["record-exercise-filter"].tap()
+        app.buttons["深蹲"].tap()
+        XCTAssertTrue(app.cells.containing(.staticText, identifier: "深蹲").firstMatch.exists)
+        XCTAssertFalse(app.cells.containing(.staticText, identifier: "卧推").firstMatch.exists)
+        app.descendants(matching: .any)["history-record"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["edit-record"].waitForExistence(timeout: 5))
+        let before = app.descendants(matching: .any)["record-total-reps"].value as? String
+        app.buttons["edit-record"].tap()
+        fill(app, app.textFields["总次数"], "10")
+        app.buttons["完成"].tap()
+        app.buttons["取消"].tap(); app.buttons["放弃修改"].tap()
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["save-record"])
+        wait(for: [dismissed], timeout: 5)
+        XCTAssertEqual(app.descendants(matching: .any)["record-total-reps"].value as? String, before)
+        app.navigationBars["训练详情"].buttons["BackButton"].tap()
+        XCTAssertTrue(app.buttons["record-select"].waitForExistence(timeout: 5))
+        app.buttons["record-select"].tap(); app.buttons["全选"].tap()
+        app.buttons["删除所选记录"].tap()
+        snapshot(app, "pro-filtered-deletion-confirmation")
+        app.alerts.buttons["取消"].tap(); app.buttons["record-select"].tap()
+        app.buttons["选择日期"].tap()
+        XCTAssertTrue(app.navigationBars["选择日期"].waitForExistence(timeout: 5))
+        snapshot(app, "pro-calendar")
+        app.buttons["完成"].tap()
+        XCTAssertTrue(app.staticTexts["暂无记录"].waitForExistence(timeout: 5))
+        app.buttons["清除筛选"].tap()
+        app.buttons["tab-3"].tap()
+        let chart = app.descendants(matching: .any)["trend-chart"].firstMatch
+        XCTAssertTrue(chart.waitForExistence(timeout: 5))
+        let neededScroll = chart.frame.maxY > app.frame.height - 110
+        if neededScroll { app.swipeUp() }
+        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["trend-open-day"].label.contains("10月9日"))
+        snapshot(app, "pro-chart-selection")
+        if neededScroll { app.swipeDown() }
+        app.buttons["trend-open-day"].tap()
+        XCTAssertTrue(app.buttons["record-period-filter"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["record-period-filter"].label.contains("自定义日期"))
+        XCTAssertTrue(app.cells.containing(.staticText, identifier: "卧推").firstMatch.exists)
+        snapshot(app, "pro-chart-day-records")
+        app.buttons["tab-3"].tap()
+        app.buttons["trend-period-filter"].tap()
+        app.buttons["全部时间"].tap()
+        snapshot(app, "pro-trend-all-years")
     }
 
     @MainActor
-    private func tapVisible(_ app: XCUIApplication, _ identifier: String) {
-        let button = app.buttons[identifier]
-        for _ in 0..<6 {
-            if button.exists && button.isHittable { button.tap(); return }
-            if button.exists && button.frame.midY < app.frame.midY { app.swipeDown() }
-            else { app.swipeUp() }
+    func testRecordAccessibility() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--isolated-ui-test", "--ui-test-storage-id=pro-records-review", "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-records.appearance", "light"]
+        app.launch()
+        XCTAssertTrue(app.buttons["add-record"].waitForExistence(timeout: 15))
+        try requireRealHistory(app)
+        snapshot(app, "pro-real-history-english")
+        try auditVisibleContent(app)
+        app.swipeUp()
+        try auditVisibleContent(app)
+        app.buttons["tab-2"].tap()
+        try auditVisibleContent(app)
+        snapshot(app, "pro-settings-english")
+    }
+
+    @MainActor
+    private func requireRealHistory(_ app: XCUIApplication) throws {
+        guard app.descendants(matching: .any)["history-record"].firstMatch.exists else {
+            throw XCTSkip("Requires the private real-history seed in isolated storage; see docs/ios-records.md.")
         }
-        XCTFail("Cannot reach button: " + identifier)
+    }
+
+    @MainActor
+    private func auditVisibleContent(_ app: XCUIApplication) throws {
+        let top = app.navigationBars.firstMatch.frame.maxY + 8
+        let bottom = app.buttons["tab-1"].frame.minY - 48
+        try app.performAccessibilityAudit(for: [.contrast, .elementDetection, .sufficientElementDescription]) { issue in
+            // iOS 26 audits rows underneath the native scroll-edge fade/tab bar.
+            // Scroll and audit again above so these same rows are checked unobscured.
+            if issue.auditType == .contrast, let element = issue.element,
+               element.frame.maxY > bottom || element.frame.minY < top {
+                let report = XCTAttachment(string: "Native scroll-edge overlay: " + element.debugDescription)
+                report.name = "native-scroll-edge-contrast"; report.lifetime = .keepAlways; self.add(report)
+                return true
+            }
+            return false
+        }
+    }
+
+    @MainActor
+    private func fill(_ app: XCUIApplication, _ field: XCUIElement, _ value: String) {
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        let old = field.value as? String ?? ""
+        if !old.isEmpty && old != "—" {
+            field.press(forDuration: 1.2)
+            let selectAll = app.menuItems["全选"]
+            if selectAll.waitForExistence(timeout: 2) { selectAll.tap() }
+            else {
+                let button = app.buttons["全选"]
+                XCTAssertTrue(button.waitForExistence(timeout: 2)); button.tap()
+            }
+        }
+        field.typeText(value)
+        XCTAssertEqual(field.value as? String, value)
     }
 
     @MainActor
     func testWatchHealthGuideNavigation() {
         let app = XCUIApplication()
-        app.launchArguments = ["--isolated-ui-test"]
+        app.launchArguments = ["--isolated-ui-test", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         app.launch()
         XCTAssertTrue(app.buttons["tab-2"].waitForExistence(timeout: 10))
         app.buttons["tab-2"].tap()
         app.buttons["手表健康权限"].tap()
         XCTAssertTrue(app.navigationBars["手表健康权限"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["在手表本机操作"].exists)
         XCTAssertTrue(app.staticTexts["设置 → 健康 → 数据来源、App 和服务 → 健身计数器"].exists)
         XCTAssertTrue(app.staticTexts["开启「允许写入」中的「体能训练」。"].exists)
         snapshot(app, "watch-health-permission-guide")
@@ -126,7 +245,7 @@ final class PhoneNavigationTests: XCTestCase {
     @MainActor
     func testCaptureStartTimeoutCancellationAndLateReply() {
         let app = XCUIApplication()
-        app.launchArguments = ["--isolated-ui-test", "--capture-start-timeout-test"]
+        app.launchArguments = ["--isolated-ui-test", "--capture-start-timeout-test", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         app.launch()
         XCTAssertTrue(app.buttons["tab-2"].waitForExistence(timeout: 10))
         app.buttons["tab-2"].tap()
@@ -156,53 +275,26 @@ final class PhoneNavigationTests: XCTestCase {
     }
 
     @MainActor
-    func testTrainingHomeAndDeveloperNavigation() {
+    func testWatchHistoryViewerAndDeveloperNavigation() {
         let app = XCUIApplication()
-        app.launchArguments = ["--isolated-ui-test"]
+        app.launchArguments = ["--isolated-ui-test", "--ui-test-storage-id=" + UUID().uuidString,
+                               "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         app.launch()
-        XCTAssertTrue(app.buttons["开始训练"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["开始训练"].exists)
-        XCTAssertFalse(app.tabBars.buttons["同步采集"].exists)
-        XCTAssertFalse(app.buttons["开发者工具"].exists)
-        XCTAssertFalse(XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch.exists)
-        app.buttons["深蹲"].tap()
-        snapshot(app, "training-home")
-
+        XCTAssertTrue(app.buttons["record-select"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["history-sync-workouts"].exists)
+        XCTAssertFalse(app.buttons["tab-0"].exists)
+        XCTAssertFalse(app.buttons["开始训练"].exists)
+        snapshot(app, "watch-history-empty-viewer")
+        app.buttons["history-sync-workouts"].tap()
+        XCTAssertTrue(app.buttons["sync-now"].exists)
+        app.navigationBars.buttons.firstMatch.tap()
         app.buttons["tab-2"].tap()
-        XCTAssertTrue(app.navigationBars["设置"].exists)
-        snapshot(app, "settings")
+        XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
         app.buttons["开发者工具"].tap()
-        XCTAssertTrue(app.navigationBars["开发者工具"].exists)
-        XCTAssertTrue(app.buttons["同步录像与采样"].exists)
-        XCTAssertTrue(app.buttons["采集记录与标注"].exists)
-        snapshot(app, "developer-tools")
-
         app.buttons["采集记录与标注"].tap()
-        XCTAssertTrue(app.navigationBars["采集记录"].exists)
-        app.navigationBars.buttons.firstMatch.tap()
-        app.buttons["同步录像与采样"].tap()
-        XCTAssertTrue(app.navigationBars["同步采集"].waitForExistence(timeout: 5))
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let allow = springboard.buttons["允许"]
-        if allow.waitForExistence(timeout: 2) { allow.tap() }
-        snapshot(app, "developer-capture")
-        app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["开发者工具"].waitForExistence(timeout: 5))
-        app.buttons["tab-0"].tap()
-        XCTAssertTrue(app.buttons["开始训练"].exists)
-        XCTAssertFalse(app.buttons["开始采集"].exists)
-
-        app.buttons["开始训练"].tap()
-        XCTAssertTrue(app.buttons["增加一次"].waitForExistence(timeout: 5))
-        app.buttons["增加一次"].tap()
-        XCTAssertTrue(app.staticTexts["已完成 1 次"].exists)
-        snapshot(app, "active-training")
-        tapVisible(app, "finish-training")
-        app.buttons["confirm-finish"].tap()
+        XCTAssertTrue(app.navigationBars["采集记录"].waitForExistence(timeout: 5))
         app.buttons["tab-1"].tap()
-        XCTAssertTrue(app.navigationBars["训练记录"].exists)
-        XCTAssertTrue(app.staticTexts["1 次"].exists)
-        snapshot(app, "saved-history")
+        XCTAssertTrue(app.buttons["record-select"].waitForExistence(timeout: 5))
     }
 
     @MainActor

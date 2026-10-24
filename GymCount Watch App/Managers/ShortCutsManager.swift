@@ -125,7 +125,9 @@ struct StopWorkoutIntent: AppIntent {
         let totalReps = session.totalReps
         
         // 结束锻炼
-        dataManager.endWorkout()
+        guard dataManager.endWorkout() else {
+            throw NSError(domain: "PowerReps", code: 1, userInfo: [NSLocalizedDescriptionKey: dataManager.saveError ?? String(localized: "保存失败，请重试")])
+        }
         
         print("✅ 快捷指令: 成功停止锻炼 \(exerciseName)，共完成 \(totalReps) 次")
         

@@ -229,3 +229,79 @@ final class BenchPressStream {
         return result
     }
 }
+
+// Causal feedback only. Never called by finish(), count reconciliation or video
+// labels. A full lower/press/held return is required before emitting one event.
+final class BenchPressFeedback {
+    static let version = "bench-live-top-return-20261021-v1"
+    private var last: Double?
+    private var top: SIMD3<Double>?
+    private var quiet: [(Double, SIMD3<Double>)] = []
+    private var state = 0
+    private var acceleration = 0.0, velocity = 0.0
+    private var start = 0.0, turn = 0.0, span = 0.0, down = 0.0, up = 0.0
+    private var heldSince: Double?
+
+    private func dot(_ a: SIMD3<Double>, _ b: SIMD3<Double>) -> Double { a.x*b.x + a.y*b.y + a.z*b.z }
+    private func norm(_ v: SIMD3<Double>) -> Double { sqrt(dot(v, v)) }
+    private func angle(_ a: SIMD3<Double>, _ b: SIMD3<Double>) -> Double { acos(max(-1, min(1, dot(a, b)))) }
+    private func clearPhase() {
+        top = nil; quiet = []; state = 0; velocity = 0; acceleration = 0; heldSince = nil
+    }
+    func reset() { clearPhase(); last = nil }
+
+    func append(_ sample: BenchMotionSample) -> Double? {
+        let values = [sample.t, sample.gravity.x, sample.gravity.y, sample.gravity.z,
+                      sample.user_acceleration.x, sample.user_acceleration.y, sample.user_acceleration.z,
+                      sample.rotation_rate.x, sample.rotation_rate.y, sample.rotation_rate.z]
+        guard values.allSatisfy(\.isFinite), norm(sample.gravity.value) >= 0.5 else { reset(); return nil }
+        guard let previous = last else { last = sample.t; return nil }
+        guard sample.t > previous else { return nil }
+        let dt = sample.t - previous
+        last = sample.t
+        guard dt <= 0.25 else { clearPhase(); return nil }
+        let g = sample.gravity.value/norm(sample.gravity.value)
+        let rate = norm(sample.rotation_rate.value)
+        acceleration += (dot(sample.user_acceleration.value, g)*9.80665 - acceleration)*min(1, dt/0.08)
+        velocity = velocity*exp(-dt/4) + acceleration*dt
+        guard let top else {
+            quiet.append((sample.t, g)); quiet.removeAll { sample.t - $0.0 > 0.5 }
+            if let first = quiet.first, sample.t - first.0 >= 0.45,
+               quiet.allSatisfy({ angle(g, $0.1) < 0.10 }) {
+                self.top = g; velocity = 0; acceleration = 0; quiet = []
+            }
+            return nil
+        }
+        let distance = angle(g, top)
+        guard distance <= 0.7, rate <= 3 else { clearPhase(); return nil }
+        if state == 0 {
+            if distance < 0.07, rate < 0.35, abs(acceleration) < 0.5 { velocity *= 0.6 }
+            // An unrack moving away from the reference is not a repetition.
+            if velocity > 0.09, distance > 0.08 { clearPhase(); return nil }
+            if velocity < -0.10, distance > 0.10 {
+                state = 1; start = sample.t; span = distance; down = 0; up = 0
+            }
+        } else {
+            span = max(span, distance)
+            guard sample.t - start <= 10 else { clearPhase(); return nil }
+            if state == 1 {
+                down += max(0, -velocity)*dt
+                if velocity > 0.08, sample.t - start > 0.25 { state = 2; turn = sample.t }
+            } else {
+                up += max(0, velocity)*dt
+                // Conservative face-plane gate excludes standing preparation in
+                // current recordings. Other wrist postures require device validation.
+                let returned = distance < 0.08 && abs(top.z) < 0.5 && rate < 1.5
+                if returned, sample.t - turn > 0.25, sample.t - start >= 1,
+                   span >= 0.15, min(down, up) >= 0.04 {
+                    if heldSince == nil { heldSince = sample.t }
+                    if sample.t - heldSince! >= 0.25 {
+                        state = 0; velocity = 0; acceleration = 0; heldSince = nil
+                        return sample.t
+                    }
+                } else { heldSince = nil }
+            }
+        }
+        return nil
+    }
+}

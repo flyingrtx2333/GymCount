@@ -23,7 +23,10 @@ struct CounterView: View {
         CounterPanel(
             exercise: currentSession?.exerciseType.displayName ?? "",
             count: currentSession?.totalReps ?? 0,
+            activeDuration: currentSession?.activeDuration,
             countingMessage: dataManager.countingMessage,
+            countingFailed: dataManager.countingFailed,
+            finished: currentSession?.endTime != nil,
             weight: currentSession?.weight ?? dataManager.settings.defaultWeight,
             onWeight: {
                 tempWeight = currentSession?.weight ?? dataManager.settings.defaultWeight
@@ -31,7 +34,7 @@ struct CounterView: View {
             },
             onMinus: { dataManager.removeRep(); WKInterfaceDevice.current().play(.click) },
             onPlus: { dataManager.addRep(); WKInterfaceDevice.current().play(.click) },
-            onEnd: { dataManager.endWorkout(); WKInterfaceDevice.current().play(.success) }
+            onEnd: { dataManager.endWorkout() }
         )
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden)
@@ -50,7 +53,10 @@ struct CounterView: View {
 struct CounterPanel: View {
     let exercise: String
     let count: Int
+    var activeDuration: TimeInterval? = nil
     var countingMessage: String = NSLocalizedString("detecting", comment: "检测中")
+    var countingFailed = false
+    var finished = false
     let weight: Double
     let onWeight: () -> Void
     let onMinus: () -> Void
@@ -91,11 +97,16 @@ struct CounterPanel: View {
                         .accessibilityLabel(String(localized: "增加次数"))
                 }
                 HStack(spacing: 5) {
-                    Circle().fill(GymStyle.mint).frame(width: 5, height: 5)
+                    Circle().fill(countingFailed ? Color.orange : GymStyle.mint).frame(width: 5, height: 5)
                     Text(countingMessage)
                         .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
                 }
-                Button(String(localized: "结束"), action: onEnd).buttonStyle(GymActionStyle())
+                if let activeDuration {
+                    Text(String(localized: "动作时长（估计）：\(Duration.seconds(activeDuration).formatted(.time(pattern: .minuteSecond)))"))
+                        .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
+                }
+                Button(finished ? String(localized: "重试保存") : String(localized: "结束"), action: onEnd).buttonStyle(GymActionStyle())
+                    .accessibilityIdentifier("workout.end")
             }
             .gymPageContent(fullWidthHeader: true)
         }

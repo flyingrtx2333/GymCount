@@ -22,11 +22,11 @@ struct PhoneCaptureView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 20))
                     .overlay(RoundedRectangle(cornerRadius: 20).stroke(Studio.line, lineWidth: 0.5))
                 Picker(String(localized: "动作"), selection: $exercise) {
-                    Text(String(localized: "杠铃深蹲")).tag("squat")
-                    Text(String(localized: "卧推")).tag("bench_press")
-                    Text(String(localized: "硬拉")).tag("deadlift")
-                    Text(String(localized: "弯举")).tag("bicep_curl")
-                    Text(String(localized: "非训练动作")).tag("other")
+                    Label(String(localized: "杠铃深蹲"), image: "Exercise-squat").tag("squat")
+                    Label(String(localized: "卧推"), image: "Exercise-bench_press").tag("bench_press")
+                    Label(String(localized: "硬拉"), image: "Exercise-deadlift").tag("deadlift")
+                    Label(String(localized: "弯举"), image: "Exercise-bicep_curl").tag("bicep_curl")
+                    Label(String(localized: "非训练动作"), image: "Exercise-other").tag("other")
                 }
                 .pickerStyle(.menu)
                 .padding(.horizontal, 16).frame(maxWidth: .infinity, minHeight: 52)
@@ -100,7 +100,10 @@ struct VideoCaptureHistoryView: View {
                             .font(.caption)
                             .foregroundStyle(item.cloudUploadComplete ? Studio.accent : Studio.muted)
                     }
-                    Text(item.exerciseTitle).font(.subheadline.weight(.medium))
+                    HStack(spacing: 8) {
+                        if let exercise = ExerciseType(rawValue: item.exercise) { RecordExerciseIcon(exercise: exercise, size: 22) }
+                        Text(item.exerciseTitle)
+                    }.font(.subheadline.weight(.medium))
                     HStack(alignment: .firstTextBaseline) {
                         if let actual = item.actualCount {
                             Text(String(localized: "实际 \(actual) 次"))
@@ -164,6 +167,7 @@ struct VideoCaptureHistoryView: View {
 }
 
 struct VideoCaptureDetailView: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     @EnvironmentObject var capture: PhoneCaptureStore
     let id: UUID
     @State private var player: AVPlayer?
@@ -203,7 +207,7 @@ struct VideoCaptureDetailView: View {
                                 .font(.caption).foregroundStyle(Studio.muted)
                         }
                         Divider().overlay(Studio.line)
-                        HStack(spacing: 12) {
+                        (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))) {
                             Button(String(localized: "标记一次")) {
                                 if let player {
                                     player.pause()
@@ -211,7 +215,7 @@ struct VideoCaptureDetailView: View {
                                     actual = capture.history.first(where: { $0.id == id })?.actualCount ?? actual
                                 }
                             }
-                            .buttonStyle(.borderedProminent).tint(Studio.accent).foregroundStyle(.black)
+                            .buttonStyle(.borderedProminent).tint(Studio.accent).foregroundStyle(Studio.onAccent)
                             .disabled(capture.uploading)
                             Button(String(localized: "撤销标记")) {
                                 capture.undoReference(id)
@@ -227,7 +231,7 @@ struct VideoCaptureDetailView: View {
                     .background(Studio.surface, in: RoundedRectangle(cornerRadius: 20))
                     if let offset = item.sensorOffsetInVideo {
                         DisclosureGroup {
-                            HStack(spacing: 12) {
+                            (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))) {
                                 Button(String(localized: "对齐 −0.1 秒")) { capture.adjustAlignment(id, by: -0.1) }
                                 Button(String(localized: "对齐 +0.1 秒")) { capture.adjustAlignment(id, by: 0.1) }
                                 Spacer(minLength: 0)
@@ -293,6 +297,7 @@ struct VideoCaptureDetailView: View {
                     confirmingUpload = true
                 }
                 .buttonStyle(StudioPrimaryButton())
+                .frame(maxWidth: .infinity)
                 .disabled(capture.uploading || !item.sensorComplete || item.actualCount == nil)
                 .padding(.horizontal, Studio.inset).padding(.vertical, 12)
                 .background(Studio.background)
@@ -305,7 +310,7 @@ struct VideoCaptureDetailView: View {
         )) {
             CaptureUploadProgressView(id: id)
                 .environmentObject(capture)
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
                 .interactiveDismissDisabled(capture.uploading)
         }
         .onDisappear { player?.pause() }
@@ -316,6 +321,7 @@ private struct CaptureUploadProgressView: View {
     @EnvironmentObject var capture: PhoneCaptureStore
     let id: UUID
     var body: some View {
+        ScrollView {
         VStack(spacing: 20) {
             if let status = capture.uploadStatus, status.id == id {
                 Image(systemName: status.stage == .succeeded ? "checkmark.circle.fill" : status.stage == .failed ? "exclamationmark.triangle.fill" : "arrow.up.circle")
@@ -347,7 +353,8 @@ private struct CaptureUploadProgressView: View {
         }
         .multilineTextAlignment(.center)
         .padding(Studio.inset * 2)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        }
         .background(Studio.background)
     }
 }

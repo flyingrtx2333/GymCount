@@ -162,7 +162,7 @@
 "训练偏好" = "Training Preferences";
 "训练总结" = "Workout Summary";
 "训练时长" = "Duration";
-"训练记录" = "Workout History";
+"训练记录" = "Records";
 "训练记录保存失败。" = "Could not save the workout.";
 "训练详情" = "Workout Details";
 "训练量 = 各组重量 × 次数之和" = "Volume is the sum of weight × reps for each set";
@@ -201,6 +201,22 @@
 "非训练动作" = "Non-workout Activity";
 "默认重量：%.1f 公斤" = "Default weight: %.1f kg";
 
+/* Watch action time and phone history viewer */
+"动作时长（估计）：%@" = "Action time (estimated): %@";
+"动作时长未测量" = "Action time not measured";
+"请在 Apple Watch 上选择动作并开始训练，保存后会同步到这里。" = "Choose an exercise and start training on Apple Watch. Saved workouts will sync here.";
+"动作时长（估计）" = "Action Time (Estimated)";
+"训练总用时" = "Total Elapsed Time";
+"未测量" = "Not measured";
+"未归档的手机记录" = "Unsaved iPhone Record";
+"旧版手机草稿仍保留，可保存到历史记录。" = "Your earlier iPhone draft is preserved. You can save it to history.";
+"保存已有草稿" = "Save Existing Draft";
+"清除空草稿" = "Clear Empty Draft";
+
+/* Source-faithful legacy elapsed time */
+"旧版记录 · 总用时 %@" = "Legacy record · Total time %@";
+"%lld 组 · 总用时 %@" = "%lld sets · Total time %@";
+
 /* Local capture history deletion */
 "删除" = "Delete";
 "删除这条采集记录？" = "Delete this capture?";
@@ -230,3 +246,101 @@
 
 /* Capture review controls */
 "采样对齐" = "Sample Alignment";
+
+// Workout records
+"%@ · %@" = "%@ · %@";
+"%@ 公斤 · %lld 次" = "%@ kg · %lld reps";
+"%@ 公斤 × %lld 次" = "%@ kg × %lld reps";
+"%lld" = "%lld";
+"—" = "—";
+"保存" = "Save";
+"保存失败，请检查输入后重试。" = "Could not save. Check your entries and try again.";
+"全部动作" = "All exercises";
+"全部时间" = "All time";
+"删除记录" = "Delete record";
+"删除这条训练记录？" = "Delete this workout?";
+"指标" = "Metric";
+"日期" = "Date";
+"时长（分钟，可选）" = "Duration (minutes, optional)";
+"时间范围" = "Date range";
+"最大重量（公斤）" = "Maximum weight (kg)";
+"最高重量" = "Best weight";
+"每日记录" = "Daily records";
+"添加一组" = "Add set";
+"移除此组" = "Remove set";
+"累计次数" = "Total reps";
+"编辑记录" = "Edit record";
+"补记训练" = "Log workout";
+"记录" = "Records";
+"记录不存在" = "Record not found";
+"趋势" = "Trends";
+"近30天" = "Last 30 days";
+"近7天" = "Last 7 days";
+"#%lld" = "#%lld";
+
+/* Professional records */
+"下一项" = "Next";
+"不支持此备份版本" = "Unsupported backup version";
+"保留现有记录" = "Keep existing records";
+"保留草稿" = "Keep draft";
+"保留这次编辑？" = "Keep these edits?";
+"全选" = "Select all";
+"删除所选记录" = "Delete selected records";
+"删除所选记录？" = "Delete selected records?";
+"参考上次" = "Use last workout";
+"合并恢复" = "Merge backup";
+"同步失败" = "Sync failed";
+"备份文件损坏或内容无效" = "The backup is damaged or invalid";
+"备份日期" = "Backup date";
+"备注" = "Notes";
+"备注最多 2000 字" = "Notes cannot exceed 2,000 characters";
+"备注（可选）" = "Notes (optional)";
+"外观" = "Appearance";
+"导出当前筛选记录" = "Export filtered records";
+"导出恢复前快照" = "Export pre-restore backup";
+"尚未配对手表" = "No paired Apple Watch";
+"已同步" = "Up to date";
+"帮助" = "Help";
+"开始日期" = "Start date";
+"恢复备份" = "Restore backup";
+"恢复完成" = "Restore complete";
+"手表同步" = "Watch sync";
+"放弃修改" = "Discard changes";
+"数据" = "Data";
+"数据管理" = "Data management";
+"新增草稿" = "New drafts";
+"新增记录" = "New records";
+"日期范围" = "Date range";
+"时长应在 0–1440 分钟之间" = "Duration must be 0–1,440 minutes";
+"暂无记录" = "No records";
+"最后同步" = "Last synced";
+"有备注" = "Has notes";
+"查看当天记录" = "View records for this day";
+"正在接收记录" = "Receiving records";
+"每日最高重量" = "Daily best weight";
+"每日次数" = "Daily reps";
+"浅色" = "Light";
+"深色" = "Dark";
+"清除筛选" = "Clear filters";
+"立即同步" = "Sync now";
+"等待手表连接" = "Waiting for Apple Watch";
+"组明细 CSV" = "Sets CSV";
+"结束日期" = "End date";
+"继续编辑" = "Continue editing";
+"自定义日期" = "Custom dates";
+"草稿" = "Drafts";
+"训练汇总 CSV" = "Workouts CSV";
+"训练组" = "Sets";
+"训练记录备份" = "Back up workout records";
+"记录未能保存，请重试" = "Could not save records. Try again.";
+"请先清空次数，再参考上次" = "Clear the reps before using a previous workout";
+"请安装手表应用" = "Install the Watch app";
+"请输入有效次数和重量" = "Enter valid reps and weight";
+"跟随系统" = "System";
+"近90天" = "Last 90 days";
+"连接手表失败，请重试" = "Could not connect to Apple Watch. Try again.";
+"选择" = "Select";
+"选择日期" = "Choose date";
+"重量 0–500 公斤，次数 1–999" = "Weight: 0–500 kg. Reps: 1–999.";
+"%lld 条记录" = "%lld records";
+"%lld 组" = "%lld sets";

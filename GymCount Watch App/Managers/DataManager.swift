@@ -18,6 +18,13 @@ class DataManager: ObservableObject {
     @Published var settings = AppSettings.shared
     @Published var isFirstLaunch = true
     @Published var countingMessage = String(localized: "检测中")
+    @Published var completedWorkout: WorkoutHistory?
+    @Published var saveError: String?
+    @Published var countingFailed = false
+    private var diagnostics: WorkoutDiagnostics?
+    private let historyURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("WatchHistory/history-v1.json")
+    private var historyReadFailed = false
+    private let feedbackArchive = WorkoutFeedbackArchive(folder: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("WorkoutFeedback"))
     private var automaticBenchCycles: [UUID: BenchCycle] = [:]
     private var removedBenchIDs: Set<UUID> = []
     
@@ -44,15 +51,38 @@ class DataManager: ObservableObject {
         motionDetector.onRepDetected = { [weak self] in
             self?.addRep()
         }
+        motionDetector.onSquatCompletion = { [weak self] in
+            guard self?.currentSession?.exerciseType == .squat else { return }
+            self?.diagnostics?.raw.markFeedback(at: ProcessInfo.processInfo.systemUptime)
+            WKInterfaceDevice.current().play(.directionUp)
+        }
+        motionDetector.onBenchCompletion = { [weak self] in
+            guard self?.currentSession?.exerciseType == .benchPress else { return }
+            self?.diagnostics?.raw.markFeedback(at: ProcessInfo.processInfo.systemUptime)
+            WKInterfaceDevice.current().play(.directionUp)
+        }
         motionDetector.onBenchAnalysis = { [weak self] in self?.applyBenchAnalysis($0) }
-        motionDetector.onCountingError = { [weak self] in self?.countingMessage = $0 }
+        motionDetector.onCountingError = { [weak self] in self?.reportCountingFailure($0) }
+        motionDetector.onActiveDuration = { [weak self] duration in
+            guard let self, var session = self.currentSession else { return }
+            let cycles = session.repRecords.compactMap { self.automaticBenchCycles[$0.id] }
+            // A manually added rep has no measured start. Removed false positives
+            // must not keep contributing time after the next analysis update.
+            session.activeDuration = duration != nil && cycles.count == session.totalReps ? ActionTiming.total(cycles.map {
+                ActionTiming.Interval(start: $0.start, end: $0.end)
+            }) : nil
+            self.currentSession = session
+        }
     }
 
     private func applyBenchAnalysis(_ result: BenchAnalysis) {
         guard var session = currentSession, session.exerciseType == .benchPress else { return }
-        countingMessage = result.status == "insufficient_data" ? String(localized: "采样中断，请手动核对") : String(localized: "估计中 · 结束时核准")
-        guard result.status != "insufficient_data" else { return }
-        let oldCount = session.totalReps
+        if result.status == "insufficient_data" {
+            countingFailed = true
+            countingMessage = String(localized: "采样中断，请手动核对")
+            return
+        }
+        if !countingFailed { countingMessage = String(localized: "估计中 · 结束时核准") }
         var activeIDs: Set<UUID> = []
         let anchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
         for cycle in result.cycles {
@@ -75,7 +105,6 @@ class DataManager: ObservableObject {
         session.repRecords.removeAll { automaticBenchCycles[$0.id] != nil && !activeIDs.contains($0.id) }
         session.repRecords.sort { $0.timestamp < $1.timestamp }
         currentSession = session
-        if session.totalReps > oldCount { WKInterfaceDevice.current().play(.directionUp) }
     }
     
     private func setupHealthKit() {
@@ -101,12 +130,14 @@ class DataManager: ObservableObject {
     
     // MARK: - 数据持久化
     private func loadData() {
-        // 加载历史记录
-        if let historyData = userDefaults.data(forKey: historyKey),
-           let history = try? JSONDecoder().decode([WorkoutHistory].self, from: historyData) {
-            workoutHistory = history
+        if FileManager.default.fileExists(atPath: historyURL.path) {
+            do { workoutHistory = try JSONDecoder().decode([WorkoutHistory].self, from: Data(contentsOf: historyURL)) }
+            catch { historyReadFailed = true; saveError = String(localized: "训练记录读取失败，请重新打开 App") }
+        } else if let historyData = userDefaults.data(forKey: historyKey) {
+            do { workoutHistory = try JSONDecoder().decode([WorkoutHistory].self, from: historyData) }
+            catch { historyReadFailed = true; saveError = String(localized: "训练记录读取失败，请重新打开 App") }
         }
-        
+
         // 加载设置
         if let settingsData = userDefaults.data(forKey: settingsKey),
            let loadedSettings = try? JSONDecoder().decode(AppSettings.self, from: settingsData) {
@@ -114,29 +145,59 @@ class DataManager: ObservableObject {
         }
     }
     
-    private func saveData() {
-        // 保存历史记录
-        if let historyData = try? JSONEncoder().encode(workoutHistory) {
-            userDefaults.set(historyData, forKey: historyKey)
+    @discardableResult
+    private func persistHistory(_ history: [WorkoutHistory]) -> Bool {
+        guard !historyReadFailed else {
+            saveError = String(localized: "训练记录读取失败，请重新打开 App")
+            return false
         }
-        
-        // 保存设置
+        do {
+            let data = try JSONEncoder().encode(history)
+            try FileManager.default.createDirectory(at: historyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: historyURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            // Keep the original defaults snapshot as a migration fallback.
+            return true
+        } catch {
+            saveError = String(localized: "保存失败，训练仍在本页，请重试")
+            WKInterfaceDevice.current().play(.failure)
+            return false
+        }
+    }
+
+    private func saveData() {
+        _ = persistHistory(workoutHistory)
         if let settingsData = try? JSONEncoder().encode(settings) {
             userDefaults.set(settingsData, forKey: settingsKey)
         }
     }
-    
+
+    func reportCountingFailure(_ message: String) {
+        guard currentSession != nil else { return }
+        countingMessage = message
+        if !countingFailed { WKInterfaceDevice.current().play(.failure) }
+        countingFailed = true
+    }
+
     // MARK: - 锻炼会话管理
     func startWorkout(exerciseType: ExerciseType, weight: Double = 0.0) {
+        guard currentSession == nil else { return }
+        completedWorkout = nil; saveError = nil; countingFailed = false
         automaticBenchCycles = [:]; removedBenchIDs = []
         countingMessage = exerciseType == .benchPress ? String(localized: "估计中 · 前两次一起确认") : String(localized: "检测中")
-        WKInterfaceDevice.current().play(.click)
+        if exerciseType == .deadlift { WKInterfaceDevice.current().play(.click) }
         currentSession = WorkoutSession(
             exerciseType: exerciseType,
             startTime: Date(),
             weight: weight
         )
         
+        let diagnostics = WorkoutDiagnostics()
+        self.diagnostics = diagnostics
+        motionDetector.onRawAcceleration = { diagnostics.raw.append($0) }
+        motionDetector.onRawDeviceMotion = { diagnostics.raw.appendMotion($0) }
+        motionDetector.onRawBenchAnalysis = { diagnostics.raw.setBenchAnalysis($0) }
+        motionDetector.onRawRepDetected = { diagnostics.raw.markRep(at: $0) }
+
         // 创建 HealthKit 运动会话
         startHKWorkoutSession(exerciseType: exerciseType)
         
@@ -148,6 +209,7 @@ class DataManager: ObservableObject {
     func addRep() {
         guard var session = currentSession else { return }
         session.addRep()
+        session.activeDuration = nil
         currentSession = session
     }
     
@@ -155,53 +217,69 @@ class DataManager: ObservableObject {
         guard var session = currentSession else { return }
         if let id = session.repRecords.last?.id, automaticBenchCycles[id] != nil { removedBenchIDs.insert(id) }
         session.removeRep()
+        session.activeDuration = nil
         currentSession = session
     }
     
-    func endWorkout() {
-        // Finish the centered-filter pass before copying/persisting the session.
+    @discardableResult
+    func endWorkout() -> Bool {
+        saveError = nil
+        // Stop first so the finalized count and diagnostic events describe the same set.
         motionDetector.stopDetection()
-        guard var session = currentSession else { return }
-        session.endSession()
-        
-        // 结束 HealthKit 运动会话
+        guard var session = currentSession else { return false }
+        if session.endTime == nil { session.endSession() }
+        currentSession = session
         endHKWorkoutSession()
-        
-        // 添加到历史记录
-        let history = WorkoutHistory(from: session)
-        workoutHistory.insert(history, at: 0) // 最新的在前面
-        
-        // 保存数据
-        saveData()
+        let history = WorkoutHistory(id: session.id, date: session.startTime,
+            exerciseType: session.exerciseType, totalReps: session.totalReps,
+            maxWeight: session.repRecords.map(\.weight).max() ?? session.weight,
+            duration: session.duration ?? 0, activeDuration: session.activeDuration)
+        let next = [history] + workoutHistory.filter { $0.id != history.id }
+        guard persistHistory(next) else { return false }
+        workoutHistory = next
+        do {
+            try feedbackArchive.retain(history, recording: diagnostics?.recording(for: history))
+        } catch {
+            // A diagnostic failure must not falsely claim the saved workout was lost.
+            saveError = String(localized: "训练已保存，但反馈采样保存失败")
+        }
+        diagnostics = nil
+        motionDetector.onRawAcceleration = nil; motionDetector.onRawDeviceMotion = nil
+        motionDetector.onRawBenchAnalysis = nil; motionDetector.onRawRepDetected = nil
+        currentSession = nil
+        completedWorkout = history
+        WKInterfaceDevice.current().play(.success)
         #if DEBUG || GYMCOUNT_CAPTURE
         Task { @MainActor in WatchCaptureLink.shared.syncWorkouts() }
         #endif
-        
-        // 同步到 HealthKit
         if settings.healthKitSyncEnabled && settings.autoSyncToHealthKit {
-            Task {
-                await syncWorkoutToHealthKit(history)
-            }
+            Task { await syncWorkoutToHealthKit(history) }
         }
-        
-        // 清除当前会话
-        currentSession = nil
+        return true
     }
-    
+
     func resetCurrentWorkout() {
         motionDetector.stopDetection()
+        endHKWorkoutSession()
+        diagnostics = nil
+        motionDetector.onRawAcceleration = nil; motionDetector.onRawDeviceMotion = nil
+        motionDetector.onRawBenchAnalysis = nil; motionDetector.onRawRepDetected = nil
         currentSession = nil
     }
     
     // MARK: - 历史记录管理
     func deleteHistoryItem(_ item: WorkoutHistory) {
-        workoutHistory.removeAll { $0.id == item.id }
-        saveData()
+        let next = workoutHistory.filter { $0.id != item.id }
+        guard persistHistory(next) else { return }
+        workoutHistory = next
+        try? feedbackArchive.remove(item.id)
     }
     
     func clearAllHistory() {
-        workoutHistory.removeAll()
-        saveData()
+        guard persistHistory([]) else { return }
+        let ids = workoutHistory.map(\.id)
+        workoutHistory = []
+        for id in ids { try? feedbackArchive.remove(id) }
     }
     
     // MARK: - 调试方法
@@ -636,7 +714,7 @@ class DataManager: ObservableObject {
             hkWorkoutSession?.startActivity(with: Date())
             print("🏃‍♂️ 开始 HealthKit 运动会话")
         } catch {
-            print("❌ 创建 HealthKit 运动会话失败: \(error)")
+            reportCountingFailure(String(localized: "训练会话启动失败，请保持 App 打开"))
         }
     }
     
@@ -680,6 +758,8 @@ class WorkoutSessionDelegate: NSObject, HKWorkoutSessionDelegate {
     }
     
     func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
-        print("❌ 运动会话失败: \(error)")
+        DispatchQueue.main.async { [weak self] in
+            self?.dataManager?.reportCountingFailure(String(localized: "训练会话中断，请核对次数"))
+        }
     }
 }

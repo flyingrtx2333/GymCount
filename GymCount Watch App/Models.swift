@@ -81,6 +81,7 @@ struct WorkoutSession: Codable, Identifiable {
     var endTime: Date?
     var repRecords: [RepRecord] = []
     var weight: Double = 0.0 // 当前重量设置
+    var activeDuration: TimeInterval?
     
     init(exerciseType: ExerciseType, startTime: Date, weight: Double = 0.0) {
         self.id = UUID()
@@ -126,14 +127,16 @@ struct WorkoutHistory: Codable, Identifiable {
     let totalReps: Int
     let maxWeight: Double
     let duration: TimeInterval
+    var activeDuration: TimeInterval?
 
-    init(id: UUID, date: Date, exerciseType: ExerciseType, totalReps: Int, maxWeight: Double, duration: TimeInterval) {
+    init(id: UUID, date: Date, exerciseType: ExerciseType, totalReps: Int, maxWeight: Double, duration: TimeInterval, activeDuration: TimeInterval? = nil) {
         self.id = id
         self.date = date
         self.exerciseType = exerciseType
         self.totalReps = totalReps
         self.maxWeight = maxWeight
         self.duration = duration
+        self.activeDuration = activeDuration
     }
     
     init(from session: WorkoutSession) {
@@ -142,7 +145,9 @@ struct WorkoutHistory: Codable, Identifiable {
         self.exerciseType = session.exerciseType
         self.totalReps = session.totalReps
         self.maxWeight = session.repRecords.map { $0.weight }.max() ?? 0.0
-        self.duration = session.duration ?? 0.0
+        let elapsed = session.duration ?? 0.0
+        self.duration = elapsed
+        self.activeDuration = session.activeDuration.map { min(elapsed, max(0, $0)) }
     }
 }
 

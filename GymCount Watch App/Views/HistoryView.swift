@@ -14,6 +14,7 @@ struct HistoryView: View {
     @Binding var showingHistory: Bool
     @State private var selectedExercise: ExerciseType = .benchPress
     @State private var currentWeekDate: Date = Date()
+    @State private var feedbackWorkout: WorkoutHistory?
 
     var body: some View {
         ScrollView {
@@ -48,6 +49,22 @@ struct HistoryView: View {
                 .frame(height: 72)
                 .padding(.horizontal, 2)
 
+                ForEach(dataManager.workoutHistory.filter {
+                    $0.exerciseType == selectedExercise &&
+                    Calendar.current.isDate($0.date, equalTo: currentWeekDate, toGranularity: .weekOfYear)
+                }.sorted { $0.date > $1.date }) { workout in
+                    Button { feedbackWorkout = workout } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text(workout.date, format: .dateTime.month().day().hour().minute())
+                                Spacer(minLength: 2)
+                                Text(String(localized: "\(workout.totalReps) 次"))
+                            }.font(GymStyle.caption)
+                            Text(String(localized: "计数反馈")).font(GymStyle.detail).foregroundStyle(GymStyle.mint)
+                        }.frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityIdentifier("feedback.history." + workout.id.uuidString)
+                }
+
                 Spacer(minLength: 4)
             }
             .gymPageContent()
@@ -56,6 +73,7 @@ struct HistoryView: View {
         .toolbar(.hidden)
         .tint(GymStyle.mint)
         .gymPage()
+        .sheet(item: $feedbackWorkout) { WorkoutFeedbackView(workout: $0) }
 
     }
 
@@ -132,6 +150,8 @@ struct ExerciseTypePicker: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(exercise.displayName)
+                .accessibilityIdentifier("history.exercise." + exercise.rawValue)
             }
         }
     }
@@ -154,6 +174,7 @@ struct WeekNavigatorRow: View {
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "上一周"))
 
             Text(title)
                 .font(GymStyle.detail)
@@ -170,6 +191,7 @@ struct WeekNavigatorRow: View {
             }
             .buttonStyle(.plain)
             .disabled(isCurrentWeek)
+            .accessibilityLabel(String(localized: "下一周"))
         }
         .padding(.horizontal, 2)
     }

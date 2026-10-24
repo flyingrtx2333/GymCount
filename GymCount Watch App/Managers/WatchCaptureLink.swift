@@ -136,7 +136,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
         for offset in stride(from: 0, to: min(pending.count, slots * WorkoutSync.maximumBatchSize), by: WorkoutSync.maximumBatchSize) {
             let records = pending[offset..<min(offset + WorkoutSync.maximumBatchSize, pending.count)].map {
                 WorkoutSync.Record(id: $0.id, date: $0.date, exercise: $0.exerciseType.rawValue,
-                    totalReps: $0.totalReps, maxWeight: $0.maxWeight, duration: $0.duration)
+                    totalReps: $0.totalReps, maxWeight: $0.maxWeight, duration: $0.duration, activeDuration: $0.activeDuration)
             }
             guard let payload = try? WorkoutSync.message(records) else { continue }
             submittedWorkouts.formUnion(records.map(\.id))
@@ -218,7 +218,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             if attemptedInitialAuthorization && needsAuthorization {
                 reply(["error": String(localized: "手表尚未授权，请在手表检查同步权限")]); return
             }
-            WKInterfaceDevice.current().play(.click)
+            if !["bench_press", "squat"].contains(message["exercise"] as? String ?? "") { WKInterfaceDevice.current().play(.click) }
             // A transport reply must never wait for a human to dismiss a permission sheet.
             guard !needsAuthorization else {
                 reply(["authorizationPending": true])
@@ -398,7 +398,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
     }
 
     func startFromWatch(exercise: String) async {
-        WKInterfaceDevice.current().play(.click)
+        if !["bench_press", "squat"].contains(exercise) { WKInterfaceDevice.current().play(.click) }
         guard await authorizeCapture() else { return }
         guard !requestingPhone, WCSession.default.activationState == .activated, WCSession.default.isReachable else {
             message = String(localized: "请先打开手机同步采集页"); WKInterfaceDevice.current().play(.failure); return
