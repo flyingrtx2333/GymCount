@@ -16,7 +16,6 @@ enum Studio {
     static let ink = adaptive(0x252722, 0xF4F1E8)
     static let muted = adaptive(0x6A6D65, 0xABA99F)
     static let accent = adaptive(0x806124, 0xD5BE86)
-    static let gold = adaptive(0xE8D8B3, 0x514830)
     static let line = adaptive(0xE4E1D7, 0x3B3B35)
     static let onAccent = adaptive(0xFFFFFF, 0x222019)
 }

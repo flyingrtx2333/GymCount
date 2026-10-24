@@ -210,14 +210,12 @@ struct StatsRow: View {
             StatCard(
                 value: "\(reps)",
                 unit: NSLocalizedString("times", comment: "次"),
-                change: repChange,
-                accentColor: GymStyle.mint
+                change: repChange
             )
             StatCard(
                 value: "\(weight)",
                 unit: NSLocalizedString("kg", comment: "kg"),
-                change: weightChange,
-                accentColor: GymStyle.mint
+                change: weightChange
             )
         }
     }
@@ -227,7 +225,6 @@ struct StatCard: View {
     let value: String
     let unit: String
     let change: Int
-    let accentColor: Color
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -252,14 +249,6 @@ struct StatCard: View {
         .padding(.horizontal, 4)
         .padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.clear)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Color.clear, lineWidth: 0)
-        )
     }
 }
 

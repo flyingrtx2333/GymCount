@@ -7,7 +7,6 @@
 
 import SwiftUI
 import HealthKit
-import Intents
 
 enum WatchHealthPermissionGuide {
     static let path = String(localized: "设置 → 健康 → 数据来源、App 和服务 → 健身计数器")
@@ -22,7 +21,6 @@ struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var tempSettings: AppSettings
     @State private var healthKitStatus: HKAuthorizationStatus = .notDetermined
-    @State private var siriStatus: INSiriAuthorizationStatus = .notDetermined
     @State private var showingHealthGuide = false
 
     var appVersion: String {
@@ -57,8 +55,6 @@ struct SettingsView: View {
                 Section {
                     WeightRow(
                         label: NSLocalizedString("equipment weight", comment: "器械重量"),
-                        icon: "dumbbell.fill",
-                        iconColor: GymStyle.mint,
                         value: $tempSettings.defaultWeight,
                         step: 2.5,
                         minValue: 0
@@ -69,8 +65,6 @@ struct SettingsView: View {
                 Section {
                     WeightRow(
                         label: NSLocalizedString("my_weight", comment: "我的体重"),
-                        icon: "person.fill",
-                        iconColor: GymStyle.mint,
                         value: $tempSettings.userBodyWeight,
                         step: 1.0,
                         minValue: 30,
@@ -288,8 +282,6 @@ struct SettingsView: View {
 
 struct WeightRow: View {
     let label: String
-    let icon: String
-    let iconColor: Color
     @Binding var value: Double
     let step: Double
     var minValue: Double = 0
@@ -345,10 +337,10 @@ struct WeightAdjustmentView: View {
                     Text(String(localized: "公斤")).font(GymStyle.body).foregroundStyle(GymStyle.muted)
                 }
                 HStack(spacing: 20) {
-                    CircleButton(icon: "minus", color: GymStyle.mint, size: 44,
+                    CircleButton(icon: "minus", size: 44,
                                  disabled: value - step < minValue) { value -= step }
                         .accessibilityLabel(String(localized: "减少重量"))
-                    CircleButton(icon: "plus", color: GymStyle.mint, size: 44,
+                    CircleButton(icon: "plus", size: 44,
                                  disabled: value + step > maxValue) { value += step }
                         .accessibilityLabel(String(localized: "增加重量"))
                 }

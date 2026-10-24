@@ -85,7 +85,7 @@ struct CounterPanel: View {
                 .frame(height: 28)
 
                 HStack(spacing: 2) {
-                    CircleButton(icon: "minus", color: GymStyle.mint, size: 44, disabled: count == 0, action: onMinus)
+                    CircleButton(icon: "minus", size: 44, disabled: count == 0, action: onMinus)
                         .accessibilityLabel(String(localized: "减少次数"))
                     Text("\(count)")
                         .font(GymStyle.trainingCounter)
@@ -93,7 +93,7 @@ struct CounterPanel: View {
                         .lineLimit(1).minimumScaleFactor(0.5)
                         .frame(maxWidth: .infinity)
                         .contentTransition(.numericText())
-                    CircleButton(icon: "plus", color: GymStyle.mint, size: 44, action: onPlus)
+                    CircleButton(icon: "plus", size: 44, action: onPlus)
                         .accessibilityLabel(String(localized: "增加次数"))
                 }
                 HStack(spacing: 5) {
@@ -118,7 +118,6 @@ struct CounterPanel: View {
 
 struct CircleButton: View {
     let icon: String
-    let color: Color
     var size: CGFloat = 44
     var disabled: Bool = false
     let action: () -> Void

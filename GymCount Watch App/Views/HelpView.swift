@@ -10,10 +10,9 @@ import SwiftUI
 struct HelpView: View {
     @Environment(\.presentationMode) var presentationMode
 
-    private let sections: [(icon: String, color: Color, title: String, key: String, items: [String])] = [
+    private let sections: [(icon: String, title: String, key: String, items: [String])] = [
         (
             icon: "star.fill",
-            color: .yellow,
             title: NSLocalizedString("help_features_title", comment: "功能介绍"),
             key: "features",
             items: [
@@ -26,7 +25,6 @@ struct HelpView: View {
         ),
         (
             icon: "hand.tap.fill",
-            color: .blue,
             title: NSLocalizedString("help_usage_title", comment: "使用方法"),
             key: "usage",
             items: [
@@ -39,7 +37,6 @@ struct HelpView: View {
         ),
         (
             icon: "waveform.path",
-            color: .green,
             title: NSLocalizedString("help_auto_detection_title", comment: "自动检测"),
             key: "detect",
             items: [
@@ -51,7 +48,6 @@ struct HelpView: View {
         ),
         (
             icon: "mic.fill",
-            color: .purple,
             title: NSLocalizedString("help_shortcuts_title", comment: "快捷指令"),
             key: "shortcuts",
             items: [
@@ -63,7 +59,6 @@ struct HelpView: View {
         ),
         (
             icon: "exclamationmark.triangle.fill",
-            color: .orange,
             title: NSLocalizedString("help_notes_title", comment: "注意事项"),
             key: "notes",
             items: [
@@ -84,7 +79,6 @@ struct HelpView: View {
                     ForEach(sections, id: \.key) { section in
                         HelpCard(
                             icon: section.icon,
-                            iconColor: section.color,
                             title: section.title,
                             items: section.items
                         )
@@ -105,7 +99,6 @@ struct HelpView: View {
 
 struct HelpCard: View {
     let icon: String
-    let iconColor: Color
     let title: String
     let items: [String]
 
@@ -136,10 +129,6 @@ struct HelpCard: View {
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(GymStyle.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Color.clear, lineWidth: 0)
-                )
         )
     }
 }

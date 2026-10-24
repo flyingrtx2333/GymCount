@@ -25,11 +25,11 @@ struct WorkoutFeedbackView: View {
                 } else if entry?.recording != nil {
                     Text(String(localized: "实际次数")).font(GymStyle.caption).foregroundStyle(.secondary)
                     HStack(spacing: 4) {
-                        CircleButton(icon: "minus", color: GymStyle.mint, disabled: actual == 0 || locked) { actual -= 1 }
+                        CircleButton(icon: "minus", disabled: actual == 0 || locked) { actual -= 1 }
                             .accessibilityLabel(String(localized: "减少实际次数"))
                         Text("\(actual)").font(GymStyle.counter).monospacedDigit().frame(maxWidth: .infinity)
                             .accessibilityIdentifier("feedback.actual")
-                        CircleButton(icon: "plus", color: GymStyle.mint, disabled: actual == 500 || locked) { actual += 1 }
+                        CircleButton(icon: "plus", disabled: actual == 500 || locked) { actual += 1 }
                             .accessibilityLabel(String(localized: "增加实际次数"))
                     }
                     if entry?.actualCount == nil {
