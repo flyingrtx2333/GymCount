@@ -3,13 +3,8 @@ import UIKit
 
 // One semantic palette shared by records, tools and upload sheets.
 enum Studio {
-    static let title = Font.largeTitle.weight(.semibold)
-    static let body = Font.body
-    static let button = Font.headline
-    static let detail = Font.subheadline
     static let inset: CGFloat = 20
     static let spacing: CGFloat = 16
-    static let buttonHeight: CGFloat = 48
     static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
         Color(uiColor: UIColor { trait in
             let hex = trait.userInterfaceStyle == .dark ? dark : light

@@ -19,3 +19,6 @@ design/exercise-icons/gymcount-exercise-icons.zip
 # Local design experiments and screenshot evidence
 /design/concepts/
 /design/evidence/
+/design/app-icon-*/
+/evidence/
+*.xcresult/
