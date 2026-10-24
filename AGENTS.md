@@ -48,7 +48,19 @@
 - 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.4-37/`。隔离发布源码位于 `/tmp/GymCount-TestFlight-1.1.4-37-20261023/source`，原工作区及无关设计改动保留。
 - 最初 1.1.3 (37) 上传被苹果拒绝（90062/90186）：1.1.3 已获批准并关闭追加构建。只升营销版本到 1.1.4 后重新归档上传成功，失败证据保留在 `TestFlight-1.1.3-37/`。本次没有提交正式版审核或修改已上架版本。
 
-## 最新 App Store 正式版：1.1.3（36）
+## 最新 App Store 提交：2026-10-24（40）
+
+- 版本：1.1.4 (40)，iPhone 与 Watch 一致；归档源码提交 `b15e0e2f63cf9c0c593a6b1621a360b859370344`，422 个源码文件 SHA-256 已核验。
+- Delivery UUID / ASC Build ID：`d293db2c-6be2-47d9-b164-4976bf49011c`；苹果 `BUILD-STATUS: VALID` / `APP_STORE_ELIGIBLE`。
+- App Store Version ID：`2ad53749-061c-4fd6-8cc8-055aa01d57aa`；Review Submission ID：`f02d30e2-5696-4f32-9cd5-064d59841525`。提交后版本及审核状态均为 `WAITING_FOR_REVIEW`，发布方式 `AFTER_APPROVAL`；尚未称为已上架，当前公开版本仍为 1.1.3。
+- 简体中文商店副标题改为“手表自动计数，手机专注记录”，更新介绍、关键词、推广文本及更新说明，覆盖记录、趋势、多组补记、草稿、备份恢复和 CSV 导出；保留既有审核联系人并更新操作说明。
+- iPhone 替换为 4 张白金风格截图，分别展示记录、趋势、补记与备份设置；5 张 Watch 截图保留。所有图片均为 `COMPLETE`，iPhone 图片顺序与来源校验和通过。截图来自当前生产界面和独立、明确标注的展示示例，不含用户真实训练资料。补记 PNG 处理停滞后换用 JPEG，最终已处理完成，原图保留。
+- 包含顶部筛选和右上角补记入口；修复退出补记后系统底栏重新出现、遮挡自定义导航的问题。39 版未提交审核，40 版包含此修复。没有新增 Watch 算法改动，沿用保存成功提示、震动及计数反馈。
+- 双端 Aqua 签名归档、导出、IPA 签名/版本/HealthKit/配套关系验证通过；两个独立 iPhone 工程 Release 构建通过。真实82条历史的记录/趋势检查、多组录入/键盘/草稿/重启检查共2项通过，最终截图及取消编辑后导航检查1项通过，均无运行时布局告警。生产源码与归档、原生预览逐文件匹配；截图脚本后续只修正了预填重量的录入方式，未改动生产源码。
+- IPA SHA-256：`54b0cd831f337baf3908fb23b3f8316f54ebcab0b6b63e2b68d2576a6f6b9168`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/AppStore-1.1.4-40/`。用户真机安装和记录未覆盖；实际佩戴、双端同步、真机文件导出恢复及人工 VoiceOver 仍待补验。临时发布 LaunchAgent 已移除。
+
+## 当前已上架 App Store 正式版：1.1.3（36）
 
 - 版本：1.1.3 (36)，iPhone 与 Watch 一致；发布应用源码：`aaf117b3bc3dd82b0d640a591d633fec361f7e0a`。
 - Delivery UUID / ASC Build ID：`4fb1984d-82c3-4772-8736-dbcb6ee08d35`。

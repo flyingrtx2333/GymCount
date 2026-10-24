@@ -16,12 +16,8 @@ final class StoreScreenshotsTests: XCTestCase {
         capture(app, "store-trends")
         app.buttons["tab-1"].tap()
         app.buttons["add-record"].tap()
-        let weight = app.textFields["重量（公斤）"].firstMatch
-        weight.tap()
-        let value = weight.value as? String ?? ""
-        if value != "—" { weight.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count)) }
-        weight.typeText("70")
-        app.buttons["下一项"].tap(); app.typeText("8"); app.buttons["完成"].tap()
+        XCTAssertEqual(app.textFields["重量（公斤）"].firstMatch.value as? String, "70")
+        app.textFields["次数"].firstMatch.tap(); app.typeText("8"); app.buttons["完成"].tap()
         for reps in ["8", "6"] {
             app.buttons["add-record-set"].tap(); app.typeText(reps); app.buttons["完成"].tap()
         }
