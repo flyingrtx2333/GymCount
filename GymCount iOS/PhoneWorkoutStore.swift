@@ -48,6 +48,35 @@ struct PhoneTrainingSession: Codable, Identifiable {
     }
 }
 
+enum RecordTimeMetric: CaseIterable, Hashable {
+    case elapsed, active
+
+    var title: String {
+        self == .elapsed ? String(localized: "训练总用时") : String(localized: "动作时长（估计）")
+    }
+
+    func seconds(in record: PhoneTrainingSession) -> TimeInterval? {
+        let value = self == .elapsed ? record.displayDuration : record.activeDuration
+        guard let value, value.isFinite, value >= 0 else { return nil }
+        return value
+    }
+}
+
+struct RecordDurationDay: Identifiable, Equatable {
+    let id: Date
+    let seconds: TimeInterval
+    let measuredRecords: Int
+    let recordCount: Int
+
+    static func summarize(_ records: [PhoneTrainingSession], metric: RecordTimeMetric, calendar: Calendar = .current) -> [Self] {
+        Dictionary(grouping: records, by: { calendar.startOfDay(for: $0.startTime) }).compactMap { day, records in
+            let values = records.compactMap { metric.seconds(in: $0) }
+            guard !values.isEmpty else { return nil }
+            return Self(id: day, seconds: values.reduce(0, +), measuredRecords: values.count, recordCount: records.count)
+        }.sorted { $0.id < $1.id }
+    }
+}
+
 // Editable text is preserved verbatim so unfinished fields survive relaunch.
 struct RecordSetDraft: Codable, Identifiable, Hashable {
     var id = UUID()

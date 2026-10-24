@@ -344,3 +344,11 @@
 "重量 0–500 公斤，次数 1–999" = "Weight: 0–500 kg. Reps: 1–999.";
 "%lld 条记录" = "%lld records";
 "%lld 组" = "%lld sets";
+"运动时间" = "Workout Time";
+"每日运动时间" = "Daily workout time";
+"累计时长" = "Total time";
+"暂无时长数据" = "No duration data";
+"%lld/%lld 条有时长" = "%lld/%lld records have duration";
+"时长" = "Duration";
+"分钟" = "min";
+"秒" = "sec";

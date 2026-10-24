@@ -82,6 +82,7 @@ final class M2RecordsTests: XCTestCase {
         XCTAssertEqual(app.textFields.matching(identifier: "次数").element(boundBy: 1).value as? String, "6")
         app.buttons["save-record"].tap()
         XCTAssertTrue(app.staticTexts["1 条记录"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["record-time-empty"].firstMatch.exists)
         app.buttons["history-record"].firstMatch.tap()
         XCTAssertEqual(app.descendants(matching: .any)["record-total-reps"].value as? String, "14 次")
         app.buttons["tab-3"].tap()
@@ -112,6 +113,28 @@ final class M2RecordsTests: XCTestCase {
         app.buttons["Cancel"].tap()
         app.buttons["tab-3"].tap()
         shot(app, "m2-integrated-trends-large-english")
+    }
+    @MainActor func testRecordTimeChart() {
+        let app = launch("m2-real-review")
+        XCTAssertTrue(app.staticTexts["82 条记录"].exists)
+        let chart = app.descendants(matching: .any)["record-time-chart"].firstMatch
+        XCTAssertTrue(chart.waitForExistence(timeout: 5))
+        shot(app, "record-time-all-light")
+        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["record-time-open-day"].waitForExistence(timeout: 5))
+        app.buttons["record-time-open-day"].tap()
+        XCTAssertLessThan(app.buttons["history-record"].firstMatch.frame.minY, 300)
+        app.buttons["record-exercise-filter"].tap(); app.buttons["卧推"].tap()
+        app.buttons["record-period-filter"].tap(); app.buttons["近7天"].tap()
+        XCTAssertTrue(app.staticTexts["4 条记录"].waitForExistence(timeout: 5))
+        XCTAssertTrue(chart.exists)
+        shot(app, "record-time-bench-week")
+        app.buttons["record-time-metric"].tap(); app.buttons["动作时长（估计）"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["record-time-empty"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(chart.exists, "Missing action durations must not be rendered as zero")
+        shot(app, "record-time-unmeasured")
+        app.buttons["record-time-metric"].tap(); app.buttons["训练总用时"].tap()
+        XCTAssertTrue(chart.waitForExistence(timeout: 5))
     }
     @MainActor func testM2NativeWalkthrough() {
         let app = launch("m2-tour-review")

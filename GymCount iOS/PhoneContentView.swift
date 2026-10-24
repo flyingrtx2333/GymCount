@@ -176,6 +176,13 @@ struct PhoneContentView: View {
                             .listRowSeparator(.hidden).listRowBackground(Color.clear)
                             .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 6, trailing: 20))
                             .id("record-overview").accessibilityIdentifier("record-summary")
+                        if !filtered.isEmpty && !editMode.isEditing {
+                            RecordTimeChart(records: filtered, filter: filter) { day in
+                                withAnimation(RecordMotion.animation(reduced: reduceMotion)) { proxy.scrollTo(day, anchor: .top) }
+                            }
+                            .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 16, trailing: 20))
+                            .listRowSeparator(.hidden).listRowBackground(Color.clear)
+                        }
                         if let error = store.storageError {
                             Text(error).font(.footnote).foregroundStyle(.red).listRowBackground(Color.clear)
                         }
@@ -206,6 +213,7 @@ struct PhoneContentView: View {
                                 .padding(.top, 10).padding(.bottom, 6).frame(minHeight: 36)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
                                 .listRowSeparator(.hidden).listRowBackground(Color.clear)
+                                .id(day)
                             ForEach(rows) { item in
                                 NavigationLink(value: item.id) { RecordRow(item: item, filter: filter) }
                                     .buttonStyle(.automatic).accessibilityIdentifier("history-record").tag(item.id)

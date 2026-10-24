@@ -65,6 +65,24 @@ enum VerifyWorkoutHistoryImport {
         }
         let restored = PhoneWorkoutStore(defaults: defaults, reminderID: suite, watchArchiveURL: url)
         precondition(restored.history.count == histories.count, "Relaunch lost rows")
+        // Daily time totals must equal the original recorded durations, without
+        // turning unavailable action times into zero-valued measurements.
+        for metric in RecordTimeMetric.allCases {
+            let days = RecordDurationDay.summarize(restored.history, metric: metric)
+            var expected: [Date: [TimeInterval]] = [:]
+            for history in histories {
+                if let value = metric == .elapsed ? history.duration : history.activeDuration {
+                    expected[Calendar.current.startOfDay(for: history.date), default: []].append(value)
+                }
+            }
+            precondition(days.count == expected.count)
+            for day in days {
+                let values = expected[day.id]!
+                precondition(day.measuredRecords == values.count)
+                precondition(day.recordCount == histories.filter { Calendar.current.startOfDay(for: $0.date) == day.id }.count)
+                precondition(abs(day.seconds - values.reduce(0, +)) < 0.000001)
+            }
+        }
         // Exercise phone-only corrections against a real source summary. The
         // Watch source, group boundaries and duration must remain untouched.
         let target = incoming[0]
@@ -89,11 +107,17 @@ enum VerifyWorkoutHistoryImport {
         precondition(store.addRecord(date: original.date, sets: sets, duration: nil))
         let manual = store.history.first { $0.manualEntry == true }!
         precondition(manual.displayDuration == nil && manual.totalReps == original.totalReps)
+        precondition(RecordTimeMetric.elapsed.seconds(in: manual) == nil)
+        precondition(RecordDurationDay.summarize([manual], metric: .elapsed).isEmpty)
+        let measuredBeforeManualDuration = RecordDurationDay.summarize(store.history, metric: .elapsed)
+        precondition(measuredBeforeManualDuration.reduce(0) { $0 + $1.measuredRecords } == histories.count)
+        precondition(measuredBeforeManualDuration.contains { $0.recordCount > $0.measuredRecords })
         precondition(manual.sets.first?.id == sets.first?.id)
         precondition(store.updateRecord(id: manual.id, date: original.date, sets: sets, duration: original.duration,
             summaryReps: nil, summaryWeight: nil))
         let afterManual = PhoneWorkoutStore(defaults: defaults, reminderID: suite, watchArchiveURL: url)
         precondition(afterManual.history.first { $0.id == manual.id }?.displayDuration == original.duration)
+        precondition(RecordTimeMetric.elapsed.seconds(in: afterManual.history.first { $0.id == manual.id }!) == original.duration)
         store.deleteRecord(id: manual.id)
         precondition(store.history.count == histories.count)
         // Once migrated, stale UserDefaults must not replace the atomic snapshot.
@@ -181,6 +205,7 @@ enum VerifyWorkoutHistoryImport {
         precondition(store.confirmSync() && store.lastSyncAt != nil)
         let result: [String: Any] = ["sourceRecords": histories.count, "importedWatchRecords": incoming.count,
             "existingSummaryPreserved": true, "duplicatesSuppressed": true, "fieldsPreserved": true,
+            "dailyDurationMatchesSource": true, "missingDurationsNotZero": true, "partialDurationCoverageCorrect": true,
             "relaunchPreserved": true, "journalRecoveryPassed": true, "deletedRowNotResurrected": true,
             "phoneCorrectionsSurviveResync": true, "manualRecordEditingPreserved": true, "invalidEditsRejected": true,
             "backupRoundTripPassed": true, "restoreConflictRulesPassed": true, "invalidBackupsRejected": true,
