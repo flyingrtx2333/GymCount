@@ -22,7 +22,18 @@
 
 详细证据见 [iPhone 多组训练完善记录](docs/phone-training-flow.md)。
 
-## 最新 TestFlight 发布：2026-10-24（38）
+## 最新 TestFlight 发布：2026-10-24（41）
+
+- 版本：1.1.4 (41)，iPhone 与 Watch 一致；发布源码提交 `cf279071f7c51104e23a8050ab5b187370331f80`，423 个源码文件 SHA-256 已核验。
+- Delivery UUID / ASC Build ID：`aca1df33-7b5d-4dca-85d6-af9e342dc3ec`。苹果 `BUILD-STATUS: VALID` / `IN_BETA_TESTING` / `INTERNAL_ONLY`；已确认内部测试组 `flyingrtx` 包含本构建，中英文测试说明已更新。
+- 记录页新增每日运动时长图表，随动作、日期范围和日历筛选；支持总用时／动作时长切换、点选与定位当天记录，缺失时长不计为零。保留顶部筛选与底栏修复。
+- Watch 功能内容与 40 版一致，仅配套构建号升至 41；四个 Watch 源文件的字节差异仅为 CRLF/LF 换行，已核对。计数算法和通信协议未改，保留保存提示、震动与反馈上传。
+- 双端 Aqua 签名归档、导出、IPA 签名／版本／HealthKit／配套关系核验通过。图表相关源码与已完成原生验证逐文件匹配；三个工程构建通过，原生大屏 4 项、小屏 1 项通过，0 失败、无运行时告警。82 条真实历史的时长汇总及既有存储验证通过。
+- 真机图表触控、人工 VoiceOver、双端同步等仍待补验；用户设备安装和数据未覆盖。沿用既有 HealthKit 弃用、捕获引用和 AppIntents 编译警告。本次仅发布 TestFlight，正在审核的 1.1.4 (40) 未替换。
+- IPA SHA-256：`8258799dd3ca0d272cab966e512dc6f93cd94d27909b65e43196393c4ea9ea11`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.4-41/`；隔离归档源码：`/private/tmp/GymCount-TestFlight-1.1.4-41-20261024/source`。临时发布 LaunchAgent 已移除。
+
+## 历史 TestFlight 发布：2026-10-24（38）
 
 - 版本：1.1.4 (38)，iPhone 与 Watch 一致；源码以 37 版为基线，使用当前工作区逐文件核验的快照，421 个文件 SHA-256 已保存。
 - Delivery UUID / ASC Build ID：`9bfdfd35-51f1-4a28-9bac-708d5a286306`。
