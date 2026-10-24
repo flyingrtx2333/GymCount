@@ -36,6 +36,7 @@ struct RecordTrendsView: View {
             VStack(spacing: 0) {
                 HStack { Text(String(localized: "趋势")).font(.title2.weight(.semibold)); Spacer() }
                     .padding(.horizontal, 20).frame(minHeight: 56)
+                filters
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         if points.isEmpty {
@@ -69,7 +70,6 @@ struct RecordTrendsView: View {
                     }.padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 20)
                 }
             }.background(Studio.background)
-                .safeAreaInset(edge: .bottom, spacing: 0) { filters }
                 .toolbar(.hidden, for: .navigationBar)
                 .animation(RecordMotion.animation(reduced: reduceMotion), value: filter)
                 .onChange(of: filter) { _, _ in selectedDate = nil }
@@ -100,7 +100,7 @@ struct RecordTrendsView: View {
             } label: { RecordFilterLabel(title: showReps ? String(localized: "次数") : String(localized: "最大重量")).frame(maxWidth: .infinity) }
                 .accessibilityIdentifier("trend-metric")
         }.buttonStyle(RecordPressStyle()).padding(.horizontal, 12).padding(.vertical, 5).background(Studio.background)
-            .overlay(alignment: .top) { Rectangle().fill(Studio.line).frame(height: 0.5) }
+            .overlay(alignment: .bottom) { Rectangle().fill(Studio.line).frame(height: 0.5) }
     }
     private func selectedDay(_ point: RecordTrendPoint) -> some View {
         Button { openDay(filter.exercise ?? .benchPress, point.id) } label: {

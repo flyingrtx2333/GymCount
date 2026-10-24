@@ -165,6 +165,7 @@ struct PhoneContentView: View {
         NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 historyHeader
+                filters
                 ScrollViewReader { proxy in
                     List(selection: editMode.isEditing ? $selected : nil) {
                         (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 4))) {
@@ -230,7 +231,6 @@ struct PhoneContentView: View {
                         #endif
                 }
             }.background(Studio.background)
-                .safeAreaInset(edge: .bottom, spacing: 0) { filters }
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: UUID.self) { id in
                     RecordDetailView(id: id, edit: { openEditor($0) }, delete: { askDelete([$0.id]) })
@@ -258,6 +258,12 @@ struct PhoneContentView: View {
                 }.accessibilityLabel(capture.workoutSyncState.title).accessibilityIdentifier("history-sync-workouts")
             }
             #endif
+            if !editMode.isEditing {
+                Button { openEditor() } label: {
+                    Image(systemName: "plus").font(.system(size: 20, weight: .medium))
+                        .frame(width: 44, height: 44)
+                }.accessibilityLabel(String(localized: "补记训练")).accessibilityIdentifier("add-record")
+            }
             }
         }.font(.subheadline).buttonStyle(RecordPressStyle()).padding(.horizontal, 20)
             .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading).fixedSize(horizontal: false, vertical: true)
@@ -293,19 +299,13 @@ struct PhoneContentView: View {
                     } label: { RecordFilterLabel(title: filter.period.title).frame(maxWidth: .infinity) }
                         .accessibilityIdentifier("record-period-filter")
                     if !typeSize.isAccessibilitySize { Divider().frame(height: 20) }
-                    HStack(spacing: 0) {
-                        Button { dateRequest = RecordDateRequest(singleDay: true, start: filter.start, end: filter.end) } label: {
-                            Image(systemName: "calendar").font(.system(size: 18)).frame(width: 44, height: 44)
-                        }.accessibilityLabel(String(localized: "选择日期"))
-                        Button { openEditor() } label: {
-                            Image(systemName: "plus").font(.system(size: 22, weight: .medium)).foregroundStyle(Studio.onAccent)
-                                .frame(width: 40, height: 40).background(Studio.accent, in: Circle()).frame(width: 44, height: 44)
-                        }.accessibilityLabel(String(localized: "补记训练")).accessibilityIdentifier("add-record")
-                    }
+                    Button { dateRequest = RecordDateRequest(singleDay: true, start: filter.start, end: filter.end) } label: {
+                        Image(systemName: "calendar").font(.system(size: 18)).frame(width: 44, height: 44)
+                    }.accessibilityLabel(String(localized: "选择日期"))
                 }.padding(.horizontal, 12)
             }
         }.buttonStyle(RecordPressStyle()).padding(.vertical, 5).background(Studio.background)
-            .overlay(alignment: .top) { Rectangle().fill(Studio.line).frame(height: 0.5) }
+            .overlay(alignment: .bottom) { Rectangle().fill(Studio.line).frame(height: 0.5) }
     }
     private func askDelete(_ ids: Set<UUID>) { deletionIDs = ids; confirmingDelete = !ids.isEmpty }
     private func openEditor(_ record: PhoneTrainingSession? = nil) {

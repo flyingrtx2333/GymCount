@@ -24,6 +24,9 @@ final class M2RecordsTests: XCTestCase {
     @MainActor func testM2RealRecordsAndTrends() {
         let app = launch("m2-real-review")
         XCTAssertTrue(app.staticTexts["82 条记录"].exists, "Requires the original 82-record snapshot in isolated storage")
+        let recordFilter = app.buttons["record-exercise-filter"]
+        XCTAssertLessThan(recordFilter.frame.maxY, app.buttons["history-record"].firstMatch.frame.minY)
+        XCTAssertLessThan(app.buttons["add-record"].frame.maxY, recordFilter.frame.minY)
         shot(app, "m2-integrated-records-light")
         app.buttons["record-exercise-filter"].tap(); app.buttons["深蹲"].tap()
         XCTAssertTrue(app.cells.containing(.staticText, identifier: "深蹲").firstMatch.exists)
@@ -38,6 +41,8 @@ final class M2RecordsTests: XCTestCase {
         app.buttons["tab-3"].tap()
         let chart = app.descendants(matching: .any)["trend-chart"].firstMatch
         XCTAssertTrue(chart.waitForExistence(timeout: 5))
+        XCTAssertLessThan(app.buttons["trend-exercise-filter"].frame.maxY, chart.frame.minY)
+        XCTAssertLessThan(app.buttons["trend-metric"].frame.maxY, chart.frame.minY)
         shot(app, "m2-integrated-trends-light")
         app.buttons["trend-metric"].tap(); app.buttons["次数"].firstMatch.tap()
         chart.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)).tap()
