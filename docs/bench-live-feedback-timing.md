@@ -39,8 +39,8 @@
 
 ## 构建与发布边界
 
-配套 iPhone/Watch Release 和独立 iPhone Release 无签名编译通过；前端生产构建通过；新旧真实采集文件的 schema 兼容与旧 canonical 内容不变检查通过。未执行新的真机佩戴验收、未发布 TestFlight、未部署看板。
+配套 iPhone/Watch Release 和独立 iPhone Release 无签名编译通过；前端生产构建通过；新旧真实采集文件的 schema 兼容与旧 canonical 内容不变检查通过。已发布 TestFlight 1.1.3 (35)，双端 Aqua 签名归档、导出和 IPA 核验通过；后台与看板已上线，登录后列表及逐次时间对比已验收。未覆盖安装用户应用，尚未执行新佩戴验收。发布证据见 AGENTS.md 与本机 TestFlight-1.1.3-35 产物目录。
 
 配套构建只指定 `generic/platform=iOS`，不要全局强制 `-sdk iphoneos`，否则会把 Watch target 也错误地置于 iOS SDK 下，导致 WatchKit 模块解析失败。
 
-FlyingrtxFast 改动位于隔离工作树 `/Users/xiangjunsheng/.codex/worktrees/flyingrtx-gymcount-timing-20261021`，分支 `codex/gymcount-timing-feedback-20261021`。原工作区无关改动保留。
+发布源码分别为客户端 `cecce23`、后台 `7c7dbab4e`。原工作区无关改动保留，未混入发布包。
