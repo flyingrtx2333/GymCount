@@ -70,7 +70,7 @@ struct RecordTrendsView: View {
                     }.padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 20)
                 }
             }.background(Studio.background)
-                .toolbar(.hidden, for: .navigationBar)
+                .toolbar(.hidden, for: .navigationBar, .tabBar)
                 .animation(RecordMotion.animation(reduced: reduceMotion), value: filter)
                 .onChange(of: filter) { _, _ in selectedDate = nil }
                 .sheet(isPresented: $showDates) {

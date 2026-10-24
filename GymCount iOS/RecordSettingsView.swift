@@ -72,6 +72,7 @@ struct RecordSettingsView: View {
                 }.listRowBackground(Studio.surface)
                 if let error = store.storageError { Text(error).font(.footnote).foregroundStyle(.red) }
             }.recordListStyle().navigationTitle(String(localized: "设置")).navigationBarTitleDisplayMode(.large)
+                .toolbar(.hidden, for: .tabBar)
         }
         .fileExporter(isPresented: $exporting, document: document, contentType: contentType, defaultFilename: filename) { result in
             if case .failure(let error) = result { message = error.localizedDescription }

@@ -231,7 +231,7 @@ struct PhoneContentView: View {
                         #endif
                 }
             }.background(Studio.background)
-                .toolbar(.hidden, for: .navigationBar)
+                .toolbar(.hidden, for: .navigationBar, .tabBar)
                 .navigationDestination(for: UUID.self) { id in
                     RecordDetailView(id: id, edit: { openEditor($0) }, delete: { askDelete([$0.id]) })
                         .toolbar(.visible, for: .navigationBar)

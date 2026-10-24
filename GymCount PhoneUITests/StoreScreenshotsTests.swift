@@ -27,6 +27,8 @@ final class StoreScreenshotsTests: XCTestCase {
         }
         capture(app, "store-entry")
         app.buttons["取消"].tap(); app.buttons["放弃修改"].tap()
+        let tabsReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: app.buttons["tab-2"])
+        XCTAssertEqual(XCTWaiter.wait(for: [tabsReady], timeout: 5), .completed)
         app.buttons["tab-2"].tap()
         XCTAssertTrue(app.buttons["records-backup"].waitForExistence(timeout: 5))
         capture(app, "store-settings")
