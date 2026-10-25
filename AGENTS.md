@@ -22,7 +22,18 @@
 
 详细证据见 [iPhone 多组训练完善记录](docs/phone-training-flow.md)。
 
-## 最新 TestFlight 发布：2026-10-24（41）
+## 最新 TestFlight 发布：2026-10-25（42）
+
+- 版本：1.1.5 (42)，iPhone 与 Watch 一致；发布源码提交 `8f791fd114b55fd54ee1ee93b4ef8f68c4781b3c`，418 个源码文件 SHA-256 已核验。苹果端已确认 1.1.4 正式上架，因此启用 1.1.5 测试版本；未改正式商店提交。
+- Delivery UUID / ASC Build ID：`9c9f21cd-e05e-4a6d-a342-275c39fc4c77`。苹果 `BUILD-STATUS: VALID` / `IN_BETA_TESTING` / `INTERNAL_ONLY`；已确认内部测试组 `flyingrtx` 包含本构建，中英文测试说明写入及回读一致。
+- iPhone 包含近期记录、趋势和补记布局精修：日／周／月汇总、图表收起、查看偏好保留、首错定位、返回原筛选范围、清除图表选中、真实备份成功时间及 CSV 范围反馈。
+- Watch 仅清理未使用的 UI 参数、状态、导入及透明装饰，并升版本号；计数算法、通信协议及训练快照格式不变。重复旧运动图片已清理，继续使用现有共享运动图标。
+- 双端 Aqua 签名归档、导出及 IPA 签名／版本／HealthKit／配套关系核验通过。12 个相关源码文件与最近完成的原生验证摘要一致；三个工程构建通过，最近一轮大屏 7 项、小屏 3 项原生检查通过，无运行时告警，历史验证证据随发布保存。
+- 独立真机预览安装及 82 条记录回读一致性通过；手机再次锁屏导致实际真机用例执行 0 项。真机交互、双端同步及人工 VoiceOver 仍待补验，用户现有正式安装及数据未覆盖。沿用既有 HealthKit、捕获引用及 AppIntents 编译警告。
+- IPA SHA-256：`427411f3d2ff06ea315d042a27048ca9efa8b8f174393cb76bc62eee31ad98f3`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.5-42/`；隔离归档源码：`/private/tmp/GymCount-TestFlight-1.1.5-42-20261025/source`。三个临时发布 LaunchAgent 已移除。
+
+## 历史 TestFlight 发布：2026-10-24（41）
 
 - 版本：1.1.4 (41)，iPhone 与 Watch 一致；发布源码提交 `cf279071f7c51104e23a8050ab5b187370331f80`，423 个源码文件 SHA-256 已核验。
 - Delivery UUID / ASC Build ID：`aca1df33-7b5d-4dca-85d6-af9e342dc3ec`。苹果 `BUILD-STATUS: VALID` / `IN_BETA_TESTING` / `INTERNAL_ONLY`；已确认内部测试组 `flyingrtx` 包含本构建，中英文测试说明已更新。
@@ -63,7 +74,7 @@
 
 - 版本：1.1.4 (40)，iPhone 与 Watch 一致；归档源码提交 `b15e0e2f63cf9c0c593a6b1621a360b859370344`，422 个源码文件 SHA-256 已核验。
 - Delivery UUID / ASC Build ID：`d293db2c-6be2-47d9-b164-4976bf49011c`；苹果 `BUILD-STATUS: VALID` / `APP_STORE_ELIGIBLE`。
-- App Store Version ID：`2ad53749-061c-4fd6-8cc8-055aa01d57aa`；Review Submission ID：`f02d30e2-5696-4f32-9cd5-064d59841525`。提交后版本及审核状态均为 `WAITING_FOR_REVIEW`，发布方式 `AFTER_APPROVAL`；尚未称为已上架，当前公开版本仍为 1.1.3。
+- App Store Version ID：`2ad53749-061c-4fd6-8cc8-055aa01d57aa`；Review Submission ID：`f02d30e2-5696-4f32-9cd5-064d59841525`。提交时版本及审核状态均为 `WAITING_FOR_REVIEW`，发布方式 `AFTER_APPROVAL`；2026-10-25 通过 ASC 核实为 `READY_FOR_SALE`，当前公开版本为 1.1.4。
 - 简体中文商店副标题改为“手表自动计数，手机专注记录”，更新介绍、关键词、推广文本及更新说明，覆盖记录、趋势、多组补记、草稿、备份恢复和 CSV 导出；保留既有审核联系人并更新操作说明。
 - iPhone 替换为 4 张白金风格截图，分别展示记录、趋势、补记与备份设置；5 张 Watch 截图保留。所有图片均为 `COMPLETE`，iPhone 图片顺序与来源校验和通过。截图来自当前生产界面和独立、明确标注的展示示例，不含用户真实训练资料。补记 PNG 处理停滞后换用 JPEG，最终已处理完成，原图保留。
 - 包含顶部筛选和右上角补记入口；修复退出补记后系统底栏重新出现、遮挡自定义导航的问题。39 版未提交审核，40 版包含此修复。没有新增 Watch 算法改动，沿用保存成功提示、震动及计数反馈。
@@ -71,7 +82,7 @@
 - IPA SHA-256：`54b0cd831f337baf3908fb23b3f8316f54ebcab0b6b63e2b68d2576a6f6b9168`。
 - 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/AppStore-1.1.4-40/`。用户真机安装和记录未覆盖；实际佩戴、双端同步、真机文件导出恢复及人工 VoiceOver 仍待补验。临时发布 LaunchAgent 已移除。
 
-## 当前已上架 App Store 正式版：1.1.3（36）
+## 历史已上架 App Store 正式版：1.1.3（36）
 
 - 版本：1.1.3 (36)，iPhone 与 Watch 一致；发布应用源码：`aaf117b3bc3dd82b0d640a591d633fec361f7e0a`。
 - Delivery UUID / ASC Build ID：`4fb1984d-82c3-4772-8736-dbcb6ee08d35`。
