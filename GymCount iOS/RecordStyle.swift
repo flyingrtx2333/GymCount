@@ -36,12 +36,17 @@ struct RecordViewPreferences: Codable {
     var metric: String = ""
     var granularity: String = "automatic"
     var collapsed = false
+    var previousFilter: RecordFilter?
 
     static func decode(_ data: Data, fallback: Self) -> Self {
-        guard let value = try? JSONDecoder().decode(Self.self, from: data),
+        guard var value = try? JSONDecoder().decode(Self.self, from: data),
               value.filter.start.timeIntervalSinceReferenceDate.isFinite,
               value.filter.end.timeIntervalSinceReferenceDate.isFinite,
               value.filter.start <= value.filter.end else { return fallback }
+        if let previous = value.previousFilter,
+           !previous.start.timeIntervalSinceReferenceDate.isFinite || !previous.end.timeIntervalSinceReferenceDate.isFinite || previous.start > previous.end {
+            value.previousFilter = nil
+        }
         return value
     }
     var data: Data { (try? JSONEncoder().encode(self)) ?? Data() }

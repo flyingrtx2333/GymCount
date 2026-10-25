@@ -92,6 +92,8 @@ struct PhoneContentView: View {
     @State private var tab = 1
     @State private var filter = RecordFilter()
     @State private var restoredHistory = false
+    @State private var rangeOrigin: RecordFilter?
+    @State private var rangeDestination: RecordFilter?
     @State private var path: [UUID] = []
     @State private var editor: RecordEditorDraft?
     @State private var selected: Set<UUID> = []
@@ -111,7 +113,7 @@ struct PhoneContentView: View {
         TabView(selection: $tab) {
             history.recordPage(active: tab == 1, reduced: reduceMotion).tag(1)
             RecordTrendsView { exercise, interval in
-                filter.exercise = exercise; filter.select(interval)
+                openRange(interval, exercise: exercise)
                 path = []; tab = 1
             }.recordPage(active: tab == 3, reduced: reduceMotion).tag(3)
             RecordSettingsView(records: filtered, filter: filter)
@@ -124,7 +126,10 @@ struct PhoneContentView: View {
         .preferredColorScheme(RecordAppearance(rawValue: appearance)?.scheme)
         .onAppear {
             guard !restoredHistory else { return }
-            filter = RecordViewPreferences.decode(savedHistory, fallback: .init(filter: RecordFilter())).filter
+            let saved = RecordViewPreferences.decode(savedHistory, fallback: .init(filter: RecordFilter()))
+            filter = saved.filter
+            rangeOrigin = saved.previousFilter
+            rangeDestination = saved.previousFilter == nil ? nil : saved.filter
             restoredHistory = true
         }
         .onChange(of: scenePhase) { _, phase in
@@ -134,7 +139,8 @@ struct PhoneContentView: View {
         }
         .onChange(of: filter) { _, _ in
             selected.formIntersection(filtered.map(\.id))
-            if restoredHistory { savedHistory = RecordViewPreferences(filter: filter).data }
+            if filter != rangeDestination { rangeOrigin = nil; rangeDestination = nil }
+            if restoredHistory { savedHistory = RecordViewPreferences(filter: filter, previousFilter: rangeOrigin).data }
         }
         .onChange(of: store.history.map(\.id)) { _, ids in
             selected.formIntersection(ids); path.removeAll { !ids.contains($0) }
@@ -204,7 +210,7 @@ struct PhoneContentView: View {
                                     if Calendar.current.dateComponents([.day], from: interval.start, to: interval.end).day == 1 {
                                         proxy.scrollTo(Calendar.current.startOfDay(for: interval.start), anchor: .top)
                                     } else {
-                                        filter.select(interval)
+                                        openRange(interval)
                                         proxy.scrollTo("record-overview", anchor: .top)
                                     }
                                 }
@@ -319,7 +325,21 @@ struct PhoneContentView: View {
                     .font(.subheadline).padding(.horizontal, 20)
             }
             if filter.period == .custom && !editMode.isEditing {
-                Text(filter.rangeTitle).font(.caption).foregroundStyle(Studio.muted).padding(.horizontal, 20).padding(.top, 6)
+                if rangeOrigin != nil {
+                    let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0)) : AnyLayout(HStackLayout(spacing: 12))
+                    layout {
+                        Button {
+                            guard let original = rangeOrigin else { return }
+                            rangeOrigin = nil; rangeDestination = nil; filter = original
+                        } label: {
+                            Label(String(localized: "返回原范围"), systemImage: "arrow.uturn.backward")
+                                .fixedSize(horizontal: false, vertical: true).frame(minHeight: 44)
+                        }.accessibilityIdentifier("record-return-range")
+                        Text(filter.rangeTitle).foregroundStyle(Studio.muted).fixedSize(horizontal: false, vertical: true)
+                    }.font(.caption).padding(.horizontal, 20)
+                } else {
+                    Text(filter.rangeTitle).font(.caption).foregroundStyle(Studio.muted).padding(.horizontal, 20).padding(.top, 6)
+                }
             }
             if editMode.isEditing {
                 HStack {
@@ -356,6 +376,15 @@ struct PhoneContentView: View {
             .overlay(alignment: .bottom) { Rectangle().fill(Studio.line).frame(height: 0.5) }
     }
     private func askDelete(_ ids: Set<UUID>) { deletionIDs = ids; confirmingDelete = !ids.isEmpty }
+    private func openRange(_ interval: DateInterval, exercise: ExerciseType? = nil) {
+        var destination = filter
+        if let exercise { destination.exercise = exercise }
+        destination.select(interval)
+        guard destination != filter else { return }
+        if rangeOrigin == nil { rangeOrigin = filter }
+        rangeDestination = destination
+        filter = destination
+    }
     private func openEditor(_ record: PhoneTrainingSession? = nil) {
         if let saved = store.editorDrafts.first(where: { $0.recordID == record?.id }) { editor = saved; return }
         let exercise = record?.exercise ?? filter.exercise ?? store.lastExercise

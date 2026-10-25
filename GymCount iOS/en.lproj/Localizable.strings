@@ -367,3 +367,7 @@
 "运动时间趋势" = "Workout time trend";
 "次数趋势" = "Rep trend";
 "最高重量趋势" = "Best weight trend";
+
+"返回原范围" = "Back to previous range";
+"恢复累计时长" = "Show total time";
+"上次备份：%@" = "Last backup: %@";

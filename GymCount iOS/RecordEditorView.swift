@@ -13,6 +13,7 @@ struct RecordEditorView: View {
     @State private var error: String?
     @State private var saving = false
     @State private var attempted = false
+    @State private var saveAttempt = 0
     @State private var finishing = false
     @FocusState private var focus: String?
     @Namespace private var fieldSpace
@@ -28,82 +29,120 @@ struct RecordEditorView: View {
     private var duration: Double? { Double(draft.duration.replacingOccurrences(of: ",", with: ".")).map { $0 * 60 } }
     private var validDuration: Bool { draft.duration.isEmpty || (duration.map { $0.isFinite && (0...86400).contains($0) } ?? false) }
     private var validSummary: Bool {
-        guard let reps = Int(draft.summaryReps), (0...1_000_000).contains(reps),
-              let weight = Double(draft.summaryWeight.replacingOccurrences(of: ",", with: ".")) else { return false }
-        return weight.isFinite && (0...500).contains(weight)
+        validReps(draft.summaryReps, range: 0...1_000_000) && validWeight(draft.summaryWeight)
     }
-    private var valid: Bool {
-        draft.note.count <= 2000 && (summary ? validSummary : !draft.sets.isEmpty && draft.sets.allSatisfy { $0.parsed != nil } && validDuration)
+    private var firstInvalidField: String? {
+        if summary {
+            if !validReps(draft.summaryReps, range: 0...1_000_000) { return "summary-reps" }
+            if !validWeight(draft.summaryWeight) { return "summary-weight" }
+        } else {
+            if draft.sets.isEmpty { return "training-sets" }
+            for set in draft.sets {
+                if !validWeight(set.weight) { return set.id.uuidString + ":weight" }
+                if !validReps(set.reps, range: 1...999) { return set.id.uuidString + ":reps" }
+            }
+            if !validDuration { return "duration" }
+        }
+        return draft.note.count > 2000 ? "note" : nil
+    }
+    private func validWeight(_ text: String) -> Bool {
+        guard let value = Double(text.replacingOccurrences(of: ",", with: ".")) else { return false }
+        return value.isFinite && (0...500).contains(value)
+    }
+    private func validReps(_ text: String, range: ClosedRange<Int>) -> Bool {
+        Int(text).map(range.contains) ?? false
     }
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    if let error { validation(error) }
-                    if draft.recordID != nil && record == nil {
-                        validation(String(localized: "记录不存在"))
-                    } else if summary {
-                        RecordExerciseLabel(exercise: record!.exercise, size: 28).font(.headline)
-                        VStack(spacing: 16) {
-                            labeledField(String(localized: "总次数"), text: $draft.summaryReps, key: "summary-reps", decimal: false)
-                            labeledField(String(localized: "最大重量（公斤）"), text: $draft.summaryWeight, key: "summary-weight", decimal: true)
-                            if !validSummary { validation(String(localized: "请输入有效次数和重量")) }
-                        }.padding(16).background(Studio.surface, in: RoundedRectangle(cornerRadius: 12))
-                    } else {
-                        DatePicker(String(localized: "日期"), selection: $draft.date, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
-                            .labelsHidden().frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
-                        Text(String(localized: "训练组")).font(.headline)
-                        VStack(spacing: 0) {
-                            if !expandedRows { setColumnLabels }
-                            ForEach($draft.sets) { $set in
-                                setRow($set).id(set.id.uuidString)
-                                    .transition(RecordMotion.row(reduced: reduceMotion))
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        if let error { validation(error).accessibilityIdentifier("entry-save-error") }
+                        if draft.recordID != nil && record == nil {
+                            validation(String(localized: "记录不存在"))
+                        } else if summary {
+                            RecordExerciseLabel(exercise: record!.exercise, size: 28).font(.headline)
+                            VStack(spacing: 16) {
+                                labeledField(String(localized: "总次数"), text: $draft.summaryReps, key: "summary-reps", decimal: false)
+                                labeledField(String(localized: "最大重量（公斤）"), text: $draft.summaryWeight, key: "summary-weight", decimal: true)
+                                if !validSummary { validation(String(localized: "请输入有效次数和重量")) }
+                            }.padding(16).background(Studio.surface, in: RoundedRectangle(cornerRadius: 12))
+                        } else {
+                            DatePicker(String(localized: "日期"), selection: $draft.date, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
+                                .labelsHidden().frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+                            Text(String(localized: "训练组")).font(.headline)
+                            VStack(spacing: 0) {
+                                if !expandedRows { setColumnLabels }
+                                ForEach($draft.sets) { $set in
+                                    setRow($set).id(set.id.uuidString)
+                                        .transition(RecordMotion.row(reduced: reduceMotion))
+                                }
+                                if attempted && draft.sets.isEmpty { validation(String(localized: "请输入有效次数和重量")) }
+                            }.padding(12).background(Studio.surface, in: RoundedRectangle(cornerRadius: 12)).id("training-sets")
+                        }
+                        if !summary && (record == nil || record?.manualEntry == true) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                labeledField(String(localized: "时长（分钟，可选）"), text: $draft.duration, key: "duration", decimal: true)
+                                    .font(.subheadline).padding(.horizontal, 12)
+                                    .background(Studio.surface, in: RoundedRectangle(cornerRadius: 10))
+                                if !validDuration { validation(String(localized: "时长应在 0–1440 分钟之间")) }
                             }
-                        }.padding(12).background(Studio.surface, in: RoundedRectangle(cornerRadius: 12))
-                    }
-                    if !summary && (record == nil || record?.manualEntry == true) {
+                        }
                         VStack(alignment: .leading, spacing: 8) {
-                            labeledField(String(localized: "时长（分钟，可选）"), text: $draft.duration, key: "duration", decimal: true)
-                                .font(.subheadline).padding(.horizontal, 12)
+                            Text(String(localized: "备注（可选）")).font(.subheadline).foregroundStyle(Studio.muted)
+                            TextField("", text: $draft.note, axis: .vertical)
+                                .lineLimit(1...5).focused($focus, equals: "note").id("note")
+                                .padding(12).frame(minHeight: 44)
                                 .background(Studio.surface, in: RoundedRectangle(cornerRadius: 10))
-                            if !validDuration { validation(String(localized: "时长应在 0–1440 分钟之间")) }
+                                .modifier(RecordFocusOutline(focused: focus == "note", space: fieldSpace))
+                                .accessibilityLabel(String(localized: "备注"))
+                                .accessibilityIdentifier("record-note-field")
+                            if draft.note.count > 2000 { validation(String(localized: "备注最多 2000 字")) }
+                        }
+                    }.padding(.horizontal, 20).padding(.vertical, 12).id("entry-top")
+                }.scrollDismissesKeyboard(.interactively).background(Studio.background)
+                    .accessibilityIdentifier("record-editor-scroll")
+                    .safeAreaInset(edge: .bottom, spacing: 0) { commandBar }
+                    .navigationTitle(draft.recordID == nil ? String(localized: "补记训练") : String(localized: "编辑记录"))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbarBackground(Studio.background, for: .navigationBar)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(String(localized: "取消")) {
+                                focus = nil
+                                if changed || store.editorDrafts.contains(where: { $0.id == draft.id }) { confirmingExit = true }
+                                else { dismiss() }
+                            }
                         }
                     }
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(String(localized: "备注（可选）")).font(.subheadline).foregroundStyle(Studio.muted)
-                        TextField("", text: $draft.note, axis: .vertical)
-                            .lineLimit(1...5).focused($focus, equals: "note").id("note")
-                            .padding(12).frame(minHeight: 44)
-                            .background(Studio.surface, in: RoundedRectangle(cornerRadius: 10))
-                            .modifier(RecordFocusOutline(focused: focus == "note", space: fieldSpace))
-                            .accessibilityLabel(String(localized: "备注"))
-                            .accessibilityIdentifier("record-note-field")
-                        if draft.note.count > 2000 { validation(String(localized: "备注最多 2000 字")) }
+                    .confirmationDialog(String(localized: "保留这次编辑？"), isPresented: $confirmingExit, titleVisibility: .visible) {
+                        Button(String(localized: "保留草稿")) {
+                            if store.saveDraft(draft) { finishing = true; dismiss() } else { error = store.storageError }
+                        }
+                        Button(String(localized: "放弃修改"), role: .destructive) {
+                            if store.discardEditorDraft(draft.id) { finishing = true; dismiss() } else { error = store.storageError }
+                        }
+                        Button(String(localized: "继续编辑"), role: .cancel) {}
                     }
-                }.padding(.horizontal, 20).padding(.vertical, 12)
-            }.scrollDismissesKeyboard(.interactively).background(Studio.background)
-                .safeAreaInset(edge: .bottom, spacing: 0) { commandBar }
-                .navigationTitle(draft.recordID == nil ? String(localized: "补记训练") : String(localized: "编辑记录"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbarBackground(Studio.background, for: .navigationBar)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(String(localized: "取消")) {
-                            focus = nil
-                            if changed || store.editorDrafts.contains(where: { $0.id == draft.id }) { confirmingExit = true }
-                            else { dismiss() }
+                    .onChange(of: focus) { _, value in
+                        guard let value else { return }
+                        withAnimation(RecordMotion.animation(reduced: reduceMotion)) { proxy.scrollTo(value, anchor: .center) }
+                    }
+                    .onChange(of: error) { _, value in
+                        guard value != nil else { return }
+                        withAnimation(RecordMotion.animation(reduced: reduceMotion)) { proxy.scrollTo("entry-top", anchor: .top) }
+                    }
+                    .task(id: saveAttempt) {
+                        guard saveAttempt > 0 else { return }
+                        await Task.yield()
+                        guard !Task.isCancelled else { return }
+                        let target = error == nil ? firstInvalidField : "entry-top"
+                        guard let target else { return }
+                        withAnimation(RecordMotion.animation(reduced: reduceMotion)) {
+                            proxy.scrollTo(target, anchor: target == "entry-top" ? .top : .center)
                         }
                     }
-                }
-                .confirmationDialog(String(localized: "保留这次编辑？"), isPresented: $confirmingExit, titleVisibility: .visible) {
-                    Button(String(localized: "保留草稿")) {
-                        if store.saveDraft(draft) { finishing = true; dismiss() } else { error = store.storageError }
-                    }
-                    Button(String(localized: "放弃修改"), role: .destructive) {
-                        if store.discardEditorDraft(draft.id) { finishing = true; dismiss() } else { error = store.storageError }
-                    }
-                    Button(String(localized: "继续编辑"), role: .cancel) {}
-                }
+            }
         }.tint(Studio.accent).foregroundStyle(Studio.ink)
             .animation(RecordMotion.animation(reduced: reduceMotion), value: draft.sets.count)
             .animation(RecordMotion.animation(reduced: reduceMotion), value: attempted)
@@ -223,17 +262,21 @@ struct RecordEditorView: View {
     private func compactEntry(_ text: Binding<String>, key: String, decimal: Bool, label: String) -> some View {
         TextField("—", text: text).keyboardType(decimal ? .decimalPad : .numberPad)
             .focused($focus, equals: key).accessibilityLabel(label)
+            .accessibilityIdentifier(fieldIdentifier(key))
             .font(.subheadline.weight(.medium)).monospacedDigit().multilineTextAlignment(.center)
             .frame(minHeight: 44).background(Studio.background, in: RoundedRectangle(cornerRadius: 8))
             .modifier(RecordFocusOutline(focused: focus == key, space: fieldSpace))
+            .id(key)
     }
     private func entry(_ title: String, text: Binding<String>, key: String, decimal: Bool, label: String) -> some View {
         HStack(spacing: 8) {
             TextField("—", text: text).keyboardType(decimal ? .decimalPad : .numberPad)
                 .focused($focus, equals: key).accessibilityLabel(label).monospacedDigit()
+                .accessibilityIdentifier(fieldIdentifier(key))
             Text(title).font(.caption).foregroundStyle(Studio.muted)
         }.padding(.horizontal, 12).frame(minHeight: 44).background(Studio.background, in: RoundedRectangle(cornerRadius: 10))
             .modifier(RecordFocusOutline(focused: focus == key, space: fieldSpace))
+            .id(key)
     }
     private func labeledField(_ title: String, text: Binding<String>, key: String, decimal: Bool) -> some View {
         let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
@@ -246,6 +289,10 @@ struct RecordEditorView: View {
         }.id(key)
     }
     private func validation(_ text: String) -> some View { Text(text).font(.caption).foregroundStyle(.red).accessibilityIdentifier("entry-error") }
+    private func fieldIdentifier(_ key: String) -> String {
+        guard let index = draft.sets.firstIndex(where: { key.hasPrefix($0.id.uuidString + ":") }) else { return "record-\(key)-field" }
+        return "record-set-\(index + 1)-\(key.hasSuffix(":weight") ? "weight" : "reps")-field"
+    }
     private func appendSet() {
         let last = draft.sets.last
         let next = RecordSetDraft(exercise: last?.exercise ?? store.lastExercise, weight: last?.weight ?? "")
@@ -270,7 +317,11 @@ struct RecordEditorView: View {
     }
     private func save() {
         attempted = true; error = nil
-        guard valid else { return }
+        if let invalid = firstInvalidField {
+            focus = invalid == "training-sets" ? nil : invalid
+            saveAttempt += 1
+            return
+        }
         saving = true; focus = nil
         let sets = draft.sets.compactMap(\.parsed)
         let saved: Bool
@@ -280,6 +331,6 @@ struct RecordEditorView: View {
         } else { saved = store.addRecord(date: draft.date, sets: sets, duration: duration, note: draft.note, draftID: draft.id) }
         saving = false
         if saved { finishing = true; onSave(); dismiss() }
-        else { error = store.storageError ?? String(localized: "保存失败，请检查输入后重试。") }
+        else { error = store.storageError ?? String(localized: "保存失败，请检查输入后重试。"); saveAttempt += 1 }
     }
 }

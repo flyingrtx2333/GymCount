@@ -98,13 +98,25 @@ struct RecordTimeChart: View {
             }
             if !collapsed {
                 if let selected {
-                    Button { openRange(selected.range) } label: {
-                        HStack(spacing: 4) {
-                            Text(recordChartRangeTitle(selected.range, granularity: grouping))
-                            Image(systemName: "chevron.right")
-                        }.font(.caption).frame(minHeight: 44)
-                    }.accessibilityHint(String(localized: "查看此范围记录"))
-                        .accessibilityIdentifier("record-time-open-day")
+                    HStack(alignment: .top, spacing: 8) {
+                        Button { openRange(selected.range) } label: {
+                            HStack(spacing: 4) {
+                                Text(recordChartRangeTitle(selected.range, granularity: grouping))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Image(systemName: "chevron.right")
+                            }.font(.caption).frame(minHeight: 44)
+                        }.accessibilityHint(String(localized: "查看此范围记录"))
+                            .accessibilityIdentifier("record-time-open-day")
+                            .layoutPriority(1)
+                        Spacer(minLength: 0)
+                        Button {
+                            withAnimation(RecordMotion.animation(reduced: reduceMotion)) { selectedDate = nil }
+                        } label: {
+                            Image(systemName: "xmark").font(.system(size: 13, weight: .semibold))
+                                .frame(width: 44, height: 44)
+                        }.accessibilityLabel(String(localized: "恢复累计时长"))
+                            .accessibilityIdentifier("record-time-clear-selection")
+                    }
                 }
                 if points.isEmpty {
                     Label(String(localized: "暂无时长数据"), systemImage: "clock")

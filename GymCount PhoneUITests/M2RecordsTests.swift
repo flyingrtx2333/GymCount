@@ -19,7 +19,10 @@ final class M2RecordsTests: XCTestCase {
     @MainActor private func fill(_ field: XCUIElement, _ value: String) {
         field.tap()
         let old = field.value as? String ?? ""
-        if old != "—" && !old.isEmpty { field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count)) }
+        if old != "—" && !old.isEmpty {
+            field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count))
+        }
         field.typeText(value)
     }
     @MainActor func testM2RealRecordsAndTrends() {
@@ -276,6 +279,127 @@ final class M2RecordsTests: XCTestCase {
         app.buttons["trend-metric"].tap(); app.buttons["trend-toggle-chart"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["trend-chart"].firstMatch.exists)
         shot(app, "workflow-preferences-restored")
+    }
+    @MainActor func testChartClearAndReturnRange() {
+        let app = launch("m2-real-review")
+        let chart = app.descendants(matching: .any)["record-time-chart"].firstMatch
+        let total = app.staticTexts["record-time-value"].label
+        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons["record-time-clear-selection"].waitForExistence(timeout: 5))
+        XCTAssertNotEqual(app.staticTexts["record-time-value"].label, total)
+        shot(app, "interactions-clear-selection")
+        app.buttons["record-time-clear-selection"].tap()
+        XCTAssertEqual(app.staticTexts["record-time-value"].label, total)
+        XCTAssertTrue(app.staticTexts["82 条记录"].exists)
+        XCTAssertFalse(app.buttons["record-time-open-day"].exists)
+        XCTAssertEqual(app.buttons["record-time-metric"].value as? String, "按月")
+        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+        app.buttons["record-time-open-day"].tap()
+        XCTAssertTrue(app.staticTexts["6 条记录"].waitForExistence(timeout: 5))
+        shot(app, "interactions-return-range")
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["record-return-range"].waitForExistence(timeout: 10))
+        app.buttons["record-return-range"].tap()
+        XCTAssertTrue(app.staticTexts["82 条记录"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["record-return-range"].exists)
+        app.buttons["record-exercise-filter"].tap(); app.buttons["卧推"].tap()
+        app.buttons["record-period-filter"].tap(); app.buttons["近30天"].tap()
+        XCTAssertTrue(app.staticTexts["5 条记录"].waitForExistence(timeout: 5))
+        app.buttons["tab-3"].tap()
+        app.buttons["trend-metric"].tap(); app.buttons["trend-granularity-week"].tap()
+        app.buttons["trend-open-day"].tap()
+        XCTAssertTrue(app.staticTexts["4 条记录"].waitForExistence(timeout: 5))
+        app.buttons["record-return-range"].tap()
+        XCTAssertTrue(app.staticTexts["5 条记录"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["record-exercise-filter"].label.contains("卧推"))
+        XCTAssertTrue(app.buttons["record-period-filter"].label.contains("近30天"))
+        app.buttons["tab-3"].tap(); app.buttons["trend-open-day"].tap()
+        app.buttons["record-period-filter"].tap(); app.buttons["全部时间"].tap()
+        XCTAssertTrue(app.staticTexts["78 条记录"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["record-return-range"].exists, "Manual filtering ends the drill-down context")
+    }
+    @MainActor func testEditorFirstErrorFocus() {
+        let app = launch("first-error-" + UUID().uuidString)
+        app.buttons["add-record"].tap()
+        let first = app.textFields["record-set-1-weight-field"]
+        fill(first, "600"); app.buttons["下一项"].tap(); app.typeText("8"); app.buttons["完成"].tap()
+        app.buttons["add-record-set"].tap()
+        fill(app.textFields["record-set-2-weight-field"], "42.5")
+        XCTAssertEqual(app.textFields["record-set-2-weight-field"].value as? String, "42.5")
+        app.buttons["下一项"].tap(); app.typeText("0"); app.buttons["完成"].tap()
+        for _ in 3...10 {
+            app.buttons["add-record-set"].tap(); app.typeText("6"); app.buttons["完成"].tap()
+        }
+        app.scrollViews["record-editor-scroll"].swipeUp()
+        XCTAssertFalse(first.isHittable, "The first error starts outside the viewport")
+        app.buttons["save-record"].tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(first.isHittable)
+        XCTAssertEqual(first.value as? String, "600")
+        shot(app, "interactions-first-error")
+        app.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "42.5")
+        XCTAssertEqual(first.value as? String, "42.5", "Typing after invalid save targets the first bad field")
+        app.buttons["save-record"].tap()
+        let second = app.textFields["record-set-2-reps-field"]
+        XCTAssertTrue(second.isHittable)
+        app.typeText(XCUIKeyboardKey.delete.rawValue + "6")
+        XCTAssertEqual(second.value as? String, "6")
+        app.buttons["完成"].tap(); app.buttons["save-record"].tap()
+        XCTAssertTrue(app.staticTexts["1 条记录"].waitForExistence(timeout: 5))
+        app.buttons["history-record"].firstMatch.tap()
+        XCTAssertEqual(app.descendants(matching: .any)["record-total-reps"].value as? String, "62 次")
+    }
+    @MainActor func testBackupSavedConfirmation() {
+        let app = launch("m2-real-review")
+        app.buttons["tab-2"].tap()
+        app.buttons["records-backup"].tap()
+        XCTAssertTrue(app.buttons["保存"].waitForExistence(timeout: 10))
+        let name = app.textFields.firstMatch
+        if name.exists { fill(name, "PowerReps-Proof-" + String(UUID().uuidString.prefix(8))) }
+        app.buttons["保存"].tap()
+        let last = app.staticTexts["records-backup-last-success"]
+        XCTAssertTrue(last.waitForExistence(timeout: 10))
+        let savedLabel = last.label
+        shot(app, "interactions-backup-confirmed")
+        app.terminate(); app.launch(); app.buttons["tab-2"].tap()
+        XCTAssertTrue(last.waitForExistence(timeout: 10))
+        XCTAssertEqual(last.label, savedLabel)
+    }
+    @MainActor func testBackupCancelAndCSV() {
+        let app = launch("m2-real-review")
+        app.buttons["tab-2"].tap()
+        let last = app.staticTexts["records-backup-last-success"]
+        XCTAssertTrue(last.waitForExistence(timeout: 5), "Run after an actual successful backup")
+        let savedLabel = last.label
+        app.buttons["records-backup"].tap()
+        XCTAssertTrue(app.buttons["保存"].waitForExistence(timeout: 10))
+        if !app.buttons["取消"].exists && app.buttons["浏览"].exists { app.buttons["浏览"].tap() }
+        shot(app, "interactions-backup-cancel-picker")
+        XCTAssertTrue(app.buttons["取消"].waitForExistence(timeout: 10))
+        app.buttons["取消"].tap()
+        XCTAssertTrue(app.buttons["records-backup"].waitForExistence(timeout: 5))
+        XCTAssertEqual(last.label, savedLabel)
+        app.buttons["records-export"].tap(); app.buttons["训练汇总 CSV"].tap()
+        XCTAssertTrue(app.buttons["保存"].waitForExistence(timeout: 10))
+        let name = app.textFields.firstMatch
+        if name.exists { fill(name, "PowerReps-CSV-Proof-" + String(UUID().uuidString.prefix(8))) }
+        app.buttons["保存"].tap()
+        XCTAssertTrue(app.buttons["records-backup"].waitForExistence(timeout: 10))
+        XCTAssertEqual(last.label, savedLabel)
+        shot(app, "interactions-backup-unchanged-after-csv")
+    }
+    @MainActor func testReturnRangeLargeEnglish() {
+        let app = launch("m2-real-review", dark: true, englishLarge: true)
+        app.buttons["tab-3"].tap()
+        let open = app.buttons["trend-open-day"]
+        for _ in 0..<3 { if !open.isHittable { app.swipeUp() } }
+        open.tap()
+        let back = app.buttons["record-return-range"]
+        XCTAssertTrue(back.waitForExistence(timeout: 5))
+        XCTAssertTrue(back.isHittable)
+        shot(app, "interactions-return-range-large-english")
+        back.tap()
+        XCTAssertTrue(app.staticTexts["82 records"].waitForExistence(timeout: 5))
     }
     @MainActor func testM2NativeWalkthrough() {
         let app = launch("m2-tour-review")

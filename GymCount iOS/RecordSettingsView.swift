@@ -13,8 +13,10 @@ struct RecordDocument: FileDocument {
 }
 
 struct RecordSettingsView: View {
+    private enum ExportIntent: Equatable { case trainingBackup, other }
     @EnvironmentObject private var store: PhoneWorkoutStore
     @AppStorage("records.appearance") private var appearance = RecordAppearance.system.rawValue
+    @AppStorage("records.last-backup-success") private var lastBackupSuccess: Double = 0
     let records: [PhoneTrainingSession]
     let filter: RecordFilter
     @State private var importing = false
@@ -22,6 +24,7 @@ struct RecordSettingsView: View {
     @State private var document: RecordDocument?
     @State private var contentType = UTType.json
     @State private var filename = "PowerReps-Records"
+    @State private var exportIntent: ExportIntent?
     @State private var preview: RecordRestorePreview?
     @State private var message: String?
     @State private var busy = false
@@ -42,7 +45,21 @@ struct RecordSettingsView: View {
                 Section { NavigationLink { RecordSyncView() } label: { Label(String(localized: "手表同步"), systemImage: "applewatch") } }.listRowBackground(Studio.surface)
                 #endif
                 Section(String(localized: "数据")) {
-                    Button { exportBackup() } label: { Label(String(localized: "训练记录备份"), systemImage: "externaldrive.badge.plus") }
+                    Button { exportBackup() } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(String(localized: "训练记录备份"))
+                                if lastBackupSuccess.isFinite && lastBackupSuccess > 0 {
+                                    Text(String(localized: "上次备份：\(Date(timeIntervalSince1970: lastBackupSuccess).formatted(date: .abbreviated, time: .shortened))"))
+                                        .font(.caption).foregroundStyle(Studio.muted)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .accessibilityIdentifier("records-backup-last-success")
+                                }
+                            }.padding(.vertical, 4)
+                        } icon: { Image(systemName: "externaldrive.badge.plus") }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
                         .accessibilityIdentifier("records-backup")
                     Button { importing = true } label: { Label(String(localized: "恢复备份"), systemImage: "arrow.down.doc") }
                         .accessibilityIdentifier("records-restore")
@@ -94,9 +111,18 @@ struct RecordSettingsView: View {
             }.recordListStyle().navigationTitle(String(localized: "设置")).navigationBarTitleDisplayMode(.large)
                 .toolbar(.hidden, for: .tabBar)
         }
-        .fileExporter(isPresented: $exporting, document: document, contentType: contentType, defaultFilename: filename) { result in
-            if case .failure(let error) = result { message = error.localizedDescription }
-        }
+        .fileExporter(isPresented: $exporting, document: document, contentTypes: [contentType], defaultFilename: filename, onCompletion: { result in
+            let intent = exportIntent
+            exportIntent = nil; document = nil; exporting = false
+            switch result {
+            case .success:
+                if intent == .trainingBackup { lastBackupSuccess = Date().timeIntervalSince1970 }
+            case .failure(let error):
+                message = error.localizedDescription
+            }
+        }, onCancellation: {
+            exportIntent = nil; document = nil; exporting = false
+        })
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
             do {
                 let url = try result.get()
@@ -134,7 +160,7 @@ struct RecordSettingsView: View {
         } message: { Text(message ?? "") }
     }
     private func exportBackup() {
-        do { present(try store.backupData(), type: .json, name: "PowerReps-Records") }
+        do { present(try store.backupData(), type: .json, name: "PowerReps-Records", intent: .trainingBackup) }
         catch { message = error.localizedDescription }
     }
     private func exportBeforeRestore() {
@@ -149,7 +175,9 @@ struct RecordSettingsView: View {
         guard !records.isEmpty, !sets || hasExportableSets else { return }
         present(Data(store.csv(records: records, sets: sets, exercise: filter.exercise).utf8), type: .commaSeparatedText, name: sets ? "PowerReps-Sets" : "PowerReps-Workouts")
     }
-    private func present(_ data: Data, type: UTType, name: String) {
+    private func present(_ data: Data, type: UTType, name: String, intent: ExportIntent = .other) {
+        guard exportIntent == nil else { return }
+        exportIntent = intent
         document = RecordDocument(data: data); contentType = type
         filename = name + "-" + Date().ISO8601Format().prefix(10); exporting = true
     }
