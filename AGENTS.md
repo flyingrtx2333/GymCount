@@ -22,7 +22,18 @@
 
 详细证据见 [iPhone 多组训练完善记录](docs/phone-training-flow.md)。
 
-## 最新 TestFlight 发布：2026-10-25（42）
+## 最新 TestFlight 发布：2026-10-26（43）
+
+- 版本：1.1.5 (43)，iPhone 与 Watch 一致；发布源码提交 `54d364737e1117d12a565048df543064f7d3c1b1`，418 个源码文件 SHA-256 已核验。工作区与 Git 有 8 个仅 CRLF/LF 的字节差异，均已单独核对并保留清单。
+- Delivery UUID / ASC Build ID：`df88b503-c690-46b2-8383-624f2dc0227a`。苹果 `BUILD-STATUS: VALID` / `IN_BETA_TESTING` / `INTERNAL_ONLY`；内部测试组 `flyingrtx` 已确认包含本构建，中英文更新说明已写入并回读。
+- Watch 正式整合用户选择的保存提示 A / M2：深灰紧凑结果、小绿勾、独立 44pt 关闭及计数反馈入口、轻浮现及按压反馈；英文和大字号结果可完整换行。五秒退场随记录及视图生命周期取消，VoiceOver 时保留提示；减弱动态效果走短淡入淡出分支。原持久化成功后的单次震动保留，视图不叠加震动。
+- iPhone 105 个源码／资源文件与 42 版一致，仅配套版本号更新。计数算法、记录模型、采样、同步和真实反馈上传流程未改；正式商店 1.1.4 状态及内容未修改。
+- Aqua 会话签名归档、导出、双端 IPA 签名／版本／HealthKit／配套关系核验通过；独立 iPhone Release 模拟器构建通过。归档中 7 个相关源码与上一轮原生检查逐文件一致；修复后的中文 2 项、英文大字号 1 项原生检查通过，无运行时告警。保存实际截图、动效录像及区域比较证据，未把构建成功当成真机验收。
+- 真机震动触感、系统减弱动态效果开关及人工 VoiceOver 尚待实测；没有覆盖用户手机或手表安装，没有代提交训练反馈。原有首页标题在极大字号下截短，已记录为区域外问题。沿用既有编译警告。
+- IPA SHA-256：`bda9c6039e8eefe81e5af966a626750728e292c05020f98e9d08012aaac30b39`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.5-43/`；隔离归档源码：`/private/tmp/GymCount-TestFlight-1.1.5-43-20261026/source`。本次三个临时发布 LaunchAgent 已移除。
+
+## 历史 TestFlight 发布：2026-10-25（42）
 
 - 版本：1.1.5 (42)，iPhone 与 Watch 一致；发布源码提交 `8f791fd114b55fd54ee1ee93b4ef8f68c4781b3c`，418 个源码文件 SHA-256 已核验。苹果端已确认 1.1.4 正式上架，因此启用 1.1.5 测试版本；未改正式商店提交。
 - Delivery UUID / ASC Build ID：`9c9f21cd-e05e-4a6d-a342-275c39fc4c77`。苹果 `BUILD-STATUS: VALID` / `IN_BETA_TESTING` / `INTERNAL_ONLY`；已确认内部测试组 `flyingrtx` 包含本构建，中英文测试说明写入及回读一致。
