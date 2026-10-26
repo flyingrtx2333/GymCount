@@ -70,25 +70,79 @@ struct WorkoutSavedBanner: View {
     let workout: WorkoutHistory
     let feedback: () -> Void
     let close: () -> Void
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    @AccessibilityFocusState private var resultFocused: Bool
+    @ScaledMetric(relativeTo: .caption) private var textSize: CGFloat = 12
 
     var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                Text(String(localized: "已保存")).font(GymStyle.section).lineLimit(1).minimumScaleFactor(0.8)
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.green).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(String(localized: "已保存"))
+                        .font(.system(size: textSize, weight: .semibold))
+                    Text(workout.exerciseType.displayName + " · " + String(localized: "\(workout.totalReps) 次"))
+                        .font(.system(size: textSize)).lineLimit(nil)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityElement(children: .combine)
+                .accessibilityFocused($resultFocused)
                 Spacer(minLength: 0)
-                Button(action: close) { Image(systemName: "xmark").frame(width: 44, height: 44) }
-                    .buttonStyle(.plain).accessibilityLabel(String(localized: "关闭"))
+                Button(action: close) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(WorkoutSavedButtonStyle())
+                .accessibilityLabel(String(localized: "关闭"))
+                .accessibilityIdentifier("workout.saved.close")
             }
-            Text(workout.exerciseType.displayName + " · " + String(localized: "\(workout.totalReps) 次"))
-                .font(GymStyle.body)
-            Button(String(localized: "计数不准？"), action: feedback)
-                .font(GymStyle.caption).frame(minHeight: 44).buttonStyle(.plain)
+            .padding(.leading, 10).padding(.trailing, 2).frame(minHeight: 44)
+            Rectangle().fill(.white.opacity(0.12)).frame(height: 0.5).accessibilityHidden(true)
+            Button(action: feedback) {
+                HStack {
+                    Text(String(localized: "计数反馈")).font(.system(size: textSize))
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .medium))
+                }
+                .foregroundStyle(.white.opacity(0.85))
+                .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(WorkoutSavedButtonStyle())
+            .accessibilityIdentifier("workout.saved.feedback")
         }
-        .padding(.horizontal, 10).padding(.bottom, 4)
-        .background(Color(red: 0.06, green: 0.20, blue: 0.13), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.green.opacity(0.4)))
-        .padding(.horizontal, 6)
-        .accessibilityIdentifier("workout.saved")
+        .foregroundStyle(.white)
+        .background(Color(red: 26 / 255, green: 28 / 255, blue: 29 / 255), in: RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: 14)).padding(.horizontal, 8)
+        .onAppear { if voiceOver { resultFocused = true } }
+    }
+}
+
+enum WorkoutSavedMotion {
+    static func animation(isPresented: Bool, reduced: Bool) -> Animation {
+        if reduced { return .easeOut(duration: 0.12) }
+        return isPresented ? .spring(response: 0.28, dampingFraction: 0.92) : .easeInOut(duration: 0.16)
+    }
+
+    static func transition(reduced: Bool) -> AnyTransition {
+        guard !reduced else { return .opacity }
+        return .asymmetric(
+            insertion: .offset(y: 8).combined(with: .opacity).combined(with: .scale(scale: 0.98)),
+            removal: .offset(y: -3).combined(with: .opacity))
+    }
+}
+
+private struct WorkoutSavedButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.6 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .animation(.easeOut(duration: reduceMotion ? 0 : 0.1), value: configuration.isPressed)
     }
 }

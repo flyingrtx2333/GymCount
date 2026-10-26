@@ -22,14 +22,14 @@ final class GymCount_Watch_AppUITests: XCTestCase {
         if !end.isHittable { app.swipeUp() }
         end.tap()
         XCTAssertTrue(app.staticTexts["保存失败，训练仍在本页，请重试"].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.staticTexts["已保存"].exists)
+        XCTAssertFalse(app.buttons["workout.saved.close"].exists)
         app.buttons["知道了"].tap()
         XCTAssertTrue(app.buttons["重试保存"].exists)
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "watch-save-failure"; shot.lifetime = .keepAlways; add(shot)
         // External review script removes the filesystem obstruction after this attachment.
         Thread.sleep(forTimeInterval: 3)
         app.buttons["workout.end"].tap()
-        XCTAssertTrue(app.staticTexts["已保存"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["workout.saved.close"].waitForExistence(timeout: 3))
         let recovered = XCTAttachment(screenshot: app.screenshot()); recovered.name = "watch-save-retried"; recovered.lifetime = .keepAlways; add(recovered)
     }
     @MainActor
@@ -46,10 +46,16 @@ final class GymCount_Watch_AppUITests: XCTestCase {
         let end = app.buttons["workout.end"]
         if !end.isHittable { app.swipeUp() }
         end.tap()
-        let saved = app.staticTexts["已保存"]
-        XCTAssertTrue(saved.waitForExistence(timeout: 5))
-        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "watch-saved-green"; shot.lifetime = .keepAlways; add(shot)
-        app.buttons["计数不准？"].tap()
+        let close = app.buttons["workout.saved.close"]
+        let feedback = app.buttons["workout.saved.feedback"]
+        XCTAssertTrue(feedback.waitForExistence(timeout: 5))
+        XCTAssertTrue(close.isHittable); XCTAssertTrue(feedback.isHittable)
+        XCTAssertGreaterThanOrEqual(close.frame.width, 43.5)
+        XCTAssertGreaterThanOrEqual(close.frame.height, 43.5)
+        XCTAssertGreaterThanOrEqual(feedback.frame.height, 43.5)
+        XCTAssertLessThanOrEqual(close.frame.maxY, feedback.frame.minY + 0.5)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "watch-saved-M2"; shot.lifetime = .keepAlways; add(shot)
+        feedback.tap()
         XCTAssertTrue(app.staticTexts["计数反馈"].waitForExistence(timeout: 3))
         // A simulator has no real motion stream; it must never fabricate an upload.
         XCTAssertTrue(app.staticTexts["此记录没有可上传的采样"].exists)
@@ -57,7 +63,36 @@ final class GymCount_Watch_AppUITests: XCTestCase {
         app.buttons["返回"].tap()
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["workout.start.bench_press"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["已保存"].exists)
+        XCTAssertFalse(close.exists)
+    }
+
+    @MainActor
+    func testSavedBannerCloseAndAutoDismiss() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        app.launch()
+        let close = app.buttons["workout.saved.close"]
+        for exercise in ["squat", "deadlift"] {
+            let start = app.buttons["workout.start." + exercise]
+            XCTAssertTrue(start.waitForExistence(timeout: 5))
+            start.tap()
+            let plus = app.buttons["增加次数"]
+            XCTAssertTrue(plus.waitForExistence(timeout: 5))
+            for _ in 0..<(exercise == "squat" ? 10 : 1) { plus.tap() }
+            let end = app.buttons["workout.end"]
+            if !end.isHittable { app.swipeUp() }
+            end.tap()
+            XCTAssertTrue(close.waitForExistence(timeout: 5))
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = "watch-saved-" + exercise; shot.lifetime = .keepAlways; add(shot)
+            if exercise == "squat" {
+                close.tap()
+                XCTAssertTrue(close.waitForNonExistence(timeout: 2))
+            } else {
+                XCTAssertTrue(close.waitForNonExistence(timeout: 7))
+            }
+        }
+        XCTAssertTrue(app.buttons["workout.start.deadlift"].exists)
     }
 
     @MainActor

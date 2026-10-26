@@ -84,6 +84,7 @@ struct GymHeader: View {
 struct ContentView: View {
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @State private var selectedExercise: ExerciseType = .benchPress
     @State private var showingHistory = false
     @State private var showingSettings = false
@@ -109,19 +110,25 @@ struct ContentView: View {
         }
         .sheet(item: $feedbackWorkout) { WorkoutFeedbackView(workout: $0) }
         .overlay(alignment: .center) {
-            if dataManager.currentSession == nil, let workout = dataManager.completedWorkout {
-                WorkoutSavedBanner(workout: workout, feedback: {
-                    dataManager.completedWorkout = nil
-                    feedbackWorkout = workout
-                }, close: { dataManager.completedWorkout = nil })
-                .transition(reduceMotion ? .identity : .opacity)
-                .task(id: workout.id) {
-                    do { try await Task.sleep(for: .seconds(5)) } catch { return }
-                    if dataManager.completedWorkout?.id == workout.id {
-                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { dataManager.completedWorkout = nil }
+            ZStack {
+                if dataManager.currentSession == nil, let workout = dataManager.completedWorkout {
+                    WorkoutSavedBanner(workout: workout, feedback: {
+                        dataManager.completedWorkout = nil
+                        feedbackWorkout = workout
+                    }, close: { dataManager.completedWorkout = nil })
+                    .id(workout.id)
+                    .transition(WorkoutSavedMotion.transition(reduced: reduceMotion))
+                    .task(id: voiceOver) {
+                        guard !voiceOver else { return }
+                        do { try await Task.sleep(for: .seconds(5)) } catch { return }
+                        if dataManager.completedWorkout?.id == workout.id {
+                            dataManager.completedWorkout = nil
+                        }
                     }
                 }
             }
+            .animation(WorkoutSavedMotion.animation(isPresented: dataManager.completedWorkout != nil, reduced: reduceMotion),
+                       value: dataManager.completedWorkout?.id)
         }
         .alert(String(localized: "保存提示"), isPresented: Binding(
             get: { dataManager.saveError != nil }, set: { if !$0 { dataManager.saveError = nil } })) {
