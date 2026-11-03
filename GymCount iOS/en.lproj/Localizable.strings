@@ -1,5 +1,6 @@
 
 /* Training, history, capture, and accessibility */
+"无效指令" = "Invalid command";
 "%.1f 公斤" = "%.1f kg";
 "%.1f 公斤 × %lld 次" = "%.1f kg × %lld reps";
 "%@ · 第 %lld 组" = "%@ · Set %lld";
@@ -371,3 +372,133 @@
 "返回原范围" = "Back to previous range";
 "恢复累计时长" = "Show total time";
 "上次备份：%@" = "Last backup: %@";
+
+// Commercial readiness fixes
+"使用帮助" = "Help";
+"原记录文件会保留，恢复后使用此备份。" = "The original file will be kept. Recovery will use this backup.";
+"同步状态与重试" = "Sync status and retry";
+"在手表结束并保存训练后，打开手机记录页同步。" = "Finish and save your workout on Apple Watch, then open Records on iPhone to sync.";
+"在记录页补记训练；左滑记录可编辑或删除。" = "Add workouts in Records. Swipe left on a record to edit or delete it.";
+"在设置中导出训练记录备份。恢复前可预览新增记录，已有记录保留手机当前内容。" = "Export a training record backup in Settings. Preview additions before restoring; existing records keep their current content.";
+"备份与恢复" = "Backup and restore";
+"待核对" = "Needs review";
+"恢复本地记录" = "Recover local records";
+"本地记录无法读取，请从备份恢复" = "Local records could not be read. Restore from a backup.";
+"草稿未能删除" = "Draft could not be deleted";
+"退出并保留已有草稿" = "Exit and keep the saved draft";
+"采样接收超时，请保持手机与手表连接后重试" = "Receiving samples timed out. Keep iPhone and Apple Watch connected and retry.";
+"高级" = "Advanced";
+
+"更多操作" = "More actions";
+"清除选择" = "Clear selection";
+
+"每日汇总" = "Daily summary";
+
+"每周汇总" = "Weekly summary";
+
+"每月汇总" = "Monthly summary";
+
+"总用时" = "Elapsed time";
+
+"估算时长" = "Est. active time";
+
+"时间轴" = "Timeline";
+"加速度" = "Acceleration";
+"去重力加速度" = "User acceleration";
+"旋转速率" = "Rotation rate";
+"姿态角" = "Attitude";
+"重力" = "Gravity";
+"融合磁场" = "Fused magnetic field";
+"识别打点" = "Detected reps";
+"人工标注" = "Annotations";
+"震动请求" = "Haptic requests";
+"部分采样" = "Partial recording";
+"传感器" = "Sensor";
+"传感器时间轴" = "Sensor timeline";
+"上一时段" = "Previous interval";
+"下一时段" = "Next interval";
+"间隔 %@ 秒" = "Interval %@ s";
+"全部 %lld 次" = "All %lld reps";
+"时间轴无法读取" = "Timeline could not be read";
+"训练记录备份不能超过 256 MB" = "Training record backups cannot exceed 256 MB";
+"训练时间轴保存失败，请重试同步" = "Could not save the workout timeline. Retry sync.";
+"训练时间轴接收失败，请重试同步" = "Could not receive the workout timeline. Retry sync.";
+"%lld 秒" = "%lld s";
+"全程" = "Full";
+"收起" = "Show less";
+"时间" = "Time";
+"清除选中" = "Clear selection";
+"第 %lld 次" = "Rep %lld";
+"Axis" = "Axis";
+"Event" = "Event";
+"Selection" = "Selection";
+"Time" = "Time";
+
+"概览" = "Overview";
+"训练天数" = "Training days";
+"已知用时" = "Recorded time";
+"累计用时" = "Total time";
+"最常练" = "Most frequent";
+"%lld 条 · %lld 次" = "%lld records · %lld reps";
+"常用重量" = "Most-used load";
+"常见最大重量" = "Most frequent maximum";
+"动作分布" = "Exercise distribution";
+"按记录数" = "By record count";
+"按动作次数" = "By reps";
+"记录数" = "Records";
+"筛选此动作" = "Filter this exercise";
+"常用重量分布" = "Working load distribution";
+"最大重量分布" = "Maximum load distribution";
+"暂无重量记录" = "No recorded loads";
+"最长连续 %lld 天" = "Longest streak: %lld days";
+"当前连续 %lld 天" = "Current streak: %lld days";
+"训练日历" = "Training calendar";
+"近一年" = "Past year";
+"少" = "Less";
+"多" = "More";
+"上下轻扫选择日期" = "Swipe up or down to select a date";
+"%lld 天" = "%lld days";
+"组数" = "Sets";
+"重量" = "Load";
+" · " = " · ";
+"%lld 条" = "%lld records";
+"天数" = "Days";
+"用时" = "Time";
+"日历" = "Calendar";
+"未接收采样" = "Samples not received";
+"动作时长" = "Active time";
+"同步" = "Sync";
+"无传感器采样" = "No sensor samples";
+
+// Training streak and conditional daily reminder
+"连续 %lld 天" = "%lld-day streak";
+"已连续训练 %lld 天，今天动一动，延续连动。" = "Keep your %lld-day streak going. Train today.";
+"今天还没训练，动一动吧。" = "No workout yet today. Time to move.";
+"未训练提醒" = "Workout reminder";
+"允许通知" = "Allow notifications";
+"训练提醒" = "Time to train";
+"请先允许通知，才能接收提醒" = "Allow notifications to receive reminders.";
+"提醒未能保存，请重试" = "Could not schedule reminders. Try again.";
+
+"训练报告接收失败，请重试同步" = "Could not receive the workout report. Try syncing again.";
+"正在读取采样" = "Loading samples";
+"采样无法读取" = "Could not read samples";
+"采样段" = "Recording segment";
+"段内时间" = "Segment time";
+
+"自动计数需要 Apple Watch" = "Automatic counting requires Apple Watch";
+"设置手表" = "Set Up Watch";
+"在 Apple Watch 上开始训练，结束后保存。" = "Start a workout on Apple Watch, then finish and save.";
+"自动计数需要 Apple Watch，手机也可补记训练。" = "Automatic counting requires Apple Watch. You can also log workouts on iPhone.";
+"打开 iPhone 的 Watch App，按提示配对手表。" = "Open the Watch app on iPhone and follow the steps to pair your watch.";
+"查看配对指南" = "Pairing Guide";
+"在 iPhone 的 Watch App 中完成配对，并安装手表应用。" = "Pair your watch and install the watch app in the Watch app on iPhone.";
+"打开 iPhone 的 Watch App。" = "Open the Watch app on iPhone.";
+"我的手表 → 可用 App。" = "My Watch → Available Apps.";
+"找到「健身计数器」，点击「安装」。" = "Find PowerReps and tap Install.";
+"查看安装指南" = "Installation Guide";
+
+"选择训练记录" = "Select a Workout";
+
+"暂无记录，在 Apple Watch 上开始训练" = "No records yet. Start a workout on Apple Watch.";
+"暂无记录，设置 Apple Watch 后开始记录" = "No records yet. Set up Apple Watch to start recording.";

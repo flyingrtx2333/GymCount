@@ -1,108 +1,22 @@
-# GymCount SiriKit 集成指南
+# Apple Watch Siri 计数
 
-## 概述
-GymCount Watch App 现已集成 SiriKit，支持通过语音控制锻炼记录功能。
+使用手表本机的 App Intents / App Shortcuts，手机保持记录功能。
 
-## 支持的Siri命令
+## 语音入口
 
-### 1. 开始锻炼
-- **中文命令**：
-  - "开始记录深蹲"
-  - "开始卧推锻炼"
-  - "开始硬拉"
-  - "开始锻炼"
+- “开始健身计数”：询问卧推、深蹲或硬拉，再打开整场训练页。
+- “用健身计数开始卧推”：直接带入动作。也支持当前正式应用名“健身计数器”。
+- “结束健身计数”或“用健身计数结束训练”：结束整场训练，保存成功后读出最终累计次数并打开报告。
+- 英语：“Start PowerReps” / “Start Bench Press with PowerReps” / “Finish PowerReps”。
 
-- **英文命令**：
-  - "Start squat workout"
-  - "Start bench press workout"
-  - "Start deadlift workout"
-  - "Start workout"
+省略重量时使用手表已设置的器械重量。已有训练、未完成恢复、保存中或采集未完成时拒绝创建另一条训练。草稿实际保存成功后才回应开始成功；不自动添加次数或制造训练历史。
 
-### 2. 停止锻炼
-- **中文命令**：
-  - "停止锻炼"
-  - "结束锻炼"
-  - "停止记录"
+一场训练中可在手表切动作、重量和暂停，Siri 结束会等待最终计数核准与持久化结果。没有正在进行的训练时结束请求报错，不创建空报告。旧的单组恢复会话仍可通过同一结束 Intent 保存。完整数据与验证边界见 [整场训练报告](../docs/whole-workout-20261028.md)。
 
-- **英文命令**：
-  - "Stop workout"
-  - "End workout"
-  - "Stop recording"
+## 配置
 
-### 3. 添加次数
-- **中文命令**：
-  - "添加一次"
-  - "加一次"
-  - "记录一次"
+`Managers/ShortCutsManager.swift` 保留现有 Intent 和参数标识，`ExerciseTypeQuery` 不再默认返回深蹲；`StartWorkoutIntent` 的动作必填，未指定时由系统询问。`StartWorkoutIntent` 调用整场训练启动入口，`StopWorkoutIntent` 根据当前会话选择整场结束或兼容的单组保存；两者只在实际完成相应操作后回应成功。`GymCountShortcutsProvider` 在 Watch App 初始化时注册开始和结束入口。
 
-- **英文命令**：
-  - "Add rep"
-  - "Add one rep"
-  - "Record rep"
+语音短语使用两种语言的 `AppShortcuts.strings`，保留 `${applicationName}` 和 `${exerciseType}` 占位符。两个 Watch Info.plist 的 `INAlternativeAppNames` 注册应用别名，`InfoPlist.strings` 将别名本地化为“健身计数”／“Power Reps”。不把整条命令伪装成应用名称。
 
-## 使用方法
-
-### 首次使用
-1. 确保Apple Watch已连接到iPhone
-2. 在iPhone上打开"设置" > "Siri与搜索"
-3. 确保Siri已启用
-4. 首次使用时会提示授权Siri访问GymCount
-
-### 语音控制步骤
-1. 抬起手腕或点击Apple Watch屏幕
-2. 说"嘿Siri"或长按数字表冠
-3. 说出相应的锻炼命令
-4. Siri会确认并执行操作
-
-## 技术实现
-
-### 文件结构
-- `Intents.intentdefinition` - Siri Intent定义文件
-- `IntentHandler.swift` - Intent处理器
-- `DataManager.swift` - 数据管理器（已更新支持Siri）
-- `Info.plist` - 应用配置和权限
-
-### 支持的Intent类型
-1. **StartWorkoutIntent** - 开始锻炼
-2. **StopWorkoutIntent** - 停止锻炼  
-3. **AddRepIntent** - 添加次数
-
-### 权限配置
-- `NSSiriUsageDescription` - Siri使用说明
-- `NSHealthShareUsageDescription` - 健康数据读取权限
-- `NSHealthUpdateUsageDescription` - 健康数据写入权限
-- `NSMotionUsageDescription` - 运动数据权限
-
-## 注意事项
-
-1. **网络连接**：Siri需要网络连接才能工作
-2. **语言支持**：支持中文和英文语音命令
-3. **锻炼状态**：只能在没有活跃锻炼时开始新锻炼
-4. **权限管理**：首次使用需要用户授权Siri访问
-
-## 故障排除
-
-### Siri无法识别命令
-- 检查网络连接
-- 确保Siri已启用
-- 尝试更清晰的发音
-- 检查应用权限设置
-
-### 命令执行失败
-- 确保没有其他活跃的锻炼会话
-- 检查应用是否正在运行
-- 重启Apple Watch
-
-## 开发者信息
-
-### 自定义Intent
-如需添加新的Siri命令，请：
-1. 在`Intents.intentdefinition`中添加新的Intent
-2. 在`IntentHandler.swift`中实现对应的处理器
-3. 更新本地化字符串文件
-4. 重新编译并测试
-
-### 调试建议
-- 使用Xcode的Intent测试功能
-- 检查控制台日志输出
-- 测试不同语言环境下的命令识别
+Apple 要求 App Shortcut 短语包含应用名，可以采用已登记的应用别名：[Design App Shortcuts](https://developer.apple.com/videos/play/wwdc2022/10169/)。手表必须安装本版本并启用 Siri；安装和短语注册成功不等同于已验证某台手表的实际口语识别。

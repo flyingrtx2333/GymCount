@@ -29,7 +29,8 @@ enum VerifyActionDuration {
                     ActionTiming.Interval(start: $0.start, end: $0.end)
                 }) : nil
             } else if input.exercise == "squat" {
-                duration = nil // No validated action boundaries; never infer from counts.
+                duration = ActionTiming.estimated(exercise: input.exercise, samples: input.motion_samples ?? [],
+                    expectedCount: input.detected_count)
             } else { continue }
             if let duration {
                 precondition(duration.isFinite && duration >= 0 && duration <= input.duration_seconds)

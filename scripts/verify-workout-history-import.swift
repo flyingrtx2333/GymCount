@@ -30,19 +30,35 @@ enum VerifyWorkoutHistoryImport {
             let remindersEnabled = false
         }
         defaults.set(try JSONEncoder().encode(State(history: [existingPhone])), forKey: "phone.training.v2")
-        let incoming = histories.dropLast().map {
+        let incoming = histories.map {
             WorkoutSync.Record(id: $0.id, date: $0.date, exercise: $0.exerciseType.rawValue,
-                totalReps: $0.totalReps, maxWeight: $0.maxWeight, duration: $0.duration, activeDuration: $0.activeDuration)
+                totalReps: $0.totalReps, maxWeight: $0.maxWeight, duration: $0.duration, activeDuration: $0.activeDuration, totalWeight: $0.totalWeight)
         }
         // Migrate a real old journal together with the existing v2 summary.
         let oldJournal = try WatchWorkoutArchive(url: url)
         try oldJournal.accept(Array(incoming.prefix(10)))
         let journalBytes = try Data(contentsOf: url)
         let store = PhoneWorkoutStore(defaults: defaults, reminderID: suite, watchArchiveURL: url)
-        precondition(store.history.count == 11)
+        precondition(store.history.count == Set(incoming.prefix(10).map(\.id) + [existing.id]).count)
         let journalAfterMigration = try Data(contentsOf: url)
         precondition(journalBytes == journalAfterMigration, "Migration changed the original journal")
         precondition(store.lastSyncAt == nil, "Migration invented a successful sync")
+        let legacyCorrectedReps = existing.totalReps == 1_000_000 ? existing.totalReps - 1 : existing.totalReps + 1
+        precondition(store.updateRecord(id: existing.id, date: existing.date, sets: [], duration: nil,
+            summaryReps: legacyCorrectedReps, summaryWeight: existing.maxWeight, note: "legacy-source verification"))
+        let beforeConflict = try Data(contentsOf: store.snapshotURL)
+        let beforeConflictIDs = Set(store.history.map(\.id))
+        let preceding = incoming.first { !beforeConflictIDs.contains($0.id) } ?? incoming[0]
+        let conflictingLegacy = WorkoutSync.Record(id: existing.id, date: existing.date, exercise: existing.exerciseType.rawValue,
+            totalReps: legacyCorrectedReps, maxWeight: existing.maxWeight, duration: existing.duration,
+            activeDuration: existing.activeDuration, totalWeight: existing.totalWeight)
+        do {
+            try store.acceptWatchHistory([preceding, conflictingLegacy])
+            preconditionFailure("Conflicting legacy source was accepted")
+        } catch WorkoutSync.Failure.conflictingRecord {}
+        let afterConflict = try Data(contentsOf: store.snapshotURL)
+        precondition(beforeConflict == afterConflict && Set(store.history.map(\.id)) == beforeConflictIDs,
+            "A conflicting source partially committed its batch")
         func replay() throws {
             for offset in stride(from: 0, to: incoming.count, by: WorkoutSync.maximumBatchSize) {
                 let chunk = Array(incoming[offset..<min(offset + WorkoutSync.maximumBatchSize, incoming.count)])
@@ -52,6 +68,14 @@ enum VerifyWorkoutHistoryImport {
         }
         try replay()
         precondition(store.storageError == nil && store.history.count == histories.count)
+        let enrichedLegacy = store.history.first { $0.id == existing.id }!
+        precondition(enrichedLegacy.watchSummary?.id == existing.id && enrichedLegacy.legacySummary?.id == existing.id,
+            "Matching legacy source was not enriched or original source was discarded")
+        precondition(enrichedLegacy.legacySummary?.totalReps == existing.totalReps &&
+            enrichedLegacy.watchSummary?.totalReps == existing.totalReps && enrichedLegacy.totalReps == legacyCorrectedReps &&
+            enrichedLegacy.note == "legacy-source verification", "Legacy source enrichment overwrote phone edits")
+        precondition(store.updateRecord(id: existing.id, date: existing.date, sets: [], duration: nil,
+            summaryReps: existing.totalReps, summaryWeight: existing.maxWeight))
         try replay()
         precondition(store.history.count == histories.count, "Duplicate import created extra rows")
         for original in histories {
@@ -59,7 +83,7 @@ enum VerifyWorkoutHistoryImport {
             precondition(imported.totalReps == original.totalReps && imported.startTime == original.date)
             precondition(imported.duration == original.duration && imported.exercises == [original.exerciseType])
             precondition(imported.activeDuration == original.activeDuration, "Invented or lost action duration")
-            precondition(imported.volume == nil && imported.sets.isEmpty, "Invented missing set detail")
+            precondition(imported.volume == original.totalWeight && imported.sets.isEmpty, "Invented or lost measured training volume")
             let summary = imported.watchSummary ?? imported.legacySummary!
             precondition(summary.maxWeight == original.maxWeight)
         }
@@ -123,6 +147,30 @@ enum VerifyWorkoutHistoryImport {
             }
         }
         let sourceDates = histories.map(\.date)
+        // Partial calendar buckets must open exactly the records already counted.
+        // Choose real dates inside each populated month, without altering the source.
+        var clippedBuckets = 0
+        let months = Dictionary(grouping: restored.history) { calendar.dateInterval(of: .month, for: $0.startTime)!.start }
+        for rows in months.values {
+            let dates = Array(Set(rows.map { calendar.startOfDay(for: $0.startTime) })).sorted()
+            guard dates.count > 1 else { continue }
+            var filter = RecordFilter(period: .custom, start: dates[dates.count / 2], end: dates.last!)
+            let selected = restored.history.filter(filter.includes)
+            for grouping in [RecordChartGranularity.week, .month] {
+                for bucket in RecordTrendBucket.summarize(selected, granularity: grouping, reps: filter.reps, weight: filter.weight) {
+                    let range = filter.intersection(with: bucket.range)!
+                    var destination = filter; destination.select(range)
+                    let before = selected.filter { $0.startTime >= bucket.range.start && $0.startTime < bucket.range.end }
+                    let after = restored.history.filter(destination.includes)
+                    precondition(Set(before.map(\.id)) == Set(after.map(\.id)), "Chart drilldown expanded the selected range")
+                    if range != bucket.range { clippedBuckets += 1 }
+                }
+            }
+            filter.period = .all
+            let fullMonth = calendar.dateInterval(of: .month, for: dates[0])!
+            precondition(filter.intersection(with: fullMonth) == fullMonth)
+        }
+        precondition(clippedBuckets > 0, "Real history did not exercise a partial calendar bucket")
         let sourceSpan = calendar.dateComponents([.day], from: calendar.startOfDay(for: sourceDates.min()!), to: calendar.startOfDay(for: sourceDates.max()!)).day!
         let expectedAutomatic: RecordChartGranularity = sourceSpan <= 45 ? .day : sourceSpan <= 180 ? .week : .month
         precondition(RecordChartGranularity.automatic.resolved(for: sourceDates) == expectedAutomatic)
@@ -236,6 +284,8 @@ enum VerifyWorkoutHistoryImport {
         precondition(!failureStore.addRecord(date: original.date, sets: sets, duration: nil, draftID: draft.id))
         precondition(failureStore.editorDrafts.first?.id == draft.id)
         precondition(failureStore.history.isEmpty && failureStore.storageError != nil)
+        precondition(failureStore.discardEditorDraft(UUID()), "An unsaved draft should not require a disk write to exit")
+        precondition(!failureStore.discardEditorDraft(draft.id), "An existing draft deletion must not falsely report success")
         try FileManager.default.removeItem(at: failureURL.deletingLastPathComponent())
         try FileManager.default.createDirectory(at: failureURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try originalState.write(to: failureURL)
@@ -250,6 +300,21 @@ enum VerifyWorkoutHistoryImport {
         precondition(!corruptStore.addRecord(date: original.date, sets: sets, duration: nil))
         let afterCorruptWrite = try Data(contentsOf: corruptURL)
         precondition(afterCorruptWrite == corruptBytes, "Corrupt snapshot overwritten by fallback")
+        precondition(corruptStore.requiresRecovery)
+        do { _ = try corruptStore.previewRestore(Data("broken backup".utf8)); preconditionFailure("Corrupt backup accepted for recovery") } catch {}
+        let afterRejectedRecovery = try Data(contentsOf: corruptURL)
+        precondition(afterRejectedRecovery == corruptBytes)
+        let recovery = try corruptStore.previewRestore(backup)
+        precondition(recovery.added == store.history.count)
+        try corruptStore.restore(recovery)
+        precondition(!corruptStore.requiresRecovery && corruptStore.history.count == store.history.count)
+        let protectedFiles = try FileManager.default.contentsOfDirectory(at: corruptURL.deletingLastPathComponent(), includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix("before-recovery-") }
+        precondition(protectedFiles.count == 1)
+        let protectedBytes = try Data(contentsOf: protectedFiles[0])
+        precondition(protectedBytes == corruptBytes, "Recovery did not preserve exact original bytes")
+        let recoveredFromBackup = PhoneWorkoutStore(defaults: defaults, reminderID: suite, snapshotURL: corruptURL)
+        precondition(recoveredFromBackup.history.count == store.history.count && recoveredFromBackup.storageError == nil)
         precondition(store.lastSyncAt == nil, "Receiving batches falsely marked the sync complete")
         precondition(store.confirmSync() && store.lastSyncAt != nil)
         let result: [String: Any] = ["sourceRecords": histories.count, "importedWatchRecords": incoming.count,
@@ -257,8 +322,12 @@ enum VerifyWorkoutHistoryImport {
             "dailyDurationMatchesSource": true, "missingDurationsNotZero": true, "partialDurationCoverageCorrect": true,
             "periodAggregationMatchesSource": true, "periodSelectionBoundsPreserved": true, "periodCounts": periodCounts,
             "automaticGranularity": expectedAutomatic.rawValue, "sourceZeroDurationRecords": histories.filter { $0.duration == 0 }.count,
+            "partialChartDrilldownBuckets": clippedBuckets, "unreadableSnapshotRecoveryPassed": true,
+            "recoveryOriginalBytesPreserved": true, "unsavedEditorCanExitWithoutWrite": true,
             "relaunchPreserved": true, "journalRecoveryPassed": true, "deletedRowNotResurrected": true,
             "phoneCorrectionsSurviveResync": true, "manualRecordEditingPreserved": true, "invalidEditsRejected": true,
+            "legacySameIDReplayPreservesSourceAndCorrection": true,
+            "legacySourceConflictRejectsWholeBatch": true,
             "backupRoundTripPassed": true, "restoreConflictRulesPassed": true, "invalidBackupsRejected": true,
             "draftsPreserved": true, "failedWritesKeepPublishedState": true, "csvNoInventedSets": true, "originalJournalPreserved": true, "corruptSnapshotPreserved": true, "syncTimestampRequiresConfirmation": true, "transportValidated": false]
         FileHandle.standardOutput.write(try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]))

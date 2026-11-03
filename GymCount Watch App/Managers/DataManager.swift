@@ -13,19 +13,39 @@ import WatchKit
 class DataManager: ObservableObject {
     static let shared = DataManager()
     
-    @Published var currentSession: WorkoutSession?
-    @Published var workoutHistory: [WorkoutHistory] = []
+    @Published private(set) var currentSession: WorkoutSession?
+    @Published private(set) var requiresWorkoutRecovery = false
+    @Published private(set) var canResumeRecoveredWorkout = false
+    @Published private(set) var requiresDraftRecovery = false
+    @Published var workoutHistory: [WorkoutHistory] = [] {
+        didSet { NotificationManager.shared.scheduleDailyReminder() }
+    }
+    var trainingDates: [Date] { workoutHistory.filter { $0.totalReps > 0 }.map(\.date) }
     @Published var settings = AppSettings.shared
     @Published var isFirstLaunch = true
     @Published var countingMessage = String(localized: "检测中")
     @Published var completedWorkout: WorkoutHistory?
+    @Published var completedWholeWorkout: WorkoutReport?
+    @Published var wholeWorkoutIdlePrompt = false
+    @Published var wholeWorkoutError: String?
+    private var wholeIdleTask: Task<Void, Never>?
+    private var idleAcknowledgedAt = Date.distantPast
+    private var liveHealthObservation: AnyCancellable?
     @Published var saveError: String?
+    @Published private(set) var isSavingWorkout = false
     @Published var countingFailed = false
+    private var sensorWallAnchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
     private var diagnostics: WorkoutDiagnostics?
     private let historyURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("WatchHistory/history-v1.json")
     private var historyReadFailed = false
+    private let draftStore = WatchWorkoutDraftStore(url: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("WatchHistory/current-workout-v1.json"))
+    private var draftWriteFailed = false
+    private var checkpointedSession: WorkoutSession?
     private let feedbackArchive = WorkoutFeedbackArchive(folder: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("WorkoutFeedback"))
+    let timelineArchive = WorkoutTimelineArchive(folder: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("WorkoutTimelines"))
+    let reportSensorArchive = WorkoutReportSensorArchive(folder: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("WatchHistory/WholeWorkoutSamples"))
     private var automaticBenchCycles: [UUID: BenchCycle] = [:]
+    private var automaticSquatCycles: [UUID: SquatCycle] = [:]
     private var removedBenchIDs: Set<UUID> = []
     
     let motionDetector = MotionDetector()
@@ -43,50 +63,75 @@ class DataManager: ObservableObject {
     private init() {
         checkFirstLaunch()
         loadData()
+        loadCurrentWorkout()
         setupMotionDetector()
         setupHealthKit()
     }
     
     private func setupMotionDetector() {
-        motionDetector.onRepDetected = { [weak self] in
-            self?.addRep()
-        }
-        motionDetector.onSquatCompletion = { [weak self] in
-            guard self?.currentSession?.exerciseType == .squat else { return }
-            self?.diagnostics?.raw.markFeedback(at: ProcessInfo.processInfo.systemUptime)
-            WKInterfaceDevice.current().play(.directionUp)
-        }
-        motionDetector.onBenchCompletion = { [weak self] in
-            guard self?.currentSession?.exerciseType == .benchPress else { return }
-            self?.diagnostics?.raw.markFeedback(at: ProcessInfo.processInfo.systemUptime)
-            WKInterfaceDevice.current().play(.directionUp)
+        motionDetector.onRepDetected = { [weak self] repetition, isLive in
+            guard let self, !self.requiresWorkoutRecovery, !self.isWholeWorkoutPaused,
+                  var session = self.currentSession, session.isActive,
+                  session.exerciseType == repetition.exercise else { return }
+            let id = UUID()
+            let cycle: (start: Double, end: Double)?
+            switch repetition {
+            case .benchPress(let value):
+                self.automaticBenchCycles[id] = value
+                cycle = (value.start, value.end)
+            case .squat(let value):
+                self.automaticSquatCycles[id] = value
+                cycle = (value.start, value.end)
+            case .deadlift:
+                cycle = nil
+            }
+            var rep = RepRecord(id: id, timestamp: cycle.map { Date(timeIntervalSince1970: self.sensorWallAnchor + $0.end) } ?? Date(), weight: session.weight)
+            rep.startedAt = cycle.map { Date(timeIntervalSince1970: self.sensorWallAnchor + $0.start) }
+            session.repRecords.append(rep)
+            switch repetition {
+            case .benchPress:
+                let cycles = session.repRecords.compactMap { self.automaticBenchCycles[$0.id] }
+                session.activeDuration = cycles.count == session.totalReps ? ActionTiming.total(cycles.map {
+                    ActionTiming.Interval(start: $0.start, end: $0.end)
+                }) : nil
+            case .squat: session.activeDuration = self.squatDuration(for: session)
+            case .deadlift: session.activeDuration = nil
+            }
+            // Publish and give feedback before potentially slow checkpoint I/O.
+            self.currentSession = session
+            RepCompletionFeedback.play(isLive: isLive) { self.diagnostics?.raw.markFeedback(at: $0) }
+            self.checkpoint(session)
         }
         motionDetector.onBenchAnalysis = { [weak self] in self?.applyBenchAnalysis($0) }
         motionDetector.onCountingError = { [weak self] in self?.reportCountingFailure($0) }
         motionDetector.onActiveDuration = { [weak self] duration in
-            guard let self, var session = self.currentSession else { return }
+            guard let self, !self.requiresWorkoutRecovery, var session = self.currentSession, session.isActive else { return }
             let cycles = session.repRecords.compactMap { self.automaticBenchCycles[$0.id] }
             // A manually added rep has no measured start. Removed false positives
             // must not keep contributing time after the next analysis update.
             session.activeDuration = duration != nil && cycles.count == session.totalReps ? ActionTiming.total(cycles.map {
                 ActionTiming.Interval(start: $0.start, end: $0.end)
             }) : nil
-            self.currentSession = session
+            self.updateCurrentSession(session)
         }
     }
 
     private func applyBenchAnalysis(_ result: BenchAnalysis) {
-        guard var session = currentSession, session.exerciseType == .benchPress else { return }
+        guard !requiresWorkoutRecovery, var session = currentSession, session.isActive, session.exerciseType == .benchPress else { return }
         if result.status == "insufficient_data" {
             countingFailed = true
             countingMessage = String(localized: "采样中断，请手动核对")
             return
         }
-        if !countingFailed { countingMessage = String(localized: "估计中 · 结束时核准") }
+        // A one-rep set may have a valid live completion while V8 still needs a
+        // second cycle to qualify a bout. Unknown is not a zero-count correction.
+        guard result.count != nil else { return }
+        let message = String(localized: "估计中 · 结束时核准")
+        if !countingFailed, countingMessage != message { countingMessage = message }
         var activeIDs: Set<UUID> = []
-        let anchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
+        let anchor = sensorWallAnchor
         for cycle in result.cycles {
-            let match = automaticBenchCycles.filter {
+            let match = automaticBenchCycles.lazy.filter {
                 !activeIDs.contains($0.key) && abs($0.value.turn - cycle.turn) < 0.75
             }.min { abs($0.value.turn - cycle.turn) < abs($1.value.turn - cycle.turn) }
             let id = match?.key ?? UUID()
@@ -97,14 +142,17 @@ class DataManager: ObservableObject {
                 let date = Date(timeIntervalSince1970: anchor + cycle.end)
                 if let index = session.repRecords.firstIndex(where: { $0.id == id }) {
                     session.repRecords[index] = RepRecord(id: id, timestamp: date, weight: session.repRecords[index].weight)
+                    session.repRecords[index].startedAt = Date(timeIntervalSince1970: anchor + cycle.start)
                 } else {
-                    session.repRecords.append(RepRecord(id: id, timestamp: date, weight: session.weight))
+                    var rep = RepRecord(id: id, timestamp: date, weight: session.weight)
+                    rep.startedAt = Date(timeIntervalSince1970: anchor + cycle.start)
+                    session.repRecords.append(rep)
                 }
             }
         }
         session.repRecords.removeAll { automaticBenchCycles[$0.id] != nil && !activeIDs.contains($0.id) }
         session.repRecords.sort { $0.timestamp < $1.timestamp }
-        currentSession = session
+        updateCurrentSession(session)
     }
     
     private func setupHealthKit() {
@@ -164,11 +212,146 @@ class DataManager: ObservableObject {
         }
     }
 
-    private func saveData() {
-        _ = persistHistory(workoutHistory)
+    private func saveSettings() {
         if let settingsData = try? JSONEncoder().encode(settings) {
             userDefaults.set(settingsData, forKey: settingsKey)
         }
+    }
+
+    private func loadCurrentWorkout() {
+        do {
+            guard let draft = try draftStore.load() else { return }
+            // History commits first. A stale checkpoint after a cleanup failure
+            // must never restore a second copy of an already-saved workout.
+            if workoutHistory.contains(where: { $0.id == draft.session.id }) {
+                try draftStore.clear()
+                return
+            }
+            var session = draft.session
+            canResumeRecoveredWorkout = session.endTime == nil
+            session.pauseForRecovery(at: draft.checkpoint)
+            currentSession = session
+            requiresWorkoutRecovery = true
+        } catch {
+            requiresDraftRecovery = true
+            saveError = String(localized: "未完成训练读取失败")
+        }
+    }
+
+    func retryWorkoutDraft() {
+        guard requiresDraftRecovery else { return }
+        requiresDraftRecovery = false
+        saveError = nil
+        loadCurrentWorkout()
+    }
+
+    func resetUnreadableWorkoutDraft() {
+        guard requiresDraftRecovery else { return }
+        do {
+            try draftStore.preserveForRecovery()
+            checkpointedSession = nil
+            draftWriteFailed = false
+            requiresDraftRecovery = false
+            saveError = nil
+        } catch {
+            saveError = String(localized: "原文件保留失败，请重试")
+        }
+    }
+
+    private func matchesCheckpoint(_ session: WorkoutSession) -> Bool {
+        guard !draftWriteFailed, let saved = checkpointedSession,
+           saved.id == session.id, saved.exerciseType == session.exerciseType,
+           saved.startTime == session.startTime, saved.endTime == session.endTime,
+           saved.weight == session.weight, saved.activeDuration == session.activeDuration,
+           saved.durationBeforeResume == session.durationBeforeResume, saved.resumedAt == session.resumedAt,
+           saved.wholeDraft == session.wholeDraft,
+           saved.repRecords.count == session.repRecords.count,
+           zip(saved.repRecords, session.repRecords).allSatisfy({ pair in
+               pair.0.id == pair.1.id && pair.0.timestamp == pair.1.timestamp && pair.0.weight == pair.1.weight && pair.0.startedAt == pair.1.startedAt
+           }) else { return false }
+        return true
+
+    }
+
+    @discardableResult
+    private func checkpoint(_ session: WorkoutSession) -> Bool {
+        if matchesCheckpoint(session) { return true }
+        do {
+            try draftStore.save(session)
+            checkpointedSession = session
+            draftWriteFailed = false
+            return true
+        } catch {
+            if !draftWriteFailed {
+                saveError = String(localized: "训练备份失败，请保持 App 打开并重试保存")
+                WKInterfaceDevice.current().play(.failure)
+            }
+            draftWriteFailed = true
+            return false
+        }
+    }
+
+    private func updateCurrentSession(_ session: WorkoutSession) {
+        // Prefix replays frequently repeat the same stable result.
+        guard !matchesCheckpoint(session) else { return }
+        // Keep the newest repetitions in memory even when storage is full.
+        currentSession = session
+        checkpoint(session)
+    }
+
+    func updateCurrentWeight(_ weight: Double) {
+        guard !isSavingWorkout, !requiresWorkoutRecovery, weight.isFinite, weight >= 0, var session = currentSession, session.isActive else { return }
+        session.weight = weight
+        updateCurrentSession(session)
+    }
+
+    func resumeRecoveredWorkout() {
+        guard !isSavingWorkout else { return }
+        guard requiresWorkoutRecovery, canResumeRecoveredWorkout, var session = currentSession else { return }
+        if var draft = session.wholeDraft {
+            draft.completedSets += WorkoutReport.group(session.repRecords, exercise: session.exerciseType)
+            draft.pauses.append(.init(startedAt: draft.pausedAt ?? session.endTime ?? Date(), endedAt: Date()))
+            draft.pausedAt = nil; draft.metricsInterrupted = true
+            draft.segmentStartedAt = Date(); draft.segmentID = UUID()
+            session.wholeDraft = draft; session.repRecords = []
+        }
+        session.resume()
+        guard checkpoint(session) else { return }
+        currentSession = session
+        requiresWorkoutRecovery = false
+        canResumeRecoveredWorkout = false
+        countingFailed = false
+        countingMessage = session.exerciseType == .benchPress ? String(localized: "估计中 · 结束时核准") : String(localized: "检测中")
+        automaticBenchCycles = [:]; automaticSquatCycles = [:]; removedBenchIDs = []
+        // Previous raw samples are unavailable after a restart. A resumed set
+        // must not offer a partial recording as feedback for the full workout.
+        diagnostics = nil
+        if session.wholeDraft == nil { startHKWorkoutSession(exerciseType: session.exerciseType) }
+        else {
+            startWholeIdleMonitor()
+            wholeWorkoutError = String(localized: "训练已恢复，健康数据从现在继续")
+            isSavingWorkout = true
+            Task { @MainActor in
+                defer { isSavingWorkout = false }
+                observeLiveHealth()
+                if settings.healthKitSyncEnabled {
+                    do {
+                        try await healthKitManager.liveWorkout.begin(id: session.id, startDate: Date())
+                        if var active = currentSession, active.id == session.id {
+                            active.wholeDraft?.healthSessionStarted = true; updateCurrentSession(active)
+                        }
+                    } catch { wholeWorkoutError = error.localizedDescription }
+                }
+            }
+        }
+        sensorWallAnchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
+        motionDetector.configureForExercise(session.exerciseType)
+        motionDetector.startDetection()
+    }
+
+    func discardRecoveredWorkout() {
+        guard requiresWorkoutRecovery else { return }
+        resetCurrentWorkout()
     }
 
     func reportCountingFailure(_ message: String) {
@@ -179,17 +362,25 @@ class DataManager: ObservableObject {
     }
 
     // MARK: - 锻炼会话管理
-    func startWorkout(exerciseType: ExerciseType, weight: Double = 0.0) {
+    func startWorkout(exerciseType: ExerciseType, weight: Double = 0.0, whole: Bool = false) {
         guard currentSession == nil else { return }
+        guard !requiresDraftRecovery else {
+            saveError = String(localized: "未完成训练读取失败")
+            return
+        }
+        guard weight.isFinite, weight >= 0 else { return }
         completedWorkout = nil; saveError = nil; countingFailed = false
-        automaticBenchCycles = [:]; removedBenchIDs = []
-        countingMessage = exerciseType == .benchPress ? String(localized: "估计中 · 前两次一起确认") : String(localized: "检测中")
+        automaticBenchCycles = [:]; automaticSquatCycles = [:]; removedBenchIDs = []
+        countingMessage = exerciseType == .benchPress ? String(localized: "估计中 · 结束时核准") : String(localized: "检测中")
         if exerciseType == .deadlift { WKInterfaceDevice.current().play(.click) }
-        currentSession = WorkoutSession(
+        var session = WorkoutSession(
             exerciseType: exerciseType,
             startTime: Date(),
             weight: weight
         )
+        if whole { session.wholeDraft = WholeWorkoutDraft(id: session.id, startedAt: session.startTime, segmentID: UUID()) }
+        guard checkpoint(session) else { return }
+        currentSession = session
         
         let diagnostics = WorkoutDiagnostics()
         self.diagnostics = diagnostics
@@ -199,54 +390,92 @@ class DataManager: ObservableObject {
         motionDetector.onRawRepDetected = { diagnostics.raw.markRep(at: $0) }
 
         // 创建 HealthKit 运动会话
-        startHKWorkoutSession(exerciseType: exerciseType)
+        if !whole { startHKWorkoutSession(exerciseType: exerciseType) }
         
         // 自动开始运动检测
+        sensorWallAnchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
         motionDetector.configureForExercise(exerciseType)
         motionDetector.startDetection()
     }
     
     func addRep() {
-        guard var session = currentSession else { return }
+        guard !isSavingWorkout, !isWholeWorkoutPaused else { return }
+        recordDetectedRep()
+    }
+
+    private func recordDetectedRep() {
+        guard !requiresWorkoutRecovery, var session = currentSession, session.isActive else { return }
         session.addRep()
         session.activeDuration = nil
-        currentSession = session
+        updateCurrentSession(session)
     }
     
     func removeRep() {
-        guard var session = currentSession else { return }
+        guard !isSavingWorkout, !isWholeWorkoutPaused, !requiresWorkoutRecovery, var session = currentSession, session.isActive else { return }
         if let id = session.repRecords.last?.id, automaticBenchCycles[id] != nil { removedBenchIDs.insert(id) }
         session.removeRep()
         session.activeDuration = nil
-        currentSession = session
+        if session.exerciseType == .squat { session.activeDuration = squatDuration(for: session) }
+        updateCurrentSession(session)
+    }
+
+    private func squatDuration(for session: WorkoutSession) -> TimeInterval? {
+        let cycles = session.repRecords.compactMap { automaticSquatCycles[$0.id] }
+        guard !cycles.isEmpty, cycles.count == session.totalReps else { return nil }
+        return ActionTiming.total(cycles.map { ActionTiming.Interval(start: $0.start, end: $0.end) })
     }
     
     @discardableResult
-    func endWorkout() -> Bool {
+    @MainActor
+    func endWorkout() async -> Bool {
+        if isWholeWorkout { return await finishWholeWorkout() }
+        guard !isSavingWorkout, !historyReadFailed else { return false }
+        isSavingWorkout = true
+        defer { isSavingWorkout = false }
         saveError = nil
         // Stop first so the finalized count and diagnostic events describe the same set.
-        motionDetector.stopDetection()
+        await motionDetector.stopDetectionAsync()
         guard var session = currentSession else { return false }
         if session.endTime == nil { session.endSession() }
-        currentSession = session
+        updateCurrentSession(session)
         endHKWorkoutSession()
         let history = WorkoutHistory(id: session.id, date: session.startTime,
             exerciseType: session.exerciseType, totalReps: session.totalReps,
             maxWeight: session.repRecords.map(\.weight).max() ?? session.weight,
-            duration: session.duration ?? 0, activeDuration: session.activeDuration)
+            duration: session.duration ?? 0, activeDuration: session.activeDuration,
+            totalWeight: session.repRecords.reduce(0) { $0 + $1.weight })
         let next = [history] + workoutHistory.filter { $0.id != history.id }
-        guard persistHistory(next) else { return false }
-        workoutHistory = next
+        let diagnostics = self.diagnostics, timelineArchive = self.timelineArchive
+        let feedbackArchive = self.feedbackArchive, historyURL = self.historyURL
+        let oldHistory = workoutHistory
         do {
-            try feedbackArchive.retain(history, recording: diagnostics?.recording(for: history))
+            let warning = try await WorkoutFileIO.shared.perform { () -> String? in
+                if let timeline = try diagnostics?.timeline(for: history) { try timelineArchive.retain(timeline) }
+                let data = try JSONEncoder().encode(next)
+                try FileManager.default.createDirectory(at: historyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try data.write(to: historyURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                var canPrune = true
+                do { try Self.prepareWorkoutTimelines(oldHistory, timelineArchive: timelineArchive, feedbackArchive: feedbackArchive) }
+                catch { canPrune = false }
+                do { try feedbackArchive.retain(history, recording: diagnostics?.recording(for: history), prune: canPrune) }
+                catch { return String(localized: "训练已保存，但反馈采样保存失败") }
+                return canPrune ? nil : String(localized: "部分时间轴读取失败，请重试同步")
+            }
+            workoutHistory = next
+            saveError = warning
         } catch {
-            // A diagnostic failure must not falsely claim the saved workout was lost.
-            saveError = String(localized: "训练已保存，但反馈采样保存失败")
+            saveError = String(localized: "保存失败，训练仍在本页，请重试")
+            WKInterfaceDevice.current().play(.failure)
+            return false
         }
-        diagnostics = nil
+        self.diagnostics = nil
         motionDetector.onRawAcceleration = nil; motionDetector.onRawDeviceMotion = nil
         motionDetector.onRawBenchAnalysis = nil; motionDetector.onRawRepDetected = nil
         currentSession = nil
+        checkpointedSession = nil
+        requiresWorkoutRecovery = false
+        canResumeRecoveredWorkout = false
+        try? draftStore.clear()
         completedWorkout = history
         WKInterfaceDevice.current().play(.success)
         #if DEBUG || GYMCOUNT_CAPTURE
@@ -259,127 +488,100 @@ class DataManager: ObservableObject {
     }
 
     func resetCurrentWorkout() {
+        guard !isSavingWorkout else { return }
         motionDetector.stopDetection()
+        do { try draftStore.clear() }
+        catch {
+            saveError = String(localized: "未能放弃训练，请重试")
+            return
+        }
         endHKWorkoutSession()
+        wholeIdleTask?.cancel(); wholeIdleTask = nil
+        let discardedID = currentSession?.id
+        if isWholeWorkout, let discardedID {
+            removeWholeWorkoutSamples([discardedID], failure: String(localized: "训练已放弃，采样清理失败"))
+        }
+        Task { @MainActor in if let discardedID { healthKitManager.liveWorkout.discard(id: discardedID) } }
         diagnostics = nil
         motionDetector.onRawAcceleration = nil; motionDetector.onRawDeviceMotion = nil
         motionDetector.onRawBenchAnalysis = nil; motionDetector.onRawRepDetected = nil
         currentSession = nil
+        checkpointedSession = nil
+        requiresWorkoutRecovery = false
+        canResumeRecoveredWorkout = false
     }
     
     // MARK: - 历史记录管理
+    func prepareWorkoutTimelines() async throws {
+        let history = workoutHistory, archive = timelineArchive, feedback = feedbackArchive
+        try await WorkoutFileIO.shared.perform {
+            try Self.prepareWorkoutTimelines(history, timelineArchive: archive, feedbackArchive: feedback)
+        }
+    }
+
+    private static func prepareWorkoutTimelines(_ history: [WorkoutHistory], timelineArchive: WorkoutTimelineArchive, feedbackArchive: WorkoutFeedbackArchive) throws {
+        // Older versions kept real samples only in the bounded feedback outbox.
+        // Preserve those that still exist, without inventing a missing time anchor.
+        var failure: Error?
+        for history in history {
+            if FileManager.default.fileExists(atPath: timelineArchive.fileURL(history.id).path) { continue }
+            let url = feedbackArchive.folder.appendingPathComponent(history.id.uuidString + ".json")
+            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            do {
+                let entry = try feedbackArchive.load(history.id)
+                guard let recording = entry.recording else { continue }
+                let source = WorkoutSync.Record(id: history.id, date: history.date, exercise: history.exerciseType.rawValue,
+                    totalReps: history.totalReps, maxWeight: history.maxWeight, duration: history.duration,
+                    activeDuration: history.activeDuration, totalWeight: history.totalWeight)
+                try timelineArchive.retain(WorkoutTimeline(captureData: recording, source: source))
+            } catch { failure = error }
+        }
+        if let failure { throw failure }
+    }
+
     func deleteHistoryItem(_ item: WorkoutHistory) {
+        guard !isSavingWorkout else { return }
         let next = workoutHistory.filter { $0.id != item.id }
         guard persistHistory(next) else { return }
         workoutHistory = next
         try? feedbackArchive.remove(item.id)
+        removeWholeWorkoutSamples([item.id], failure: String(localized: "记录已删除，时间轴清理失败"))
+        do { try timelineArchive.remove(item.id) }
+        catch { saveError = String(localized: "记录已删除，时间轴清理失败") }
     }
     
     func clearAllHistory() {
+        guard !isSavingWorkout else { return }
         guard persistHistory([]) else { return }
         let ids = workoutHistory.map(\.id)
         workoutHistory = []
         for id in ids { try? feedbackArchive.remove(id) }
+        removeWholeWorkoutSamples(ids, failure: String(localized: "记录已删除，时间轴清理失败"))
+        do { for id in ids { try timelineArchive.remove(id) } }
+        catch { saveError = String(localized: "记录已删除，时间轴清理失败") }
     }
     
-    // MARK: - 调试方法
-    func printAllHistory() {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        
-        print("📊 所有历史记录:")
-        for (index, workout) in workoutHistory.enumerated() {
-            print("  \(index + 1). \(workout.exerciseType.displayName) - \(formatter.string(from: workout.date)) - \(workout.totalReps)次")
-        }
-        print("总计: \(workoutHistory.count) 条记录")
-        print("---")
-    }
-    
-    // MARK: - 调试数据生成
-    func generateRandomBenchPressData() {
-        let calendar = Calendar.current
-        let today = Date()
-        
-        // 生成当前周的数据（周一到周日）
-        let currentWeekStart = getWeekInfo(for: today).startDate
-        for dayOffset in 0..<7 {
-            if let workoutDate = calendar.date(byAdding: .day, value: dayOffset, to: currentWeekStart) {
-                let randomReps = Int.random(in: 0...50) // 0-50次随机
-                let randomWeight = Double.random(in: 20...100) // 20-100kg随机重量
-                
-                if randomReps > 0 {
-                    // 创建模拟的WorkoutSession
-                    var session = WorkoutSession(
-                        exerciseType: .benchPress,
-                        startTime: workoutDate,
-                        weight: randomWeight
-                    )
-                    
-                    // 添加随机次数
-                    for _ in 0..<randomReps {
-                        session.addRep(weight: randomWeight)
+    private func removeWholeWorkoutSamples(_ ids: [UUID], failure: String) {
+        let root = historyURL.deletingLastPathComponent().appendingPathComponent("WholeWorkoutSamples")
+        Task { @MainActor in
+            #if DEBUG || GYMCOUNT_CAPTURE
+            WatchCaptureLink.shared.cancelReportSensors(workoutIDs: Set(ids))
+            #endif
+            do {
+                try await WorkoutFileIO.shared.perform {
+                    for id in ids {
+                        let url = root.appendingPathComponent(id.uuidString)
+                        if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
                     }
-                    
-                    // 设置结束时间
-                    let duration = TimeInterval.random(in: 300...1800) // 5-30分钟
-                    let endTime = workoutDate.addingTimeInterval(duration)
-                    session.endTime = endTime
-                    
-                    // 从session创建WorkoutHistory
-                    let workout = WorkoutHistory(from: session)
-                    workoutHistory.append(workout)
                 }
-            }
+            } catch { saveError = failure }
         }
-        
-        // 生成上周的数据（周一到周日）
-        let lastWeekStart = calendar.date(byAdding: .weekOfYear, value: -1, to: currentWeekStart) ?? currentWeekStart
-        for dayOffset in 0..<7 {
-            if let workoutDate = calendar.date(byAdding: .day, value: dayOffset, to: lastWeekStart) {
-                let randomReps = Int.random(in: 0...45) // 0-45次随机（比当前周略少）
-                let randomWeight = Double.random(in: 15...95) // 15-95kg随机重量
-                
-                if randomReps > 0 {
-                    // 创建模拟的WorkoutSession
-                    var session = WorkoutSession(
-                        exerciseType: .benchPress,
-                        startTime: workoutDate,
-                        weight: randomWeight
-                    )
-                    
-                    // 添加随机次数
-                    for _ in 0..<randomReps {
-                        session.addRep(weight: randomWeight)
-                    }
-                    
-                    // 设置结束时间
-                    let duration = TimeInterval.random(in: 300...1800) // 5-30分钟
-                    let endTime = workoutDate.addingTimeInterval(duration)
-                    session.endTime = endTime
-                    
-                    // 从session创建WorkoutHistory
-                    let workout = WorkoutHistory(from: session)
-                    workoutHistory.append(workout)
-                }
-            }
-        }
-        
-        // 按日期排序（最新的在前面）
-        workoutHistory.sort { $0.date > $1.date }
-        
-        // 保存数据
-        saveData()
-        
-        print("🎲 已生成随机卧推数据:")
-        print("   当前周: 7天随机数据")
-        print("   上周: 7天随机数据")
-        print("   总记录数: \(workoutHistory.count)")
     }
-    
+
     // MARK: - 设置管理
     func updateSettings(_ newSettings: AppSettings) {
         settings = newSettings
-        saveData()
+        saveSettings()
         
         // 如果启用了 HealthKit 同步，请求权限
         if settings.healthKitSyncEnabled {
@@ -389,173 +591,13 @@ class DataManager: ObservableObject {
         }
     }
     
-    // MARK: - 统计数据
-    func getTotalWorkouts() -> Int {
-        return workoutHistory.count
-    }
-    
-    func getTotalReps() -> Int {
-        return workoutHistory.reduce(0) { $0 + $1.totalReps }
-    }
-    
-    func getMaxWeight(for exerciseType: ExerciseType) -> Double {
-        return workoutHistory
-            .filter { $0.exerciseType == exerciseType }
-            .map { $0.maxWeight }
-            .max() ?? 0.0
-    }
-    
-    func getRecentWorkouts(limit: Int = 10) -> [WorkoutHistory] {
-        return Array(workoutHistory.prefix(limit))
-    }
-    
-    // MARK: - 周数据统计
-    func getWeeklyData(for exerciseType: ExerciseType) -> [Int] {
-        let calendar = Calendar.current
-        let today = Date()
-        
-        // 获取本周的开始日期（周一）
-        let weekInterval = calendar.dateInterval(of: .weekOfYear, for: today)
-        guard let weekStart = weekInterval?.start else { return Array(repeating: 0, count: 7) }
-        
-        var weeklyData = Array(repeating: 0, count: 7)
-        
-        // 筛选本周的锻炼记录
-        let thisWeekWorkouts = workoutHistory.filter { workout in
-            workout.exerciseType == exerciseType &&
-            workout.date >= weekStart &&
-            workout.date <= today
-        }
-        
-        // 按日期分组统计次数
-        for workout in thisWeekWorkouts {
-            let dayOfWeek = calendar.component(.weekday, from: workout.date)
-            let index = (dayOfWeek + 5) % 7 // 转换为周一到周日的索引 (0-6)
-            if index >= 0 && index < 7 {
-                weeklyData[index] += workout.totalReps
-            }
-        }
-        
-        return weeklyData
-    }
-    
-    func getWeeklyTotal(for exerciseType: ExerciseType) -> Int {
-        return getWeeklyData(for: exerciseType).reduce(0, +)
-    }
-    
-    func getWeekDays() -> [String] {
-        return [String(localized: "周一"), String(localized: "周二"), String(localized: "周三"), String(localized: "周四"), String(localized: "周五"), String(localized: "周六"), String(localized: "周日")]
-    }
-    
-    // MARK: - 按具体日期获取周数据
-    func getWeeklyDataForExercise(_ exerciseType: ExerciseType, for weekStartDate: Date) -> [Int] {
-        let calendar = Calendar.current
-        
-        // 使用 getWeekInfo 来确保一致性
-        let weekInfo = getWeekInfo(for: weekStartDate)
-        let weekStart = weekInfo.startDate
-        let weekEnd = weekInfo.endDate
-        let weekEndOfDay = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: weekEnd)) ?? weekEnd
-        
-        // 调试信息
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        print("🔍 调试信息 - 获取周数据:")
-        print("   运动类型: \(exerciseType.displayName)")
-        print("   输入日期: \(formatter.string(from: weekStartDate))")
-        print("   周一开始: \(formatter.string(from: weekStart))")
-        print("   周日结束: \(formatter.string(from: weekEnd))")
-        print("   总历史记录数: \(workoutHistory.count)")
-        
-        var weeklyData = Array(repeating: 0, count: 7)
-        
-        // 筛选该周的锻炼记录
-        let weekWorkouts = workoutHistory.filter { workout in
-            workout.exerciseType == exerciseType &&
-            workout.date >= weekStart &&
-            workout.date < weekEndOfDay
-        }
-        
-        print("   匹配的锻炼记录数: \(weekWorkouts.count)")
-        
-        // 按日期分组统计次数
-        for workout in weekWorkouts {
-            let dayOfWeek = calendar.component(.weekday, from: workout.date)
-            let index = (dayOfWeek + 5) % 7 // 转换为周一到周日的索引 (0-6)
-            if index >= 0 && index < 7 {
-                weeklyData[index] += workout.totalReps
-                print("   记录: \(formatter.string(from: workout.date)) - 周\(index + 1) - \(workout.totalReps)次")
-            }
-        }
-        
-        print("   最终周数据: \(weeklyData)")
-        print("   周总计: \(weeklyData.reduce(0, +))")
-        print("---")
-        
-        return weeklyData
-    }
-    
-    // MARK: - 按具体日期获取周重量数据
-    func getWeeklyWeightDataForExercise(_ exerciseType: ExerciseType, for weekStartDate: Date) -> [Double] {
-        let calendar = Calendar.current
-        
-        // 使用 getWeekInfo 来确保一致性
-        let weekInfo = getWeekInfo(for: weekStartDate)
-        let weekStart = weekInfo.startDate
-        let weekEnd = weekInfo.endDate
-        let weekEndOfDay = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: weekEnd)) ?? weekEnd
-        
-        var weeklyWeightData = Array(repeating: 0.0, count: 7)
-        
-        // 筛选该周的锻炼记录
-        let weekWorkouts = workoutHistory.filter { workout in
-            workout.exerciseType == exerciseType &&
-            workout.date >= weekStart &&
-            workout.date < weekEndOfDay
-        }
-        
-        // 按日期分组统计重量
-        for workout in weekWorkouts {
-            let dayOfWeek = calendar.component(.weekday, from: workout.date)
-            let index = (dayOfWeek + 5) % 7 // 转换为周一到周日的索引 (0-6)
-            if index >= 0 && index < 7 {
-                weeklyWeightData[index] += workout.maxWeight * Double(workout.totalReps)
-            }
-        }
-        
-        return weeklyWeightData
-    }
-    
-    func getWeeklyTotalForExercise(_ exerciseType: ExerciseType, for weekStartDate: Date) -> Int {
-        return getWeeklyDataForExercise(exerciseType, for: weekStartDate).reduce(0, +)
-    }
-    
-    func getWeeklyTotalWeightForExercise(_ exerciseType: ExerciseType, for weekStartDate: Date) -> Double {
-        return getWeeklyWeightDataForExercise(exerciseType, for: weekStartDate).reduce(0, +)
-    }
-    
-    // MARK: - 获取上周数据对比
-    func getPreviousWeekDataForExercise(_ exerciseType: ExerciseType, for currentWeekDate: Date) -> (totalReps: Int, totalWeight: Double) {
-        let calendar = Calendar.current
-        let previousWeekDate = calendar.date(byAdding: .weekOfYear, value: -1, to: currentWeekDate) ?? currentWeekDate
-        
-        let totalReps = getWeeklyTotalForExercise(exerciseType, for: previousWeekDate)
-        let totalWeight = getWeeklyTotalWeightForExercise(exerciseType, for: previousWeekDate)
-        
-        return (totalReps: totalReps, totalWeight: totalWeight)
-    }
-    
     // MARK: - 获取指定周的日期信息
     func getWeekInfo(for weekStartDate: Date) -> (startDate: Date, endDate: Date, title: String) {
         let calendar = Calendar.current
         
-        // 确保是周一的开始
-        let weekday = calendar.component(.weekday, from: weekStartDate)
-        let daysFromMonday = (weekday + 5) % 7
-        let mondayStart = calendar.date(byAdding: .day, value: -daysFromMonday, to: weekStartDate) ?? weekStartDate
-        
-        let weekStart = calendar.startOfDay(for: mondayStart)
-        let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
+        let interval = WatchWorkoutWeek.interval(containing: weekStartDate, calendar: calendar)
+        let weekStart = interval.start
+        let weekEnd = calendar.date(byAdding: .day, value: -1, to: interval.end) ?? interval.start
         
         let formatter = DateFormatter()
         // 根据系统语言设置日期格式
@@ -571,6 +613,7 @@ class DataManager: ObservableObject {
     }
     
     // MARK: - HealthKit 集成方法
+    @MainActor
     func syncWorkoutToHealthKit(_ workoutHistory: WorkoutHistory) async {
         guard settings.healthKitSyncEnabled else {
             print("❌ HealthKit 同步已禁用")
@@ -580,18 +623,12 @@ class DataManager: ObservableObject {
         // 刷新授权状态
         healthKitManager.refreshAuthorizationStatus()
         
-        // 检查是否已存在相同的锻炼记录
-        let exists = await healthKitManager.checkWorkoutExists(workoutHistory)
-        if exists {
-            print("⚠️ 锻炼记录已存在于 HealthKit 中，跳过同步")
-            return
-        }
-        
         await healthKitManager.saveWorkoutToHealthKit(workoutHistory)
     }
     
-    func syncAllWorkoutsToHealthKit() async {
-        guard settings.healthKitSyncEnabled else {
+    @MainActor
+    func syncAllWorkoutsToHealthKit(enabled: Bool? = nil) async {
+        guard enabled ?? settings.healthKitSyncEnabled else {
             print("❌ HealthKit 同步已禁用")
             return
         }
@@ -680,7 +717,7 @@ class DataManager: ObservableObject {
     
     // MARK: - Siri Intent 支持
     func canStartWorkout() -> Bool {
-        return currentSession == nil
+        return currentSession == nil && !requiresDraftRecovery
     }
     
     func getCurrentWorkoutStatus() -> String {
@@ -725,6 +762,258 @@ class DataManager: ObservableObject {
         hkWorkoutSession = nil
         hkSessionDelegate = nil
         print("🏁 结束 HealthKit 运动会话")
+    }
+}
+
+// MARK: - Whole training lifecycle
+extension DataManager {
+    var isWholeWorkout: Bool { currentSession?.wholeDraft != nil }
+    var isWholeWorkoutPaused: Bool { currentSession?.wholeDraft?.pausedAt != nil }
+    private var currentWholeSets: [WorkoutReport.SetRecord] {
+        guard let session = currentSession else { return [] }
+        return WorkoutReport.group(session.repRecords, exercise: session.exerciseType)
+    }
+    var currentGroupNumber: Int { (currentSession?.wholeDraft?.completedSets.count ?? 0) + max(1, currentWholeSets.count) }
+    var currentGroupReps: Int { currentWholeSets.last?.totalReps ?? 0 }
+    var wholeTotalReps: Int { (currentSession?.wholeDraft?.completedSets.reduce(0) { $0 + $1.totalReps } ?? 0) + (currentSession?.totalReps ?? 0) }
+    var restStartedAt: Date? {
+        guard !isWholeWorkoutPaused else { return nil }
+        let last = currentSession?.repRecords.last?.timestamp ?? currentSession?.wholeDraft?.completedSets.last?.endedAt
+        if currentSession?.repRecords.isEmpty == true { return last }
+        return last.flatMap { Date().timeIntervalSince($0) >= 15 ? $0 : nil }
+    }
+
+    @MainActor @discardableResult
+    func startWholeWorkout(exerciseType: ExerciseType, weight: Double) async -> Bool {
+        guard !isSavingWorkout, currentSession == nil else { return false }
+        guard weight.isFinite, (0...500).contains(weight) else {
+            wholeWorkoutError = String(localized: "重量须在 0–500 公斤之间")
+            return false
+        }
+        isSavingWorkout = true; defer { isSavingWorkout = false }
+        completedWholeWorkout = nil; wholeWorkoutError = nil
+        startWorkout(exerciseType: exerciseType, weight: weight, whole: true)
+        guard let session = currentSession, session.wholeDraft != nil else { return false }
+        startWholeIdleMonitor()
+        observeLiveHealth()
+        if settings.healthKitSyncEnabled {
+            do {
+                try await healthKitManager.liveWorkout.begin(id: session.id, startDate: session.startTime)
+                if var active = currentSession, active.id == session.id {
+                    active.wholeDraft?.healthSessionStarted = true; updateCurrentSession(active)
+                }
+            }
+            catch { wholeWorkoutError = error.localizedDescription }
+        }
+        return true
+    }
+
+    @MainActor
+    private func observeLiveHealth() {
+        liveHealthObservation = healthKitManager.liveWorkout.$errorMessage.dropFirst()
+            .receive(on: DispatchQueue.main).sink { [weak self] error in
+                guard let self, self.isWholeWorkout, let error,
+                      self.healthKitManager.liveWorkout.workoutID == self.currentSession?.id else { return }
+                self.wholeWorkoutError = error
+            }
+    }
+
+    private var canChangeWholeWorkout: Bool {
+        isWholeWorkout && currentSession?.isActive == true && currentSession?.wholeDraft?.pendingReport == nil && !requiresWorkoutRecovery
+    }
+
+    private func startWholeIdleMonitor() {
+        wholeIdleTask?.cancel(); idleAcknowledgedAt = Date(); wholeWorkoutIdlePrompt = false
+        wholeIdleTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                guard !Task.isCancelled, let self, self.isWholeWorkout else { return }
+                let last = self.currentSession?.repRecords.last?.timestamp ?? self.currentSession?.wholeDraft?.completedSets.last?.endedAt ?? self.idleAcknowledgedAt
+                if !self.isWholeWorkoutPaused, Date().timeIntervalSince(max(last, self.idleAcknowledgedAt)) >= 300, !self.wholeWorkoutIdlePrompt {
+                    self.wholeWorkoutIdlePrompt = true
+                    WKInterfaceDevice.current().play(.notification)
+                }
+            }
+        }
+    }
+
+    func continueWholeWorkoutAfterIdle() { idleAcknowledgedAt = Date(); wholeWorkoutIdlePrompt = false }
+
+    /// Persist the finalized segment before resetting the detector or changing exercise.
+    @MainActor
+    private func closeWholeSegment() async -> Bool {
+        await motionDetector.stopDetectionAsync()
+        guard var session = currentSession, var draft = session.wholeDraft else { return false }
+        let sets = WorkoutReport.group(session.repRecords, exercise: session.exerciseType)
+        // Keep each real sensor segment even though the combined report uses a
+        // different multi-exercise timeline. Never label the final block as the full session.
+        if let diagnostics {
+            let start = draft.segmentStartedAt ?? session.startTime
+            if draft.segmentID == nil {
+                draft.segmentID = UUID(); session.wholeDraft = draft
+                guard checkpoint(session) else { return false }
+                currentSession = session
+            }
+            let segment = WorkoutHistory(id: draft.segmentID!, date: start,
+                exerciseType: session.exerciseType, totalReps: session.totalReps,
+                maxWeight: session.repRecords.map(\.weight).max() ?? session.weight,
+                duration: max(0, Date().timeIntervalSince(start)), activeDuration: session.activeDuration,
+                totalWeight: session.repRecords.reduce(0) { $0 + $1.weight })
+            let url = reportSensorArchive.fileURL(workoutID: draft.id, segmentID: segment.id)
+            do {
+                try await WorkoutFileIO.shared.perform {
+                    if let timeline = try diagnostics.timeline(for: segment) {
+                        let data = try JSONEncoder().encode(timeline)
+                        guard data.count <= WorkoutTimeline.maximumFileBytes else { throw WorkoutTimeline.Failure.invalid }
+                        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                        let count = try FileManager.default.contentsOfDirectory(at: url.deletingLastPathComponent(), includingPropertiesForKeys: nil)
+                            .filter { $0.pathExtension == "json" }.count
+                        guard count < WorkoutReportSensors.maximumSegments || FileManager.default.fileExists(atPath: url.path) else { throw WorkoutTimeline.Failure.invalid }
+                        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                    }
+                }
+            } catch {
+                reportCountingFailure(String(localized: "保存失败，计数已暂停，请重试"))
+                saveError = String(localized: "采样保存失败，请重试")
+                return false
+            }
+        }
+        draft.completedSets += sets
+        draft.segmentStartedAt = Date()
+        draft.segmentID = UUID()
+        session.wholeDraft = draft; session.repRecords = []; session.activeDuration = nil
+        guard checkpoint(session) else { reportCountingFailure(String(localized: "保存失败，计数已暂停，请重试")); return false }
+        currentSession = session
+        automaticBenchCycles = [:]; automaticSquatCycles = [:]; removedBenchIDs = []
+        diagnostics = nil
+        motionDetector.onRawAcceleration = nil; motionDetector.onRawDeviceMotion = nil
+        motionDetector.onRawBenchAnalysis = nil; motionDetector.onRawRepDetected = nil
+        return true
+    }
+
+    private func restartWholeDetection() {
+        guard let session = currentSession, !isWholeWorkoutPaused, !requiresWorkoutRecovery else { return }
+        let diagnostics = WorkoutDiagnostics(); self.diagnostics = diagnostics
+        motionDetector.onRawAcceleration = { diagnostics.raw.append($0) }
+        motionDetector.onRawDeviceMotion = { diagnostics.raw.appendMotion($0) }
+        motionDetector.onRawBenchAnalysis = { diagnostics.raw.setBenchAnalysis($0) }
+        motionDetector.onRawRepDetected = { diagnostics.raw.markRep(at: $0) }
+        countingFailed = false
+        countingMessage = session.exerciseType == .benchPress ? String(localized: "估计中 · 结束时核准") : String(localized: "检测中")
+        sensorWallAnchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
+        motionDetector.configureForExercise(session.exerciseType)
+        motionDetector.startDetection()
+        continueWholeWorkoutAfterIdle()
+    }
+
+    @MainActor @discardableResult
+    func nextWholeWorkoutSet() async -> Bool {
+        guard canChangeWholeWorkout, !isWholeWorkoutPaused, !isSavingWorkout else { return false }
+        isSavingWorkout = true; defer { isSavingWorkout = false }
+        guard await closeWholeSegment() else { return false }
+        restartWholeDetection()
+        return true
+    }
+
+    @MainActor @discardableResult
+    func switchWholeWorkoutExercise(exerciseType: ExerciseType, weight: Double) async -> Bool {
+        guard canChangeWholeWorkout, !isSavingWorkout, weight.isFinite, (0...500).contains(weight) else { return false }
+        isSavingWorkout = true; defer { isSavingWorkout = false }
+        guard await closeWholeSegment(), var session = currentSession else { return false }
+        session.exerciseType = exerciseType; session.weight = weight
+        guard checkpoint(session) else { reportCountingFailure(String(localized: "保存失败，计数已暂停，请重试")); return false }
+        currentSession = session
+        restartWholeDetection()
+        return true
+    }
+
+    @MainActor
+    func pauseWholeWorkout() async {
+        guard canChangeWholeWorkout, !isWholeWorkoutPaused, !isSavingWorkout else { return }
+        isSavingWorkout = true; defer { isSavingWorkout = false }
+        guard await closeWholeSegment(), var session = currentSession else { return }
+        session.wholeDraft?.pausedAt = Date()
+        guard checkpoint(session) else { reportCountingFailure(String(localized: "保存失败，计数已暂停，请重试")); return }
+        currentSession = session
+        healthKitManager.liveWorkout.pause()
+    }
+
+    @MainActor
+    func resumeWholeWorkout() async {
+        guard isWholeWorkoutPaused, !isSavingWorkout, !requiresWorkoutRecovery,
+              var session = currentSession, let pause = session.wholeDraft?.pausedAt else { return }
+        session.wholeDraft?.pauses.append(.init(startedAt: pause, endedAt: Date()))
+        session.wholeDraft?.pausedAt = nil
+        session.wholeDraft?.segmentStartedAt = Date()
+        session.wholeDraft?.segmentID = UUID()
+        guard checkpoint(session) else { return }
+        currentSession = session
+        healthKitManager.liveWorkout.resume()
+        restartWholeDetection()
+    }
+
+    @MainActor @discardableResult
+    func finishWholeWorkout() async -> Bool {
+        guard isWholeWorkout, !isSavingWorkout, !historyReadFailed else { return false }
+        isSavingWorkout = true; defer { isSavingWorkout = false }
+        saveError = nil; wholeWorkoutIdlePrompt = false
+        if currentSession?.wholeDraft?.pendingReport == nil {
+            guard await closeWholeSegment(), var session = currentSession, var draft = session.wholeDraft else { return false }
+            let end = requiresWorkoutRecovery ? (session.endTime ?? Date()) : Date()
+            if let pausedAt = draft.pausedAt { draft.pauses.append(.init(startedAt: pausedAt, endedAt: end)); draft.pausedAt = nil }
+            var report = WorkoutReport(startedAt: draft.startedAt, endedAt: end, sets: draft.completedSets, pauses: draft.pauses)
+            if draft.healthSessionStarted == true && !requiresWorkoutRecovery {
+                do {
+                    let result = try await healthKitManager.liveWorkout.finish(at: end)
+                    report.activeEnergyKcal = result.activeEnergyKilocalories
+                    report.measuredAverageHeartRate = result.averageHeartRate
+                    report.measuredMaximumHeartRate = result.maximumHeartRate
+                    report.healthWorkoutID = result.workoutUUID
+                    report.heartRates = result.heartRateSamples.map { .init(date: $0.date, bpm: $0.beatsPerMinute) }
+                    report.metricsComplete = !draft.metricsInterrupted
+                } catch {
+                    let result = healthKitManager.liveWorkout.snapshot()
+                    report.activeEnergyKcal = result.activeEnergyKilocalories
+                    report.measuredAverageHeartRate = result.averageHeartRate
+                    report.measuredMaximumHeartRate = result.maximumHeartRate
+                    report.heartRates = result.heartRateSamples.map { .init(date: $0.date, bpm: $0.beatsPerMinute) }
+                }
+            }
+            report.heartRates = report.heartRates.filter { $0.date >= report.startedAt && $0.date <= report.endedAt }
+            do { try report.validate() }
+            catch { saveError = String(localized: "训练数据校验失败，请重试"); return false }
+            draft.pendingReport = report; session.wholeDraft = draft; session.endTime = end
+            currentSession = session
+            guard checkpoint(session) else { return false }
+        }
+        guard let session = currentSession, let draft = session.wholeDraft, let report = draft.pendingReport else { return false }
+        let history = WorkoutHistory(id: draft.id, date: report.startedAt,
+            exerciseType: report.sets.first?.exercise ?? session.exerciseType, totalReps: report.totalReps,
+            maxWeight: report.maxWeight, duration: report.duration, activeDuration: report.activeDuration,
+            totalWeight: report.totalWeight, workoutReport: report)
+        let next = [history] + workoutHistory.filter { $0.id != history.id }
+        let url = historyURL
+        do {
+            try await WorkoutFileIO.shared.perform {
+                let data = try JSONEncoder().encode(next)
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            }
+        } catch { saveError = String(localized: "保存失败，训练仍在本页，请重试"); return false }
+        workoutHistory = next
+        currentSession = nil; checkpointedSession = nil
+        requiresWorkoutRecovery = false; canResumeRecoveredWorkout = false
+        wholeIdleTask?.cancel(); wholeIdleTask = nil
+        try? draftStore.clear()
+        completedWorkout = nil; completedWholeWorkout = report
+        if draft.healthSessionStarted == true && report.healthWorkoutID == nil {
+            wholeWorkoutError = String(localized: "训练已保存，健康记录未写入")
+        }
+        WKInterfaceDevice.current().play(.success)
+        #if DEBUG || GYMCOUNT_CAPTURE
+        WatchCaptureLink.shared.syncWorkouts()
+        #endif
+        return true
     }
 }
 

@@ -6,24 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
-F20000000000000000000001 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = GymCountPhoneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-F20000000000000000000002 = {isa = PBXFileSystemSynchronizedRootGroup; path = "GymCount PhoneUITests"; sourceTree = "<group>"; };
-F20000000000000000000003 = {isa = PBXNativeTarget; buildConfigurationList = F20000000000000000000007; buildPhases = (F20000000000000000000004,F20000000000000000000005,F20000000000000000000006,); buildRules = (); dependencies = (F20000000000000000000011,); fileSystemSynchronizedGroups = (F20000000000000000000002,); name = GymCountPhoneUITests; productName = GymCountPhoneUITests; productReference = F20000000000000000000001; productType = "com.apple.product-type.bundle.ui-testing"; };
-F20000000000000000000004 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-F20000000000000000000005 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-F20000000000000000000006 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-F20000000000000000000007 = {isa = XCConfigurationList; buildConfigurations = (F20000000000000000000008,F20000000000000000000009,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-F20000000000000000000010 = {isa = PBXContainerItemProxy; containerPortal = 8BB41CF82E9D0E9C00EF6076; proxyType = 1; remoteGlobalIDString = 8BB41CFD2E9D0E9C00EF6076; remoteInfo = GymCount; };
-F20000000000000000000011 = {isa = PBXTargetDependency; target = 8BB41CFD2E9D0E9C00EF6076; targetProxy = F20000000000000000000010; };
-F20000000000000000000008 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 8BPSC5L74V; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.PhoneUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = GymCount; TARGETED_DEVICE_FAMILY = 1; CURRENT_PROJECT_VERSION = 43; MARKETING_VERSION = 1.1.5; }; name = Debug; };
-F20000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = 8BPSC5L74V; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.PhoneUITests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_TARGET_NAME = GymCount; TARGETED_DEVICE_FAMILY = 1; CURRENT_PROJECT_VERSION = 43; MARKETING_VERSION = 1.1.5; }; name = Release; };
-
-
 /* Begin PBXBuildFile section */
-B40000000000000000000001 = {isa = PBXBuildFile; fileRef = B40000000000000000000002; };
-B30000000000000000000001 = {isa = PBXBuildFile; fileRef = B30000000000000000000002; };
 		8BB41D052E9D0E9C00EF6076 /* GymCount Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 8BB41D042E9D0E9C00EF6076 /* GymCount Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A10000000000000000000001 /* GymCount Watch App/Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* GymCount Watch App/Models.swift */; };
+		B30000000000000000000001 /* GymCount Watch App/Detectors/BenchPressAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30000000000000000000002 /* GymCount Watch App/Detectors/BenchPressAnalysis.swift */; };
+		B40000000000000000000001 /* GymCount Watch App/WorkoutSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40000000000000000000002 /* GymCount Watch App/WorkoutSync.swift */; };
+		B50000000000000000000001 /* GymCount Watch App/ActionTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = B50000000000000000000002 /* GymCount Watch App/ActionTiming.swift */; };
+		B60000000000000000000001 /* GymCount Watch App/Detectors/SquatAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60000000000000000000002 /* GymCount Watch App/Detectors/SquatAnalysis.swift */; };
+		B70000000000000000000001 /* GymCount Watch App/TrainingActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70000000000000000000002 /* GymCount Watch App/TrainingActivity.swift */; };
+		C80000000000000000000001 /* GymCount Watch App/WorkoutReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80000000000000000000002 /* GymCount Watch App/WorkoutReport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -48,6 +39,13 @@ B30000000000000000000001 = {isa = PBXBuildFile; fileRef = B300000000000000000000
 			remoteGlobalIDString = 8BB41D032E9D0E9C00EF6076;
 			remoteInfo = "GymCount Watch App";
 		};
+		F20000000000000000000010 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8BB41CF82E9D0E9C00EF6076 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8BB41CFD2E9D0E9C00EF6076;
+			remoteInfo = GymCount;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -65,13 +63,18 @@ B30000000000000000000001 = {isa = PBXBuildFile; fileRef = B300000000000000000000
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-B40000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GymCount Watch App/WorkoutSync.swift"; sourceTree = SOURCE_ROOT; };
-B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GymCount Watch App/Detectors/BenchPressAnalysis.swift"; sourceTree = SOURCE_ROOT; };
 		8BB41CFE2E9D0E9C00EF6076 /* GymCount.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GymCount.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BB41D042E9D0E9C00EF6076 /* GymCount Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "GymCount Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BB41D162E9D0E9D00EF6076 /* GymCount Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "GymCount Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BB41D202E9D0E9D00EF6076 /* GymCount Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "GymCount Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000002 /* GymCount Watch App/Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GymCount Watch App/Models.swift"; sourceTree = SOURCE_ROOT; };
+		B30000000000000000000002 /* GymCount Watch App/Detectors/BenchPressAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GymCount Watch App/Detectors/BenchPressAnalysis.swift"; sourceTree = SOURCE_ROOT; };
+		B40000000000000000000002 /* GymCount Watch App/WorkoutSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GymCount Watch App/WorkoutSync.swift"; sourceTree = SOURCE_ROOT; };
+		B50000000000000000000002 /* GymCount Watch App/ActionTiming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GymCount Watch App/ActionTiming.swift"; sourceTree = SOURCE_ROOT; };
+		B60000000000000000000002 /* GymCount Watch App/Detectors/SquatAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GymCount Watch App/Detectors/SquatAnalysis.swift"; sourceTree = SOURCE_ROOT; };
+		B70000000000000000000002 /* GymCount Watch App/TrainingActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GymCount Watch App/TrainingActivity.swift"; sourceTree = SOURCE_ROOT; };
+		C80000000000000000000002 /* GymCount Watch App/WorkoutReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GymCount Watch App/WorkoutReport.swift"; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000001 /* GymCountPhoneUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = GymCountPhoneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -93,6 +96,11 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 		A10000000000000000000003 /* GymCount iOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "GymCount iOS";
+			sourceTree = "<group>";
+		};
+		F20000000000000000000002 /* GymCount PhoneUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "GymCount PhoneUITests";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -119,27 +127,47 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F20000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		8BA970723090A4D5003973B1 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				B50000000000000000000002 /* GymCount Watch App/ActionTiming.swift */,
+				B60000000000000000000002 /* GymCount Watch App/Detectors/SquatAnalysis.swift */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		8BB41CF72E9D0E9C00EF6076 = {
 			isa = PBXGroup;
 			children = (
-				F20000000000000000000002,
+				F20000000000000000000002 /* GymCount PhoneUITests */,
 				A10000000000000000000003 /* GymCount iOS */,
 				A10000000000000000000002 /* GymCount Watch App/Models.swift */,
-                B30000000000000000000002,B40000000000000000000002,
+				B30000000000000000000002 /* GymCount Watch App/Detectors/BenchPressAnalysis.swift */,
+				B40000000000000000000002 /* GymCount Watch App/WorkoutSync.swift */,
+				B70000000000000000000002 /* GymCount Watch App/TrainingActivity.swift */,
+				C80000000000000000000002 /* GymCount Watch App/WorkoutReport.swift */,
 				8BB41D082E9D0E9C00EF6076 /* GymCount Watch App */,
 				8BB41D192E9D0E9D00EF6076 /* GymCount Watch AppTests */,
 				8BB41D232E9D0E9D00EF6076 /* GymCount Watch AppUITests */,
 				8BB41CFF2E9D0E9C00EF6076 /* Products */,
+				8BA970723090A4D5003973B1 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
 		8BB41CFF2E9D0E9C00EF6076 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				F20000000000000000000001,
+				F20000000000000000000001 /* GymCountPhoneUITests.xctest */,
 				8BB41CFE2E9D0E9C00EF6076 /* GymCount.app */,
 				8BB41D042E9D0E9C00EF6076 /* GymCount Watch App.app */,
 				8BB41D162E9D0E9D00EF6076 /* GymCount Watch AppTests.xctest */,
@@ -242,6 +270,27 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			productReference = 8BB41D202E9D0E9D00EF6076 /* GymCount Watch AppUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		F20000000000000000000003 /* GymCountPhoneUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F20000000000000000000007 /* Build configuration list for PBXNativeTarget "GymCountPhoneUITests" */;
+			buildPhases = (
+				F20000000000000000000004 /* Sources */,
+				F20000000000000000000005 /* Frameworks */,
+				F20000000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F20000000000000000000011 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				F20000000000000000000002 /* GymCount PhoneUITests */,
+			);
+			name = GymCountPhoneUITests;
+			productName = GymCountPhoneUITests;
+			productReference = F20000000000000000000001 /* GymCountPhoneUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -283,7 +332,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				F20000000000000000000003,
+				F20000000000000000000003 /* GymCountPhoneUITests */,
 				8BB41CFD2E9D0E9C00EF6076 /* GymCount */,
 				8BB41D032E9D0E9C00EF6076 /* GymCount Watch App */,
 				8BB41D152E9D0E9D00EF6076 /* GymCount Watch AppTests */,
@@ -321,6 +370,13 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F20000000000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -349,8 +405,20 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-                B30000000000000000000001,B40000000000000000000001,
+				B30000000000000000000001 /* GymCount Watch App/Detectors/BenchPressAnalysis.swift in Sources */,
+				B50000000000000000000001 /* GymCount Watch App/ActionTiming.swift in Sources */,
+				B60000000000000000000001 /* GymCount Watch App/Detectors/SquatAnalysis.swift in Sources */,
+				B40000000000000000000001 /* GymCount Watch App/WorkoutSync.swift in Sources */,
+				B70000000000000000000001 /* GymCount Watch App/TrainingActivity.swift in Sources */,
+				C80000000000000000000001 /* GymCount Watch App/WorkoutReport.swift in Sources */,
 				A10000000000000000000001 /* GymCount Watch App/Models.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F20000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -371,6 +439,11 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = PBXTargetDependency;
 			target = 8BB41D032E9D0E9C00EF6076 /* GymCount Watch App */;
 			targetProxy = 8BB41D212E9D0E9D00EF6076 /* PBXContainerItemProxy */;
+		};
+		F20000000000000000000011 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8BB41CFD2E9D0E9C00EF6076 /* GymCount */;
+			targetProxy = F20000000000000000000010 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -496,7 +569,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "GymCount Watch App/GymCount Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 43;
+				CURRENT_PROJECT_VERSION = 54;
 				DEVELOPMENT_ASSET_PATHS = "\"GymCount Watch App/Preview Content\"";
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				ENABLE_PREVIEWS = YES;
@@ -517,7 +590,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.5;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -536,7 +609,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "GymCount Watch App/GymCount Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 43;
+				CURRENT_PROJECT_VERSION = 54;
 				DEVELOPMENT_ASSET_PATHS = "\"GymCount Watch App/Preview Content\"";
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				ENABLE_PREVIEWS = YES;
@@ -557,7 +630,7 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.5;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -574,10 +647,10 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 		8BB41D2F2E9D0E9D00EF6076 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "GymCount-Phone-Health.entitlements";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "GymCount-Phone-Health.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 43;
+				CURRENT_PROJECT_VERSION = 54;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = PowerReps;
@@ -587,9 +660,9 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "允许手表启动体能训练会话，保持运动采样。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.1.5;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -602,22 +675,21 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 		8BB41D302E9D0E9D00EF6076 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "GymCount-Phone-Health.entitlements";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "GymCount-Phone-Health.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 43;
+				CURRENT_PROJECT_VERSION = 54;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = PowerReps;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_NSCameraUsageDescription = "录像与手表运动采样同步保存，用于核对训练次数。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "处理配套手表的训练与健康数据授权。";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "允许手表启动体能训练会话，保持运动采样。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.1.5;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -633,11 +705,11 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 43;
+				CURRENT_PROJECT_VERSION = 54;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				MARKETING_VERSION = 1.1.5;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.flyingrtx.GymCount-Watch-AppTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -654,11 +726,11 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 43;
+				CURRENT_PROJECT_VERSION = 54;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				MARKETING_VERSION = 1.1.5;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.flyingrtx.GymCount-Watch-AppTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -675,11 +747,11 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 43;
+				CURRENT_PROJECT_VERSION = 54;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				MARKETING_VERSION = 1.1.5;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.flyingrtx.GymCount-Watch-AppUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -695,11 +767,11 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 43;
+				CURRENT_PROJECT_VERSION = 54;
 				DEVELOPMENT_TEAM = 8BPSC5L74V;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				MARKETING_VERSION = 1.1.5;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.flyingrtx.GymCount-Watch-AppUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -709,6 +781,42 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 				TEST_TARGET_NAME = "GymCount Watch App";
 				VALIDATE_PRODUCT = YES;
 				WATCHOS_DEPLOYMENT_TARGET = 11.2;
+			};
+			name = Release;
+		};
+		F20000000000000000000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 54;
+				DEVELOPMENT_TEAM = 8BPSC5L74V;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.1.8;
+				PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.PhoneUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = GymCount;
+			};
+			name = Debug;
+		};
+		F20000000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 54;
+				DEVELOPMENT_TEAM = 8BPSC5L74V;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.1.8;
+				PRODUCT_BUNDLE_IDENTIFIER = com.flyingrtx.GymCount.PhoneUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = GymCount;
 			};
 			name = Release;
 		};
@@ -756,6 +864,15 @@ B30000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			buildConfigurations = (
 				8BB41D352E9D0E9D00EF6076 /* Debug */,
 				8BB41D362E9D0E9D00EF6076 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F20000000000000000000007 /* Build configuration list for PBXNativeTarget "GymCountPhoneUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F20000000000000000000008 /* Debug */,
+				F20000000000000000000009 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

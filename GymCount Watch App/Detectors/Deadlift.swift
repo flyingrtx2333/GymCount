@@ -7,7 +7,7 @@
 
 import Foundation
 import CoreMotion
-import WatchKit
+import Combine
 
 // 硬拉周期状态
 enum DeadliftCycleState {
@@ -41,7 +41,7 @@ class DeadliftDetector: ObservableObject {
     private let slowDeadliftGravityThreshold = 0.18 // 慢速硬拉的重力阈值
     private let cooldownPeriod = 0.8 // 动作完成后的冷却时间（秒）
     
-    var onRepDetected: (() -> Void)?
+    var onRepDetected: ((Double) -> Void)?
     
     init() {
         resetState()
@@ -58,11 +58,11 @@ class DeadliftDetector: ObservableObject {
         guard xAxisData.count >= stabilityWindowSize else { return }
         
         // 检测硬拉周期
-        detectDeadliftCycle()
+        detectDeadliftCycle(sensorTime: data.timestamp)
     }
     
     // 硬拉周期检测：稳定-不稳定-稳定-不稳定-稳定
-    private func detectDeadliftCycle() {
+    private func detectDeadliftCycle(sensorTime: Double) {
         let currentStability = calculateXAxisStability()
         let now = Date()
         
@@ -116,11 +116,11 @@ class DeadliftDetector: ObservableObject {
                                 if let lastTime = lastRepTime {
                                     let timeSinceLastRep = now.timeIntervalSince(lastTime)
                                     if timeSinceLastRep >= minRepInterval {
-                                        recordRep(at: now)
+                                        recordRep(at: now, sensorTime: sensorTime)
                                         print("✅ 检测到硬拉动作 - 周期时长: \(String(format: "%.2f", cycleDuration))秒, 变化次数: \(stabilityChanges), X轴平均值: \(String(format: "%.3f", xAxisAverage)), 慢速: \(isSlowDeadlift)")
                                     }
                                 } else {
-                                    recordRep(at: now)
+                                    recordRep(at: now, sensorTime: sensorTime)
                                     print("✅ 检测到硬拉动作 - 周期时长: \(String(format: "%.2f", cycleDuration))秒, 变化次数: \(stabilityChanges), X轴平均值: \(String(format: "%.3f", xAxisAverage)), 慢速: \(isSlowDeadlift)")
                                 }
                                 
@@ -193,16 +193,13 @@ class DeadliftDetector: ObservableObject {
         return recentData.reduce(0, +) / Double(recentData.count)
     }
     
-    private func recordRep(at time: Date) {
+    private func recordRep(at time: Date, sensorTime: Double) {
         repCount += 1
         lastRepTime = time
         lastRepCompletionTime = time // 记录动作完成时间
         
-        // 触觉反馈 - 使用向上方向的震动，表示计数增加
-        WKInterfaceDevice.current().play(.directionUp)
-        
         // 回调
-        onRepDetected?()
+        onRepDetected?(sensorTime)
     }
     
     func resetCount() {

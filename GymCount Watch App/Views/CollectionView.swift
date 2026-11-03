@@ -289,25 +289,17 @@ final class CollectionStore: ObservableObject {
         detector.onRawDeviceMotion = { raw.appendMotion($0) }
         detector.onRawBenchAnalysis = { raw.setBenchAnalysis($0) }
         detector.onRawRepDetected = { time in if hasWatchCounter && kind != "bench_press" { raw.markRep(at: time) } }
-        detector.onSquatCompletion = {
-            guard kind == "squat" else { return }
-            raw.markFeedback(at: ProcessInfo.processInfo.systemUptime)
-            WKInterfaceDevice.current().play(.directionUp)
-        }
-        detector.onBenchCompletion = {
-            guard kind == "bench_press" else { return }
-            raw.markFeedback(at: ProcessInfo.processInfo.systemUptime)
-            WKInterfaceDevice.current().play(.directionUp)
+        detector.onRepDetected = { [weak self] _, isLive in
+            guard let self, self.recording else { return }
+            self.detected = hasWatchCounter ? self.detector.repCount : 0
+            RepCompletionFeedback.play(isLive: isLive) { raw.markFeedback(at: $0) }
         }
         detector.onBenchAnalysis = { [weak self] analysis in
-            self?.detected = analysis.cycles.count
+            if let count = analysis.count { self?.detected = count }
             self?.benchNeedsReview = analysis.count == nil
             if analysis.status == "insufficient_data" { self?.message = String(localized: "采样中断，请手动核对次数") }
         }
         detector.onCountingError = { [weak self] in self?.message = $0 }
-        detector.onRepDetected = { [weak self] in
-            Task { @MainActor in self?.detected = hasWatchCounter ? (self?.detector.repCount ?? 0) : 0 }
-        }
         // Bench counting and capture share the very same fused motion stream.
         raw.start(includeDeviceMotion: !["bench_press", "squat"].contains(kind))
         detector.startDetection(countRepetitions: hasWatchCounter); recording = detector.isDetecting
@@ -429,6 +421,7 @@ final class CollectionStore: ObservableObject {
     }
 }
 
+#if DEBUG
 struct CollectionView: View {
     var onClose: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
@@ -464,8 +457,7 @@ struct CollectionView: View {
             needsAuthorization: link.needsAuthorization
         )
         .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden)
-        .tint(GymStyle.mint)
+        .tint(GymStyle.accent)
         .alert(String(localized: "请在手机核对并上传"), isPresented: $link.showingPhoneReview) {
             Button(String(localized: "知道了"), role: .cancel) {}
         } message: {
@@ -561,10 +553,6 @@ struct CollectionPanel: View {
 
     var body: some View {
         VStack(spacing: GymStyle.spacing) {
-            GymHeader(title: reviewing ? String(localized: "确认采集") : recording ? exerciseName : String(localized: "采集"),
-                      back: recording || reviewing || startingCapture ? nil : onBack)
-                .padding(.horizontal, GymStyle.inset)
-                .padding(.top, 12)
             ScrollView {
             VStack(spacing: GymStyle.spacing) {
                 if reviewing {
@@ -583,7 +571,7 @@ struct CollectionPanel: View {
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(GymStyle.detail)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(GymStyle.muted)
                         }
                         .padding(.horizontal, 8)
                         .frame(minHeight: 44)
@@ -615,7 +603,7 @@ struct CollectionPanel: View {
                     VStack(spacing: 2) {
                         Text(exercise == "bench_press" ? String(localized: "估计 · 结束核准") : String(localized: "手表计数"))
                             .font(GymStyle.detail)
-                            .foregroundStyle(GymStyle.mint)
+                            .foregroundStyle(GymStyle.accent)
                         Text("\(detected)")
                             .font(GymStyle.counter)
                             .monospacedDigit()
@@ -658,7 +646,7 @@ struct CollectionPanel: View {
                 if !message.isEmpty, !(uploading && message == String(localized: "正在上传…")), message != phoneMessage {
                     Text(message)
                         .font(GymStyle.detail)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(GymStyle.muted)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("capture.message")
@@ -670,24 +658,26 @@ struct CollectionPanel: View {
             }
         }
         .gymPage()
+        .gymNavigationTitle(reviewing ? String(localized: "确认采集") : recording ? exerciseName : String(localized: "采集"),
+                            back: recording || reviewing || startingCapture ? nil : onBack)
         .sheet(isPresented: $editingNotes) {
+            NavigationStack {
             ScrollView {
                 VStack(spacing: 8) {
-                    GymHeader(title: String(localized: "备注"), back: { editingNotes = false })
                     TextField(String(localized: "握持方式、负重等"), text: $notes).font(GymStyle.body)
                     Button(String(localized: "完成")) { editingNotes = false }
                         .buttonStyle(GymActionStyle(primary: true))
                 }
                 .gymPageContent()
             }
-            .gymPage()
-            .tint(GymStyle.mint)
+            .gymPage().gymNavigationTitle(String(localized: "备注"), back: { editingNotes = false })
+            .tint(GymStyle.accent)
+            }
         }
         .sheet(isPresented: $choosingExercise) {
             NavigationStack {
                 ScrollView {
                 VStack(spacing: GymStyle.spacing) {
-                    GymHeader(title: String(localized: "选择动作"), back: { choosingExercise = false })
                     exerciseOption(String(localized: "深蹲"), value: "squat")
                     exerciseOption(String(localized: "卧推"), value: "bench_press")
                     exerciseOption(String(localized: "硬拉"), value: "deadlift")
@@ -696,11 +686,11 @@ struct CollectionPanel: View {
                     exerciseOption(String(localized: "走动"), value: "walking")
                     exerciseOption(String(localized: "其他非训练"), value: "other")
                 }
-                .gymPageContent(fullWidthHeader: true)
+                .gymPageContent()
                 }
                 .gymPage()
-                .toolbar(.hidden)
-                .tint(GymStyle.mint)
+                .gymNavigationTitle(String(localized: "选择动作"), back: { choosingExercise = false })
+                .tint(GymStyle.accent)
             }
         }
     }
@@ -710,10 +700,10 @@ struct CollectionPanel: View {
             HStack {
                 Text(String(localized: "已识别"))
                 Spacer()
-                Text(String(localized: "\(detected) 次")).foregroundStyle(.white)
+                Text(String(localized: "\(detected) 次")).foregroundStyle(GymStyle.ink)
             }
                 .font(GymStyle.detail)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(GymStyle.muted)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
@@ -773,7 +763,7 @@ struct CollectionPanel: View {
                     .accessibilityHidden(true)
                 Text(name)
                 Spacer()
-                if exercise == value { Image(systemName: "checkmark").foregroundStyle(GymStyle.mint) }
+                if exercise == value { Image(systemName: "checkmark").foregroundStyle(GymStyle.accent) }
             }
             .padding(.horizontal, 8)
             .frame(minHeight: 44)
@@ -782,4 +772,5 @@ struct CollectionPanel: View {
         .buttonStyle(.plain)
     }
 }
+#endif
 #endif

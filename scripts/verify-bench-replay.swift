@@ -35,10 +35,16 @@ enum BenchReplay {
             let stream = BenchPressStream()
             let feedback = BenchPressFeedback()
             var feedbackEvents: [Double] = []
+            var feedbackCycles: [BenchCycle] = []
             var history: [[String: Any]] = [], previous = -1
             for (index, sample) in samples.enumerated() {
                 if !frames[index].isFresh { feedback.reset() }
-                if frames[index].isFresh, let t = feedback.append(sample) { feedbackEvents.append(t) }
+                if frames[index].isFresh, let t = feedback.append(sample) {
+                    feedbackEvents.append(t)
+                    guard let cycle = feedback.lastCycle, cycle.end == t,
+                          cycle.start < cycle.turn, cycle.turn < cycle.end else { fatalError("Invalid live completion") }
+                    feedbackCycles.append(cycle)
+                }
                 if let result = stream.append(sample), result.cycles.count != previous {
                     history.append(["sensor_t": sample.t, "count": result.cycles.count])
                     previous = result.cycles.count
@@ -58,6 +64,7 @@ enum BenchReplay {
             }
             precondition(reversedEvents == feedbackEvents, "Feedback changed with crown coordinates")
             feedback.reset()
+            precondition(feedback.lastCycle == nil, "Reset retained a previous live completion")
 
             let reset = BenchPressStream()
             for sample in samples { _ = reset.append(sample) }
@@ -68,6 +75,7 @@ enum BenchReplay {
                            "events": batch.cycles.map(\.end), "turns": batch.cycles.map(\.turn),
                            "stream_events": final.cycles.map(\.end), "history": history,
                            "feedback_events": feedbackEvents, "feedback_version": BenchPressFeedback.version,
+                           "feedback_cycles": feedbackCycles.map { ["start": $0.start, "turn": $0.turn, "end": $0.end] },
                            "interrupted": stream.interrupted, "seconds": Date().timeIntervalSince(started)])
         }
         let encoded = try JSONSerialization.data(withJSONObject: output, options: [.prettyPrinted, .sortedKeys])

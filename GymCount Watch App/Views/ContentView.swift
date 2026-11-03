@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import WatchKit
 
 // One type scale for labels, controls and supporting text across watch screens.
 enum GymStyle {
@@ -20,25 +21,64 @@ enum GymStyle {
     static let detail = Font.system(size: 11)
     static let trainingCounter = Font.system(size: 48, weight: .semibold, design: .rounded)
     static let counter = Font.system(size: 38, design: .rounded).weight(.semibold)
-    static let mint = Color(red: 181 / 255, green: 244 / 255, blue: 216 / 255)
-    static let surface = Color(red: 18 / 255, green: 20 / 255, blue: 20 / 255)
-    static let muted = Color.white.opacity(0.55)
+    static let accent = Color("AccentColor")
+    static let ink = Color(red: 244 / 255, green: 241 / 255, blue: 232 / 255)
+    static let surface = Color(red: 35 / 255, green: 35 / 255, blue: 32 / 255)
+    static let muted = Color(red: 171 / 255, green: 169 / 255, blue: 159 / 255)
+    static let line = Color(red: 59 / 255, green: 59 / 255, blue: 53 / 255)
+    static let onAccent = Color(red: 34 / 255, green: 32 / 255, blue: 25 / 255)
 }
 
-// Compact headers share a row with the clock; full-width headers sit just below it.
+// One compact title row reserves the system clock and keeps content stable across states.
 extension View {
-    func gymPageContent(fullWidthHeader: Bool = false) -> some View {
+    func gymPageContent() -> some View {
         padding(.horizontal, GymStyle.inset)
-            .padding(.top, fullWidthHeader ? 32 : 12)
+            .padding(.top, 2)
             .padding(.bottom, 12)
     }
 
+    func gymNavigationTitle(_ title: String, back: (() -> Void)? = nil,
+                            backIdentifier: String = "watch.back") -> some View {
+        frame(maxWidth: .infinity)
+            .padding(.top, GymStyle.buttonHeight)
+            .overlay(alignment: .topLeading) {
+                Group {
+                    if let back {
+                        Button(action: back) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left").font(.caption.weight(.semibold))
+                                Text(title).font(.body).lineLimit(1).minimumScaleFactor(0.75)
+                            }
+                            .frame(width: max(60, WKInterfaceDevice.current().screenBounds.width - 76),
+                                   height: GymStyle.buttonHeight, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "返回"))
+                        .accessibilityValue(title)
+                        .accessibilityIdentifier(backIdentifier)
+                    } else {
+                        Text(title).font(.body).lineLimit(1).minimumScaleFactor(0.75)
+                            .frame(width: max(60, WKInterfaceDevice.current().screenBounds.width - 76),
+                                   height: GymStyle.buttonHeight, alignment: .leading)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityIdentifier("watch.title")
+                    }
+                }
+                .foregroundStyle(GymStyle.ink)
+                .padding(.leading, 12)
+            }
+            .ignoresSafeArea(.container, edges: .top)
+            .navigationTitle("")
+            .navigationBarBackButtonHidden(true)
+            .toolbar(.hidden)
+    }
+
     func gymPage() -> some View {
-        ignoresSafeArea(.container, edges: .top)
-            .font(GymStyle.body)
-            .foregroundStyle(.white)
+        font(GymStyle.body)
+            .foregroundStyle(GymStyle.ink)
             .background(Color.black)
-            .tint(GymStyle.mint)
+            .tint(GymStyle.accent)
     }
 }
 
@@ -49,35 +89,11 @@ struct GymActionStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(GymStyle.button)
-            .foregroundStyle(primary ? Color.black : Color.white)
+            .foregroundStyle(primary ? GymStyle.onAccent : GymStyle.ink)
             .frame(maxWidth: .infinity, minHeight: GymStyle.buttonHeight)
-            .background(primary ? GymStyle.mint : GymStyle.surface, in: Capsule())
-            .overlay(Capsule().strokeBorder(primary ? Color.clear : GymStyle.mint.opacity(0.25), lineWidth: 0.5))
+            .background(primary ? GymStyle.accent : GymStyle.surface, in: Capsule())
+            .overlay(Capsule().strokeBorder(primary ? Color.clear : GymStyle.accent.opacity(0.25), lineWidth: 0.5))
             .opacity(!enabled ? 0.4 : configuration.isPressed ? 0.65 : 1)
-    }
-}
-
-struct GymHeader: View {
-    let title: String
-    var back: (() -> Void)? = nil
-    var body: some View {
-        HStack(spacing: 8) {
-            if let back {
-                Button(action: back) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(width: 34, height: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "返回"))
-            }
-            Text(title).font(GymStyle.title)
-                .lineLimit(1).minimumScaleFactor(0.8)
-            Spacer(minLength: 0)
-        }
-        .foregroundStyle(.white)
-        .frame(minHeight: back == nil ? 24 : 44)
-        .frame(height: 28)
     }
 }
 
@@ -92,8 +108,21 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            if dataManager.currentSession != nil {
-                CounterView()
+            if dataManager.requiresDraftRecovery {
+                WorkoutDraftRecoveryView()
+            } else if let report = dataManager.completedWholeWorkout {
+                WholeWorkoutSummaryView(report: report, close: {
+                    dataManager.completedWholeWorkout = nil
+                    dataManager.wholeWorkoutError = nil
+                }, warning: dataManager.saveError ?? dataManager.wholeWorkoutError)
+            } else if dataManager.currentSession != nil {
+                if dataManager.requiresWorkoutRecovery {
+                    WorkoutRecoveryView()
+                } else if dataManager.isWholeWorkout {
+                    WholeWorkoutView()
+                } else {
+                    CounterView()
+                }
             } else {
                 MainMenuView(
                     selectedExercise: $selectedExercise,
@@ -103,15 +132,15 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showingHistory) {
-            HistoryView(showingHistory: $showingHistory)
+            NavigationStack { HistoryView(showingHistory: $showingHistory) }
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
-        .sheet(item: $feedbackWorkout) { WorkoutFeedbackView(workout: $0) }
+        .sheet(item: $feedbackWorkout) { workout in NavigationStack { WorkoutFeedbackView(workout: workout) } }
         .overlay(alignment: .center) {
             ZStack {
-                if dataManager.currentSession == nil, let workout = dataManager.completedWorkout {
+                if dataManager.currentSession == nil, dataManager.completedWholeWorkout == nil, let workout = dataManager.completedWorkout {
                     WorkoutSavedBanner(workout: workout, feedback: {
                         dataManager.completedWorkout = nil
                         feedbackWorkout = workout
@@ -131,10 +160,85 @@ struct ContentView: View {
                        value: dataManager.completedWorkout?.id)
         }
         .alert(String(localized: "保存提示"), isPresented: Binding(
-            get: { dataManager.saveError != nil }, set: { if !$0 { dataManager.saveError = nil } })) {
-            Button(String(localized: "知道了"), role: .cancel) { dataManager.saveError = nil }
-        } message: { Text(dataManager.saveError ?? "") }
-        .tint(GymStyle.mint)
+            get: { dataManager.saveError != nil || dataManager.wholeWorkoutError != nil }, set: { presented in
+                guard !presented else { return }
+                let dismissedError = dataManager.saveError
+                let dismissedWholeError = dataManager.wholeWorkoutError
+                DispatchQueue.main.async {
+                    if dataManager.saveError == dismissedError { dataManager.saveError = nil }
+                    if dataManager.wholeWorkoutError == dismissedWholeError { dataManager.wholeWorkoutError = nil }
+                }
+            })) {
+            Button(String(localized: "知道了"), role: .cancel) {}
+        } message: { Text(dataManager.saveError ?? dataManager.wholeWorkoutError ?? "") }
+        .tint(GymStyle.accent)
+    }
+}
+
+struct WorkoutDraftRecoveryView: View {
+    @EnvironmentObject var dataManager: DataManager
+    @State private var confirmingReset = false
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: GymStyle.spacing) {
+                Text(String(localized: "未完成训练读取失败"))
+                    .font(GymStyle.title)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(String(localized: "重新读取")) { dataManager.retryWorkoutDraft() }
+                    .buttonStyle(GymActionStyle(primary: true))
+                    .accessibilityIdentifier("workout.draft.retry")
+                Button(String(localized: "保留并重置")) { confirmingReset = true }
+                    .buttonStyle(GymActionStyle())
+                    .accessibilityIdentifier("workout.draft.reset")
+            }.gymPageContent()
+        }
+        .gymPage().gymNavigationTitle(String(localized: "未完成训练"))
+        .alert(String(localized: "重置未完成训练？"), isPresented: $confirmingReset) {
+            Button(String(localized: "取消"), role: .cancel) {}
+            Button(String(localized: "保留并重置")) { dataManager.resetUnreadableWorkoutDraft() }
+        } message: {
+            Text(String(localized: "原文件将保留，已保存的训练不受影响"))
+        }
+    }
+}
+
+struct WorkoutRecoveryView: View {
+    @EnvironmentObject var dataManager: DataManager
+    @State private var confirmingDiscard = false
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: GymStyle.spacing) {
+                if let session = dataManager.currentSession {
+                    Text(dataManager.isWholeWorkout ? String(localized: "整场训练") : session.exerciseType.displayName)
+                        .font(GymStyle.section)
+                    Text(String(localized: "\(dataManager.isWholeWorkout ? dataManager.wholeTotalReps : session.totalReps) 次"))
+                        .font(GymStyle.counter).monospacedDigit()
+                    Text(String(localized: "训练已恢复，自动计数已暂停"))
+                        .font(GymStyle.caption).foregroundStyle(GymStyle.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if dataManager.canResumeRecoveredWorkout {
+                        Button(String(localized: "继续训练")) { dataManager.resumeRecoveredWorkout() }
+                            .buttonStyle(GymActionStyle(primary: true))
+                            .accessibilityIdentifier("workout.recovery.resume")
+                    }
+                    Button(String(localized: "保存训练")) { Task { await dataManager.endWorkout() } }
+                        .buttonStyle(GymActionStyle())
+                        .accessibilityIdentifier("workout.recovery.save")
+                    Button(String(localized: "放弃训练"), role: .destructive) { confirmingDiscard = true }
+                        .buttonStyle(GymActionStyle())
+                        .accessibilityIdentifier("workout.recovery.discard")
+                }
+            }.gymPageContent()
+        }
+        .gymPage().gymNavigationTitle(String(localized: "未完成训练"))
+        .alert(String(localized: "放弃这次训练？"), isPresented: $confirmingDiscard) {
+            Button(String(localized: "取消"), role: .cancel) {}
+            Button(String(localized: "放弃训练"), role: .destructive) { dataManager.discardRecoveredWorkout() }
+        } message: {
+            Text(String(localized: "已恢复的次数将被删除"))
+        }
     }
 }
 
@@ -145,42 +249,62 @@ struct MainMenuView: View {
     @Binding var selectedExercise: ExerciseType
     @Binding var showingHistory: Bool
     @Binding var showingSettings: Bool
+    @State private var startingWorkout = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                HStack(spacing: 6) {
-                    Text(String(localized: "训练")).font(GymStyle.title)
+                HStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        TimelineView(.periodic(from: .now, by: 60)) { context in
+                            let streak = TrainingStreak(dates: dataManager.trainingDates, now: context.date)
+                            Label(String(localized: "\(streak.current) 天"), systemImage: "flame")
+                                .font(GymStyle.detail).lineLimit(1).minimumScaleFactor(0.8)
+                                .foregroundStyle(streak.current > 0 ? GymStyle.accent : GymStyle.muted)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(String(localized: "连续 \(streak.current) 天"))
+                                .accessibilityIdentifier("workout.streak")
+                        }
+                    }
                     Spacer(minLength: 0)
                     Button { showingHistory = true } label: {
-                        Image(systemName: "chart.bar.fill").frame(width: 32, height: 44)
+                        Image(systemName: "chart.bar.fill")
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel(String(localized: "历史"))
                     Button { showingSettings = true } label: {
-                        Image(systemName: "gearshape").frame(width: 32, height: 44)
+                        Image(systemName: "gearshape")
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel(String(localized: "设置"))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.white)
-                .frame(height: 28)
+                .foregroundStyle(GymStyle.ink)
+                .frame(height: 44)
                 ForEach(ExerciseType.allCases, id: \.self) { exercise in
                     ExerciseCard(
                         exercise: exercise,
                         isSelected: selectedExercise == exercise
                     ) {
                         selectedExercise = exercise
-                        dataManager.startWorkout(
-                            exerciseType: exercise,
-                            weight: dataManager.settings.defaultWeight
-                        )
-                    }.accessibilityIdentifier("workout.start." + exercise.rawValue)
+                        guard !startingWorkout else { return }
+                        startingWorkout = true
+                        Task { @MainActor in
+                            _ = await dataManager.startWholeWorkout(
+                                exerciseType: exercise,
+                                weight: dataManager.settings.defaultWeight
+                            )
+                            startingWorkout = false
+                        }
+                    }.disabled(startingWorkout)
+                    .accessibilityIdentifier("workout.start." + exercise.rawValue)
                 }
             }
-            .gymPageContent(fullWidthHeader: true)
+            .padding(.horizontal, GymStyle.inset)
+            .padding(.top, 2)
+            .padding(.bottom, 12)
         }
         .navigationBarBackButtonHidden(true)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden)
         .gymPage()
+        .gymNavigationTitle(String(localized: "训练"))
     }
 }
 
@@ -200,14 +324,14 @@ struct ExerciseCard: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 36, height: 36)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(GymStyle.accent)
                     .accessibilityHidden(true)
 
                 // 名称
                 Text(exercise.displayName)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
+                    .foregroundColor(GymStyle.ink)
+                    .lineLimit(2)
                     .minimumScaleFactor(0.8)
                     .layoutPriority(1)
 
@@ -216,15 +340,15 @@ struct ExerciseCard: View {
                 // 开始指示
                 Image(systemName: "play.fill")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(GymStyle.mint)
+                    .foregroundStyle(GymStyle.accent)
                     .frame(width: 28, height: 28)
-                    .background(GymStyle.mint.opacity(0.10), in: Circle())
+                    .background(GymStyle.accent.opacity(0.10), in: Circle())
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? GymStyle.mint.opacity(0.07) : Color.clear)
+                    .fill(isSelected ? GymStyle.accent.opacity(0.07) : Color.clear)
             )
             .contentShape(Rectangle())
         }

@@ -6,6 +6,34 @@ final class WorkoutDiagnostics {
     let raw = RawCapture()
 
     func recording(for workout: WorkoutHistory) throws -> Data? {
+        guard let record = record(for: workout) else { return nil }
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(record)
+        return data.count <= 16 * 1024 * 1024 ? data : nil
+    }
+
+    func timeline(for workout: WorkoutHistory) throws -> WorkoutTimeline? {
+        let snapshot = raw.snapshot()
+        guard snapshot.points.count >= 2 else { return nil }
+        let source = WorkoutSync.Record(id: workout.id, date: workout.date, exercise: workout.exerciseType.rawValue,
+            totalReps: workout.totalReps, maxWeight: workout.maxWeight, duration: workout.duration,
+            activeDuration: workout.activeDuration, totalWeight: workout.totalWeight)
+        func vector(_ value: CaptureVector) -> WorkoutTimeline.Vector {
+            WorkoutTimeline.Vector(x: value.x, y: value.y, z: value.z)
+        }
+        return try WorkoutTimeline(source: source, origin: raw.originWallTime.map { Date(timeIntervalSince1970: $0) },
+            acceleration: snapshot.points.map { WorkoutTimeline.VectorSample(t: $0.t, x: $0.x, y: $0.y, z: $0.z) },
+            motion: snapshot.motion.map {
+                WorkoutTimeline.MotionSample(t: $0.t, gravity: vector($0.gravity), userAcceleration: vector($0.user_acceleration),
+                    rotationRate: vector($0.rotation_rate), attitude: vector($0.attitude),
+                    magneticField: $0.magnetic_field_accuracy >= 0 ? vector($0.magnetic_field) : nil)
+            }, detectedEvents: snapshot.events,
+            feedbackEvents: workout.exerciseType == .deadlift ? nil : raw.recordedFeedback,
+            algorithmVersion: workout.exerciseType == .benchPress ? BenchAnalysis.version : workout.exerciseType == .squat ? SquatStream.version : "rules-20261007",
+            isPartial: snapshot.eventsTruncated)
+    }
+
+    private func record(for workout: WorkoutHistory) -> CaptureRecord? {
         let snapshot = raw.snapshot()
         // The existing capture API accepts full sets up to ten minutes. Never
         // present a truncated sample window as a complete training record.
@@ -20,7 +48,7 @@ final class WorkoutDiagnostics {
         let info = Bundle.main.infoDictionary ?? [:]
         let kind = workout.exerciseType
         let motion = snapshot.motion.count >= 2 ? snapshot.motion : []
-        let record = CaptureRecord(session_id: workout.id, started_at: workout.date,
+        return CaptureRecord(session_id: workout.id, started_at: workout.date,
             exercise: kind.rawValue, actual_count: 0, detected_count: snapshot.events.count,
             duration_seconds: duration, wrist: WKInterfaceDevice.current().wristLocation == .left ? "left" : "right",
             watch_crown: WKInterfaceDevice.current().crownOrientation == .left ? "left" : "right", pace: "normal",
@@ -35,9 +63,6 @@ final class WorkoutDiagnostics {
             feedback_events: kind == .deadlift ? nil : raw.recordedFeedback,
             feedback_algorithm_version: kind == .benchPress ? BenchPressFeedback.version : kind == .squat ? SquatStream.version : nil,
             reference_events_truncated: snapshot.eventsTruncated)
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
-        let data = try encoder.encode(record)
-        return data.count <= 16 * 1024 * 1024 ? data : nil
     }
 }
 
@@ -62,7 +87,8 @@ final class WorkoutFeedbackStore: ObservableObject {
         errorMessage = nil; errorID = id; uploadingID = id
         defer { uploadingID = nil; revision += 1 }
         do {
-            let entry = try archive.prepare(id, actual: actual)
+            let archive = self.archive
+            let entry = try await WorkoutFileIO.shared.perform { try archive.prepare(id, actual: actual) }
             if entry.serverID != nil { return }
             var request = URLRequest(url: URL(string: "https://api.flyingrtx.com/api/v1/gymcount/sessions")!)
             request.httpMethod = "POST"; request.timeoutInterval = 45
@@ -80,7 +106,7 @@ final class WorkoutFeedbackStore: ObservableObject {
                 WKInterfaceDevice.current().play(.failure)
                 return
             }
-            try archive.acknowledge(entry, response: data)
+            try await WorkoutFileIO.shared.perform { try archive.acknowledge(entry, response: data) }
             WKInterfaceDevice.current().play(.success)
         } catch {
             if let failure = error as? URLError {

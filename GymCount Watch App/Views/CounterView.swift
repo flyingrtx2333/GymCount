@@ -12,8 +12,6 @@ import HealthKit
 struct CounterView: View {
     @EnvironmentObject var dataManager: DataManager
     @State private var showingWeightInput = false
-    @State private var tempWeight: Double = 0.0
-    @State private var isDetecting = false
 
     private var currentSession: WorkoutSession? {
         dataManager.currentSession
@@ -29,21 +27,19 @@ struct CounterView: View {
             finished: currentSession?.endTime != nil,
             weight: currentSession?.weight ?? dataManager.settings.defaultWeight,
             onWeight: {
-                tempWeight = currentSession?.weight ?? dataManager.settings.defaultWeight
                 showingWeightInput = true
             },
             onMinus: { dataManager.removeRep(); WKInterfaceDevice.current().play(.click) },
             onPlus: { dataManager.addRep(); WKInterfaceDevice.current().play(.click) },
-            onEnd: { dataManager.endWorkout() }
+            onEnd: { Task { await dataManager.endWorkout() } }
         )
         .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden)
+        .gymNavigationTitle(currentSession?.exerciseType.displayName ?? String(localized: "训练"))
+        .disabled(dataManager.isSavingWorkout)
+        .overlay { if dataManager.isSavingWorkout { ProgressView() } }
         .sheet(isPresented: $showingWeightInput) {
-            WeightInputView(weight: $tempWeight) { newWeight in
-                if var session = dataManager.currentSession {
-                    session.weight = newWeight
-                    dataManager.currentSession = session
-                }
+            WeightInputView(value: currentSession?.weight ?? dataManager.settings.defaultWeight) { newWeight in
+                dataManager.updateCurrentWeight(newWeight)
             }
         }
     }
@@ -67,11 +63,9 @@ struct CounterPanel: View {
         ScrollView {
             VStack(spacing: GymStyle.spacing) {
                 HStack(spacing: 4) {
-                    Text(exercise).font(GymStyle.section)
-                        .lineLimit(1).minimumScaleFactor(0.8)
                     Spacer(minLength: 0)
                     Button(action: onWeight) {
-                        Text(weight.formatted(.number.precision(.fractionLength(0...1))) + String(localized: " 公斤"))
+                        Text(weight.formatted(.number.grouping(.never).precision(.significantDigits(1...15))) + String(localized: " 公斤"))
                             .font(GymStyle.caption)
                             .foregroundStyle(GymStyle.muted)
                             .padding(.horizontal, 6)
@@ -79,13 +73,15 @@ struct CounterPanel: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .disabled(finished)
                     .accessibilityLabel(String(localized: "修改器械重量"))
+                    .accessibilityValue(weight.formatted(.number.grouping(.never).precision(.significantDigits(1...15))) + String(localized: " 公斤"))
                 }
 
-                .frame(height: 28)
+                .frame(minHeight: 44)
 
                 HStack(spacing: 2) {
-                    CircleButton(icon: "minus", size: 44, disabled: count == 0, action: onMinus)
+                    CircleButton(icon: "minus", size: 44, disabled: finished || count == 0, action: onMinus)
                         .accessibilityLabel(String(localized: "减少次数"))
                     Text("\(count)")
                         .font(GymStyle.trainingCounter)
@@ -93,13 +89,21 @@ struct CounterPanel: View {
                         .lineLimit(1).minimumScaleFactor(0.5)
                         .frame(maxWidth: .infinity)
                         .contentTransition(.numericText())
-                    CircleButton(icon: "plus", size: 44, action: onPlus)
+                    CircleButton(icon: "plus", size: 44, disabled: finished, action: onPlus)
                         .accessibilityLabel(String(localized: "增加次数"))
                 }
-                HStack(spacing: 5) {
-                    Circle().fill(countingFailed ? Color.orange : GymStyle.mint).frame(width: 5, height: 5)
-                    Text(countingMessage)
-                        .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
+                if !finished {
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Image(systemName: countingFailed ? "exclamationmark.circle.fill" : "circle.fill")
+                            .font(.system(size: countingFailed ? 11 : 5, weight: .medium))
+                            .accessibilityHidden(true)
+                        Text(countingMessage)
+                            .font(countingFailed ? GymStyle.caption : GymStyle.detail)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(countingFailed ? Color.orange : GymStyle.muted)
+                    .frame(maxWidth: .infinity, alignment: countingFailed ? .leading : .center)
+                    .accessibilityElement(children: .combine)
                 }
                 if let activeDuration {
                     Text(String(localized: "动作时长（估计）：\(Duration.seconds(activeDuration).formatted(.time(pattern: .minuteSecond)))"))
@@ -108,7 +112,7 @@ struct CounterPanel: View {
                 Button(finished ? String(localized: "重试保存") : String(localized: "结束"), action: onEnd).buttonStyle(GymActionStyle())
                     .accessibilityIdentifier("workout.end")
             }
-            .gymPageContent(fullWidthHeader: true)
+            .gymPageContent()
         }
         .gymPage()
     }
@@ -130,11 +134,11 @@ struct CircleButton: View {
                     .frame(width: size, height: size)
                     .overlay(
                         Circle()
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                            .strokeBorder(GymStyle.ink.opacity(0.08), lineWidth: 0.5)
                     )
                 Image(systemName: icon)
                     .font(.system(size: size * 0.36, weight: .semibold))
-                    .foregroundStyle(disabled ? GymStyle.muted.opacity(0.3) : Color.white)
+                    .foregroundStyle(disabled ? GymStyle.muted.opacity(0.3) : GymStyle.ink)
             }
         }
         .buttonStyle(.plain)
@@ -145,69 +149,101 @@ struct CircleButton: View {
 // MARK: - 重量输入视图
 
 struct WeightInputView: View {
-    @Binding var weight: Double
+    let title: String
+    let minimum: Double
+    let maximum: Double
+    let step: Double
     let onSave: (Double) -> Void
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
+    @State private var text: String
 
-    var body: some View {
-        ScrollView {
-        VStack(spacing: GymStyle.spacing) {
-
-            GymHeader(title: String(localized: "器械重量"), back: { presentationMode.wrappedValue.dismiss() })
-
-            // 大号重量显示
-            HStack(alignment: .lastTextBaseline, spacing: 3) {
-                Text("\(formatWeight(weight))")
-                    .font(GymStyle.counter)
-                    .foregroundColor(.white)
-                    .contentTransition(.numericText())
-                    .animation(.spring(duration: 0.2), value: weight)
-                Text(String(localized: "公斤"))
-                    .font(GymStyle.body)
-                    .foregroundColor(.secondary)
-            }
-
-            // 调节按钮
-            HStack(spacing: 6) {
-                // -5kg
-                WeightStepButton(label: "-5", color: GymStyle.mint) {
-                    weight = max(0, weight - 5)
-                }
-                // -2.5kg
-                WeightStepButton(label: "-2.5", color: GymStyle.mint.opacity(0.7)) {
-                    weight = max(0, weight - 2.5)
-                }
-                // +2.5kg
-                WeightStepButton(label: "+2.5", color: GymStyle.mint.opacity(0.7)) {
-                    weight += 2.5
-                }
-                // +5kg
-                WeightStepButton(label: "+5", color: GymStyle.mint) {
-                    weight += 5
-                }
-            }
-
-            Button(String(localized: "保存")) {
-                onSave(weight)
-                presentationMode.wrappedValue.dismiss()
-            }
-            .buttonStyle(GymActionStyle(primary: true))
-        }
-        .gymPageContent(fullWidthHeader: true)
-        }
-        .gymPage()
+    init(title: String = String(localized: "器械重量"), value: Double,
+         minimum: Double = 0, maximum: Double = .infinity, step: Double = 2.5,
+         onSave: @escaping (Double) -> Void) {
+        self.title = title; self.minimum = minimum; self.maximum = maximum
+        self.step = step; self.onSave = onSave
+        _text = State(initialValue: Self.inputText(value))
     }
 
-    private func formatWeight(_ w: Double) -> String {
-        w.truncatingRemainder(dividingBy: 1) == 0
-            ? String(Int(w))
-            : String(format: "%.1f", w)
+    private var value: Double? {
+        let scanner = Scanner(string: text.trimmingCharacters(in: .whitespacesAndNewlines))
+        scanner.locale = Locale.current
+        guard let number = scanner.scanDouble(), scanner.isAtEnd, number.isFinite,
+              number >= minimum, number <= maximum else { return nil }
+        return number
+    }
+
+    var body: some View {
+        NavigationStack {
+        ScrollView {
+            VStack(spacing: 8) {
+
+                TextField("0", text: $text)
+                        .textFieldStyle(.plain).textInputAutocapitalization(.never)
+                        .autocorrectionDisabled().submitLabel(.done)
+                        .font(.system(size: 26, weight: .medium, design: .rounded)).monospacedDigit()
+                        .accessibilityLabel(String(localized: "重量(kg)"))
+                        .accessibilityIdentifier("weight-input-value")
+                        .frame(minHeight: 52)
+                        .overlay(alignment: .trailing) {
+                            Text(String(localized: "公斤")).font(GymStyle.caption).foregroundStyle(GymStyle.muted)
+                                .padding(.trailing, 12).allowsHitTesting(false).accessibilityHidden(true)
+                        }
+
+                if value == nil {
+                    Text(maximum.isFinite
+                         ? String(format: String(localized: "重量范围：%@–%@ 公斤"), minimum.formatted(), maximum.formatted())
+                         : String(localized: "请输入有效重量"))
+                        .font(GymStyle.detail).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("weight-input-error")
+                }
+
+                HStack(spacing: 8) {
+                    WeightStepButton(label: "−" + step.formatted(), color: GymStyle.accent,
+                                     disabled: value.map { $0 <= minimum } ?? true) { adjust(-step) }
+                        .accessibilityLabel(String(localized: "减少重量"))
+                        .accessibilityValue(step.formatted() + String(localized: " 公斤"))
+                        .accessibilityIdentifier("weight-step-minus")
+                    WeightStepButton(label: "+" + step.formatted(), color: GymStyle.accent,
+                                     disabled: value.map { $0 >= maximum } ?? true) { adjust(step) }
+                        .accessibilityLabel(String(localized: "增加重量"))
+                        .accessibilityValue(step.formatted() + String(localized: " 公斤"))
+                        .accessibilityIdentifier("weight-step-plus")
+                }
+            }.gymPageContent()
+        }.gymPage().gymNavigationTitle(title, back: { dismiss() }, backIdentifier: "weight-input-back")
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+                    Button(String(localized: "保存")) {
+                        guard let value else { return }
+                        onSave(value); dismiss()
+                    }
+                        .buttonStyle(GymActionStyle(primary: true)).disabled(value == nil)
+                        .accessibilityIdentifier("weight-input-save")
+                    .padding(.horizontal, GymStyle.inset)
+                    .padding(.bottom, 4)
+                    .background(Color.black)
+        }
+        .ignoresSafeArea(.container, edges: .bottom)
+        }
+    }
+
+    private func adjust(_ amount: Double) {
+        guard let value else { return }
+        text = Self.inputText(min(maximum, max(minimum, value + amount)))
+    }
+
+    private static func inputText(_ value: Double) -> String {
+        let raw = String(value)
+        let number = raw.hasSuffix(".0") ? String(raw.dropLast(2)) : raw
+        return number.replacingOccurrences(of: ".", with: Locale.current.decimalSeparator ?? ".")
     }
 }
 
 struct WeightStepButton: View {
     let label: String
     let color: Color
+    var disabled = false
     let action: () -> Void
 
     var body: some View {
@@ -221,7 +257,7 @@ struct WeightStepButton: View {
                         .fill(GymStyle.surface)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.plain).disabled(disabled).opacity(disabled ? 0.35 : 1)
     }
 }
 

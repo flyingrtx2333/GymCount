@@ -10,6 +10,29 @@ import CoreMotion
 import Combine
 import WatchKit
 
+// Detection owns the movement decision; consumers own records and presentation.
+enum DetectedRepetition {
+    case benchPress(BenchCycle)
+    case squat(SquatCycle)
+    case deadlift
+
+    var exercise: ExerciseType {
+        switch self {
+        case .benchPress: return .benchPress
+        case .squat: return .squat
+        case .deadlift: return .deadlift
+        }
+    }
+}
+
+enum RepCompletionFeedback {
+    static func play(isLive: Bool, record: (Double) -> Void) {
+        guard isLive else { return }
+        record(ProcessInfo.processInfo.systemUptime)
+        WKInterfaceDevice.current().play(.directionUp)
+    }
+}
+
 class MotionDetector: ObservableObject {
     private let motionManager = CMMotionManager()
     private let motionQueue: OperationQueue = {
@@ -21,9 +44,6 @@ class MotionDetector: ObservableObject {
     var onRawRepDetected: ((Double?) -> Void)?
     var onRawDeviceMotion: ((CMDeviceMotion) -> Void)?
     var onRawBenchAnalysis: ((BenchAnalysis) -> Void)?
-    private var accelerometerData: [CMAccelerometerData] = []
-    private var dataUpdateTimer: Timer?
-    private var lastDataUpdateTime: Date = Date()
     
     // 运动检测器
     private var benchPressDetector: BenchPressDetector?
@@ -31,7 +51,9 @@ class MotionDetector: ObservableObject {
     private var deadliftDetector: DeadliftDetector?
     private var currentExerciseType: ExerciseType = .benchPress
     private var countsRepetitions = true
+    private var isStopping = false
     private var generation = UUID()
+    private var lastDeliveredRepTime: Double?
     
     @Published var isDetecting = false
     @Published var repCount = 0
@@ -39,15 +61,11 @@ class MotionDetector: ObservableObject {
     
     // 检测参数
     private let sampleRate = 40.0 // 采样率
-    private let dataUpdateInterval = 0.05 // 数据更新间隔（50ms）
     
-    var onBenchCompletion: (() -> Void)?
-    var onSquatCompletion: (() -> Void)?
     var onBenchAnalysis: ((BenchAnalysis) -> Void)?
     var onCountingError: ((String) -> Void)?
     var onActiveDuration: ((TimeInterval?) -> Void)?
-    var onRepDetected: (() -> Void)?
-    var onAccelerationDataReceived: ((Double, Double, Double, Double) -> Void)?
+    var onRepDetected: ((DetectedRepetition, Bool) -> Void)?
     
     init() {
         setupMotionManager()
@@ -70,21 +88,20 @@ class MotionDetector: ObservableObject {
             self?.publishBenchAnalysis(result)
         }
         
-        benchPressDetector?.onCompletion = { [weak self] time in
-            self?.publishCompletion(time, exercise: .benchPress)
+        benchPressDetector?.onCompletion = { [weak self] cycle in
+            self?.publishRepetition(.benchPress(cycle), sensorTime: cycle.end)
         }
 
         // 初始化深蹲检测器
         squatDetector = SquatDetector()
         squatDetector?.onRepDetected = { [weak self] time in
             self?.handleRepDetected(sensorTime: time)
-            self?.publishCompletion(time, exercise: .squat)
         }
         
         // 初始化硬拉检测器
         deadliftDetector = DeadliftDetector()
-        deadliftDetector?.onRepDetected = { [weak self] in
-            self?.handleRepDetected()
+        deadliftDetector?.onRepDetected = { [weak self] time in
+            self?.handleRepDetected(sensorTime: time)
         }
     }
     
@@ -100,18 +117,15 @@ class MotionDetector: ObservableObject {
             return
         }
         generation = UUID()
+        lastDeliveredRepTime = nil
+        isStopping = false
         isDetecting = true
         countsRepetitions = countRepetitions
-        accelerometerData.removeAll()
         repCount = 0
         lastRepTime = nil
-        lastDataUpdateTime = Date()
         
         // 重置当前检测器
         resetCurrentDetector()
-        
-        // 启动数据更新定时器
-        startDataUpdateTimer()
         
         let runID = generation
         // 使用后台队列来处理加速计数据，确保在屏幕变暗时仍能正常工作
@@ -154,34 +168,61 @@ class MotionDetector: ObservableObject {
     }
     
     func stopDetection() {
+        isStopping = true
         print("🛑 停止运动检测")
         motionManager.stopAccelerometerUpdates()
         motionManager.stopDeviceMotionUpdates()
         if OperationQueue.current !== motionQueue {
             motionQueue.waitUntilAllOperationsAreFinished()
         }
+        applyStop(finalAnalysis())
+    }
+
+    @MainActor
+    func stopDetectionAsync() async {
+        isStopping = true
+        motionManager.stopAccelerometerUpdates()
+        motionManager.stopDeviceMotionUpdates()
+        do {
+            let final = try await WorkoutFileIO.shared.perform {
+                self.motionQueue.waitUntilAllOperationsAreFinished()
+                return self.finalAnalysis()
+            }
+            applyStop(final)
+        } catch { onCountingError?(String(localized: "运动采样中断，请手动核对")) }
+    }
+
+    private func finalAnalysis() -> (bench: BenchAnalysis?, squatCount: Int, deadliftCount: Int, cycles: [SquatCycle]) {
+        (currentExerciseType == .benchPress && isDetecting && countsRepetitions ? benchPressDetector?.finish() : nil,
+         squatDetector?.repCount ?? 0, deadliftDetector?.repCount ?? 0, squatDetector?.cycles ?? [])
+    }
+
+    private func applyStop(_ final: (bench: BenchAnalysis?, squatCount: Int, deadliftCount: Int, cycles: [SquatCycle])) {
         let wasDetecting = isDetecting
         generation = UUID() // Discard queued UI updates from the previous run.
         if wasDetecting && countsRepetitions && currentExerciseType == .benchPress,
-           let result = benchPressDetector?.finish() {
+           let result = final.bench {
             onRawBenchAnalysis?(result)
             applyBenchAnalysis(result)
         } else if wasDetecting && countsRepetitions {
-            let finalCount = currentExerciseType == .squat ? (squatDetector?.repCount ?? 0) : (deadliftDetector?.repCount ?? 0)
+            let finalCount = currentExerciseType == .squat ? final.squatCount : final.deadliftCount
             let pending = max(0, finalCount - repCount)
             repCount = finalCount
-            for _ in 0..<pending { onRepDetected?() }
+            if currentExerciseType == .squat {
+                for cycle in final.cycles.suffix(pending) {
+                    onRepDetected?(.squat(cycle), false)
+                }
+            } else {
+                for _ in 0..<pending { onRepDetected?(.deadlift, false) }
+            }
         }
         isDetecting = false
-        stopDataUpdateTimer()
+        isStopping = false
     }
-    
+
     private func processAccelerometerData(_ data: CMAccelerometerData) {
         onRawAcceleration?(data)
         guard countsRepetitions else { return }
-        // 添加新数据
-        accelerometerData = [data]
-        
         // 将数据传递给当前活动的检测器
         switch currentExerciseType {
         case .benchPress:
@@ -193,73 +234,62 @@ class MotionDetector: ObservableObject {
         }
     }
     
-    private func startDataUpdateTimer() {
-        dataUpdateTimer = Timer.scheduledTimer(withTimeInterval: dataUpdateInterval, repeats: true) { [weak self] _ in
-            self?.sendDataToView()
-        }
-    }
-    
-    private func stopDataUpdateTimer() {
-        dataUpdateTimer?.invalidate()
-        dataUpdateTimer = nil
-    }
-    
-    private func sendDataToView() {
-        motionQueue.addOperation { [weak self] in
-            guard let self, let lastData = self.accelerometerData.last else { return }
-            let x = lastData.acceleration.x, y = lastData.acceleration.y, z = lastData.acceleration.z
-            let magnitude = sqrt(x*x + y*y + z*z)
-            let token = self.generation
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.generation == token else { return }
-                self.onAccelerationDataReceived?(x, y, z, magnitude)
-            }
-        }
-    }
-
     private func publishBenchAnalysis(_ result: BenchAnalysis) {
         onRawBenchAnalysis?(result)
+        // Prefix V8 results use future context and can confirm several old reps
+        // together. Keep them in the diagnostic stream, not in the live counter.
+        // applyStop() alone reconciles the finished set without completion feedback.
+        guard result.status == "insufficient_data" else { return }
         let token = generation
         DispatchQueue.main.async { [weak self] in
             guard let self, self.generation == token, self.isDetecting else { return }
-            self.applyBenchAnalysis(result)
+            self.onCountingError?(String(localized: "采样中断，请手动核对"))
+        }
+    }
+
+    private func publishRepetition(_ repetition: DetectedRepetition, sensorTime: Double?, count: Int? = nil, date: Date? = nil) {
+        let token = generation
+        let completedAt = sensorTime ?? ProcessInfo.processInfo.systemUptime
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.generation == token, self.isDetecting, !self.isStopping,
+                  self.currentExerciseType == repetition.exercise else { return }
+            let isLive = (0...0.25).contains(ProcessInfo.processInfo.systemUptime - completedAt)
+            // Never turn delayed bench completions into live increments. Squat
+            // and deadlift may reconcile their counts, but do so silently.
+            if case .benchPress = repetition, !isLive { return }
+            let next = count ?? (self.repCount + 1)
+            guard next > self.repCount,
+                  self.lastDeliveredRepTime.map({ completedAt > $0 }) ?? true else { return }
+            self.lastDeliveredRepTime = completedAt
+            self.repCount = next
+            let anchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
+            self.lastRepTime = date ?? Date(timeIntervalSince1970: anchor + completedAt)
+            self.onRepDetected?(repetition, isLive)
         }
     }
 
     private func applyBenchAnalysis(_ result: BenchAnalysis) {
-        repCount = result.cycles.count
-        let anchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
-        lastRepTime = result.cycles.last.map { Date(timeIntervalSince1970: anchor + $0.end) }
+        if let count = result.count {
+            repCount = count
+            let anchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
+            lastRepTime = result.cycles.last.map { Date(timeIntervalSince1970: anchor + $0.end) }
+        }
         onBenchAnalysis?(result)
         onActiveDuration?(result.status == "estimated" ? ActionTiming.total(result.cycles.map {
             ActionTiming.Interval(start: $0.start, end: $0.end)
         }) : nil)
     }
 
-    private func publishCompletion(_ time: Double, exercise: ExerciseType) {
-        let token = generation
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.generation == token, self.isDetecting,
-                  self.currentExerciseType == exercise,
-                  (0...0.25).contains(ProcessInfo.processInfo.systemUptime - time) else { return }
-            if exercise == .benchPress { self.onBenchCompletion?() }
-            else { self.onSquatCompletion?() }
-        }
-    }
-
     private func handleRepDetected(sensorTime: Double? = nil) {
         onRawRepDetected?(sensorTime)
-        let count: Int
-        let time: Date?
         switch currentExerciseType {
         case .benchPress: return
-        case .squat: count = squatDetector?.repCount ?? 0; time = squatDetector?.lastRepTime
-        case .deadlift: count = deadliftDetector?.repCount ?? 0; time = deadliftDetector?.lastRepTime
-        }
-        let token = generation
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.generation == token, self.isDetecting else { return }
-            self.repCount = count; self.lastRepTime = time; self.onRepDetected?()
+        case .squat:
+            guard let detector = squatDetector, let cycle = detector.cycles.last else { return }
+            publishRepetition(.squat(cycle), sensorTime: sensorTime, count: detector.repCount, date: detector.lastRepTime)
+        case .deadlift:
+            guard let detector = deadliftDetector else { return }
+            publishRepetition(.deadlift, sensorTime: sensorTime, count: detector.repCount, date: detector.lastRepTime)
         }
     }
 

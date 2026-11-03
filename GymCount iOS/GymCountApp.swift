@@ -19,7 +19,9 @@ final class GymCountPhoneDelegate: NSObject, UIApplicationDelegate {
 
 @main
 struct GymCountPhoneApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var store: PhoneWorkoutStore
+    @StateObject private var trainingReminder: PhoneTrainingReminder
     private let trainingDefaults: UserDefaults
     #if GYMCOUNT_SYNC
     @UIApplicationDelegateAdaptor(GymCountPhoneDelegate.self) private var appDelegate
@@ -45,6 +47,10 @@ struct GymCountPhoneApp: App {
         trainingDefaults = defaults
         let workoutStore = PhoneWorkoutStore(defaults: defaults, reminderID: reminderID, watchArchiveURL: watchArchiveURL)
         _store = StateObject(wrappedValue: workoutStore)
+        let reminders = PhoneTrainingReminder(defaults: defaults, prefix: reminderID + ".daily")
+        workoutStore.onTrainingDatesChanged = { [weak reminders] dates in reminders?.recordsChanged(dates: dates) }
+        reminders.recordsChanged(dates: workoutStore.trainingDates)
+        _trainingReminder = StateObject(wrappedValue: reminders)
         #if GYMCOUNT_SYNC
         _capture = StateObject(wrappedValue: PhoneCaptureStore(workoutStore: workoutStore, defaults: defaults,
             activateConnectivity: !ProcessInfo.processInfo.arguments.contains("--isolated-ui-test")))
@@ -55,7 +61,22 @@ struct GymCountPhoneApp: App {
         WindowGroup {
             PhoneContentView()
                 .environmentObject(store)
+                .environmentObject(trainingReminder)
                 .defaultAppStorage(trainingDefaults)
+                .task { await store.enrichRetainedDurations() }
+                .task {
+                    await trainingReminder.refresh(dates: store.trainingDates,
+                        requestPermission: !ProcessInfo.processInfo.arguments.contains("--isolated-ui-test"))
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { Task { await trainingReminder.refresh(dates: store.trainingDates) } }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+                    Task { await trainingReminder.refresh(dates: store.trainingDates) }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+                    Task { await trainingReminder.refresh(dates: store.trainingDates) }
+                }
                 #if GYMCOUNT_SYNC
                 .environmentObject(capture)
                 #endif

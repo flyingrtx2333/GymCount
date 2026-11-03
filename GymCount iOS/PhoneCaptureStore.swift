@@ -25,6 +25,20 @@ enum WorkoutSyncState: Equatable {
     } }
 }
 
+enum WatchSetupState: Equatable {
+    case checking, unpaired, notInstalled, ready
+}
+
+enum CaptureSampleReceiveState: Equatable {
+    case receiving(UUID), succeeded, failed(String)
+    var isReceiving: Bool { if case .receiving = self { true } else { false } }
+    var message: String { switch self {
+        case .receiving: String(localized: "正在接收采样…")
+        case .succeeded: String(localized: "采样已接收")
+        case .failed(let message): message
+    } }
+}
+
 @MainActor
 final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AVCaptureFileOutputRecordingDelegate {
     @Published private(set) var busy = false
@@ -37,26 +51,35 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
     @Published private(set) var message = ""
     @Published private(set) var history: [VideoCaptureManifest] = []
     @Published private(set) var cameraReady = false
+    @Published private(set) var cameraDevice: AVCaptureDevice?
     @Published private(set) var benchReviews: [UUID: BenchAnalysis] = [:]
+    @Published private(set) var sampleReceiveStates: [UUID: CaptureSampleReceiveState] = [:]
+    @Published private(set) var actualCountErrors: [UUID: String] = [:]
     @Published private(set) var workoutSyncMessage = ""
     @Published private(set) var workoutSyncState = WorkoutSyncState.idle
+    @Published private(set) var watchSetupState = WatchSetupState.checking
+    @Published private(set) var unavailableTimelineIDs: Set<UUID> = []
     private let workoutStore: PhoneWorkoutStore?
-    private let workoutReceiverID: String
+    nonisolated private let workoutInbox: URL
+    nonisolated private let workoutReceiverID: String
     private let connectivityEnabled: Bool
     private var workoutRequestGeneration = UUID()
     let camera = AVCaptureSession()
     private let health = HKHealthStore()
     private let movie = AVCaptureMovieFileOutput()
     private let cameraQueue = DispatchQueue(label: "GymCount.camera")
+    private var captureRotation: AVCaptureDevice.RotationCoordinator?
     private var active: VideoCaptureManifest?
     private var watchdog: Timer?
     private var configuring = false
     private var commandGeneration = UUID()
     private var captureScreenToken: UUID?
+    private var lastCaptureStatus: [UUID: NSDictionary] = [:]
     private let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("VideoCaptures", isDirectory: true)
 
     init(workoutStore: PhoneWorkoutStore? = nil, defaults: UserDefaults = .standard, activateConnectivity: Bool = true) {
         self.workoutStore = workoutStore
+        workoutInbox = (workoutStore?.snapshotURL.deletingLastPathComponent() ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]).appendingPathComponent("IncomingWorkouts")
         workoutReceiverID = defaults.string(forKey: "watchSync.receiverID.v2") ?? UUID().uuidString
         defaults.set(workoutReceiverID, forKey: "watchSync.receiverID.v2")
         connectivityEnabled = activateConnectivity
@@ -66,9 +89,10 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         if activateConnectivity && WCSession.isSupported() { WCSession.default.delegate = self; WCSession.default.activate() }
     }
 
-    func requestWorkoutHistory(force: Bool = false) {
+    func requestWorkoutHistory(force: Bool = false, timelineID: UUID? = nil) {
         guard connectivityEnabled, workoutStore != nil, WCSession.isSupported() else { return }
-        if !force && (workoutSyncState == .receiving || workoutSyncState == .connecting) { return }
+        refreshWatchSetup()
+        if timelineID == nil && !force && (workoutSyncState == .receiving || workoutSyncState == .connecting) { return }
         let session = WCSession.default
         let generation = UUID(); workoutRequestGeneration = generation
         guard session.activationState == .activated else {
@@ -77,7 +101,9 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         }
         guard session.isPaired else { workoutSyncState = .unpaired; workoutSyncMessage = workoutSyncState.title; return }
         guard session.isWatchAppInstalled else { workoutSyncState = .notInstalled; workoutSyncMessage = workoutSyncState.title; return }
-        let payload: [String: Any] = ["kind": WorkoutSync.requestKind, "receiver_id": workoutReceiverID, "force": force]
+        var payload: [String: Any] = ["kind": WorkoutSync.requestKind, "receiver_id": workoutReceiverID,
+                                      "timeline_version": 1, "workout_report_version": 1, WorkoutReportSensors.capabilityKey: 1, "force": force]
+        if let timelineID { payload["timeline_id"] = timelineID.uuidString; unavailableTimelineIDs.remove(timelineID) }
         let pending = session.outstandingUserInfoTransfers.filter { $0.userInfo["kind"] as? String == WorkoutSync.requestKind }
         if force { pending.forEach { $0.cancel() } }
         if force || pending.isEmpty { session.transferUserInfo(payload) }
@@ -88,11 +114,19 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             session.sendMessage(payload, replyHandler: { [weak self] reply in
                 Task { @MainActor in
                     guard let self, self.workoutRequestGeneration == generation else { return }
+                    if self.handleTimelineFailure(reply) { return }
+                    if let timelineID, reply["workout_timeline_id"] as? String == timelineID.uuidString,
+                       reply["workout_timeline_available"] as? Bool == false {
+                        self.unavailableTimelineIDs.insert(timelineID)
+                    }
                     if reply["workout_history_ready"] as? Bool != true {
                         self.workoutSyncState = .failed
                         self.workoutSyncMessage = String(localized: "请先更新手表应用，再同步训练记录")
-                    } else if reply["workout_history_pending"] as? Int == 0 {
-                        if self.workoutStore?.confirmSync() == true {
+                    } else if reply["workout_history_pending"] as? Int == 0,
+                              (reply["workout_timeline_pending"] as? Int ?? 0) == 0 {
+                        let confirmed = await self.workoutStore?.confirmReceivedSync() == true
+                        guard self.workoutRequestGeneration == generation else { return }
+                        if confirmed {
                             self.workoutSyncState = .succeeded; self.workoutSyncMessage = self.workoutSyncState.title
                         } else { self.workoutSyncState = .failed; self.workoutSyncMessage = self.workoutStore?.storageError ?? String(localized: "记录未能保存，请重试") }
                     }
@@ -105,6 +139,12 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             })
         }
     }
+
+    private func refreshWatchSetup() {
+        let session = WCSession.default
+        guard session.activationState == .activated else { watchSetupState = .checking; return }
+        watchSetupState = !session.isPaired ? .unpaired : !session.isWatchAppInstalled ? .notInstalled : .ready
+    }
     private func scheduleWorkoutTimeout(_ generation: UUID) {
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(20))
@@ -114,18 +154,31 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         }
     }
 
-    private func receiveWorkoutHistory(_ payload: [String: Any]) -> [String: Any]? {
-        guard payload["kind"] as? String == WorkoutSync.batchKind else { return nil }
+    private func handleTimelineFailure(_ reply: [String: Any]) -> Bool {
+        guard reply["workout_timeline_failed"] as? Bool == true else { return false }
+        workoutSyncState = .failed
+        workoutSyncMessage = String(localized: "训练时间轴接收失败，请重试同步")
+        return true
+    }
+
+    private func receiveWorkoutHistory(_ payload: [String: Any]) async -> [String: Any]? {
+        guard [WorkoutSync.batchKind, WorkoutSync.reportFileKind].contains(payload["kind"] as? String ?? "") else { return nil }
         do {
             guard let workoutStore else { throw WorkoutSync.Failure.invalidPayload }
+            if payload["kind"] as? String == WorkoutSync.reportFileKind {
+                guard payload["receiver_id"] as? String == workoutReceiverID else {
+                    throw WorkoutSync.Failure.invalidPayload
+                }
+            }
             let records = try WorkoutSync.decode(payload)
-            try workoutStore.acceptWatchHistory(records)
+            try await workoutStore.receiveWatchHistory(records)
             workoutRequestGeneration = UUID()
             workoutSyncState = .receiving
             scheduleWorkoutTimeout(workoutRequestGeneration)
             workoutSyncMessage = String(localized: "已接收 \(records.count) 条手表记录")
+            await drainTimelineInbox()
             return ["kind": WorkoutSync.receiptKind, "receiver_id": workoutReceiverID,
-                    "ids": records.map { $0.id.uuidString }]
+                    "workout_report_version": 1, "ids": records.map { $0.id.uuidString }]
         } catch {
             workoutSyncState = .failed
             workoutSyncMessage = String(localized: "手表记录保存失败，原记录仍保留在手表，请稍后重试")
@@ -145,20 +198,83 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             let generation = workoutRequestGeneration
             session.sendMessage(receipt, replyHandler: { [weak self] reply in
                 Task { @MainActor in
-                    guard let self, self.workoutRequestGeneration == generation,
-                          reply["workout_history_ready"] as? Bool == true,
-                          reply["workout_history_pending"] as? Int == 0 else { return }
-                    if self.workoutStore?.confirmSync() == true {
+                    guard let self, self.workoutRequestGeneration == generation else { return }
+                    if self.handleTimelineFailure(reply) { return }
+                    guard reply["workout_history_ready"] as? Bool == true,
+                          reply["workout_history_pending"] as? Int == 0,
+                          (reply["workout_timeline_pending"] as? Int ?? 0) == 0 else { return }
+                    let confirmed = await self.workoutStore?.confirmReceivedSync() == true
+                    guard self.workoutRequestGeneration == generation else { return }
+                    if confirmed {
                         self.workoutSyncState = .succeeded; self.workoutSyncMessage = self.workoutSyncState.title
                     } else { self.workoutSyncState = .failed; self.workoutSyncMessage = self.workoutStore?.storageError ?? String(localized: "记录未能保存，请重试") }
                 }
             }, errorHandler: nil)
         } else { workoutSyncState = .waiting }
     }
+
+    private func receiveWorkoutTimeline(_ file: URL, metadata: [String: Any]) async -> Bool {
+        do {
+            guard let workoutStore,
+                  let text = metadata["id"] as? String, let id = UUID(uuidString: text),
+                  metadata["receiver_id"].map({ ($0 as? String) == workoutReceiverID }) ?? true else {
+                throw WorkoutSync.Failure.invalidPayload
+            }
+            // Tombstoned records are intentionally discarded and acknowledged.
+            // Every other receipt follows successful atomic persistence.
+            let isReportSensor = metadata["kind"] as? String == WorkoutReportSensors.fileKind
+            var receipt: [String: Any] = ["kind": isReportSensor ? WorkoutReportSensors.receiptKind : WorkoutTimeline.receiptKind,
+                "receiver_id": workoutReceiverID, "ids": [id.uuidString]]
+            if isReportSensor {
+                guard metadata["receiver_id"] as? String == workoutReceiverID,
+                      let parentText = metadata["workout_id"] as? String,
+                      let parentID = UUID(uuidString: parentText) else { throw WorkoutSync.Failure.invalidPayload }
+                try await workoutStore.receiveWatchReportSensorFile(file, workoutID: parentID, segmentID: id)
+                receipt["workout_id"] = parentID.uuidString
+                unavailableTimelineIDs.remove(parentID)
+            } else {
+                try await workoutStore.receiveWatchTimelineFile(file, id: id)
+                unavailableTimelineIDs.remove(id)
+            }
+            workoutSyncState = .receiving; workoutSyncMessage = workoutSyncState.title
+            scheduleWorkoutTimeout(workoutRequestGeneration)
+            let session = WCSession.default
+            let queued = session.outstandingUserInfoTransfers.contains {
+                $0.userInfo["kind"] as? String == receipt["kind"] as? String && WorkoutSync.ids($0.userInfo) == [id] &&
+                    $0.userInfo["workout_id"] as? String == receipt["workout_id"] as? String
+            }
+            if !queued { session.transferUserInfo(receipt) }
+            if session.isReachable {
+                let generation = workoutRequestGeneration
+                session.sendMessage(receipt, replyHandler: { [weak self] reply in
+                    Task { @MainActor in
+                        guard let self, self.workoutRequestGeneration == generation else { return }
+                        if self.handleTimelineFailure(reply) { return }
+                        guard reply["workout_history_ready"] as? Bool == true,
+                              reply["workout_history_pending"] as? Int == 0,
+                              (reply["workout_timeline_pending"] as? Int ?? 0) == 0 else { return }
+                        let confirmed = await self.workoutStore?.confirmReceivedSync() == true
+                        guard self.workoutRequestGeneration == generation else { return }
+                        if confirmed {
+                            self.workoutSyncState = .succeeded; self.workoutSyncMessage = self.workoutSyncState.title
+                        } else {
+                            self.workoutSyncState = .failed
+                            self.workoutSyncMessage = self.workoutStore?.storageError ?? String(localized: "记录未能保存，请重试")
+                        }
+                    }
+                }, errorHandler: nil)
+            }
+            return true
+        } catch {
+            workoutSyncState = .failed
+            workoutSyncMessage = String(localized: "训练时间轴保存失败，请重试同步")
+            return false
+        }
+    }
     func folder(_ id: UUID) -> URL { root.appendingPathComponent(id.uuidString, isDirectory: true) }
     func videoURL(_ id: UUID) -> URL { folder(id).appendingPathComponent("video.mov") }
     func sensorURL(_ id: UUID) -> URL { folder(id).appendingPathComponent("motion.json") }
-    func canDeleteCapture(_ id: UUID) -> Bool { !uploading && active?.id != id }
+    func canDeleteCapture(_ id: UUID) -> Bool { !uploading && active?.id != id && sampleReceiveStates[id]?.isReceiving != true }
     func deleteCapture(_ id: UUID) throws {
         guard history.contains(where: { $0.id == id }) else { return }
         guard canDeleteCapture(id) else {
@@ -169,7 +285,10 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             reload()
             throw CaptureError.text(String(localized: "删除采集记录失败，请稍后重试"))
         }
+        lastCaptureStatus.removeValue(forKey: id)
         benchReviews.removeValue(forKey: id)
+        sampleReceiveStates.removeValue(forKey: id)
+        actualCountErrors.removeValue(forKey: id)
         reload()
     }
     func reviewBench(_ id: UUID) async {
@@ -196,12 +315,15 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         guard history.contains(where: { $0.id == id }) else { return }
         benchReviews[id] = result
     }
-    private func save(_ manifest: VideoCaptureManifest) {
+    @discardableResult
+    private func save(_ manifest: VideoCaptureManifest) -> Bool {
         do {
             try FileManager.default.createDirectory(at: folder(manifest.id), withIntermediateDirectories: true)
             try JSONEncoder().encode(manifest).write(to: folder(manifest.id).appendingPathComponent("manifest.json"), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-            reload()
-        } catch { message = String(localized: "记录保存失败，请保留应用并检查存储空间") }
+            if let index = history.firstIndex(where: { $0.id == manifest.id }) { history[index] = manifest }
+            else { history.append(manifest); history.sort { $0.createdAt > $1.createdAt } }
+            return true
+        } catch { message = String(localized: "记录保存失败，请保留应用并检查存储空间"); return false }
     }
     private func reload() {
         let directories = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
@@ -224,6 +346,8 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
     func leaveCaptureScreen() {
         captureScreenToken = nil
         cameraReady = false
+        cameraDevice = nil
+        captureRotation = nil
         commandGeneration = UUID()
         if active == nil { busy = false; starting = false; watchdog?.invalidate(); watchdog = nil }
         if movie.isRecording { movie.stopRecording() }
@@ -261,7 +385,6 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
                         session.commitConfiguration(); continuation.resume(throwing: CaptureError.text(String(localized: "无法配置录像"))); return
                     }
                     session.addInput(input); session.addOutput(output)
-                    if let connection = output.connection(with: .video), connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
                     output.maxRecordedDuration = CMTime(seconds: 185, preferredTimescale: 600)
                     session.commitConfiguration(); session.startRunning()
                     continuation.resume()
@@ -272,6 +395,8 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
                 cameraQueue.async { session.stopRunning() }
                 return
             }
+            cameraDevice = (camera.inputs.first as? AVCaptureDeviceInput)?.device
+            captureRotation = cameraDevice.map { AVCaptureDevice.RotationCoordinator(device: $0, previewLayer: nil) }
             cameraReady = true
         } catch { message = error.localizedDescription }
     }
@@ -340,6 +465,11 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             count = 0; save(active!)
             UIApplication.shared.isIdleTimerDisabled = true
             message = String(localized: "正在准备采集…")
+            // Capture keeps its starting orientation; the preview can continue adapting.
+            if let angle = captureRotation?.videoRotationAngleForHorizonLevelCapture,
+               let connection = movie.connection(with: .video), connection.isVideoRotationAngleSupported(angle) {
+                connection.videoRotationAngle = angle
+            }
             movie.startRecording(to: videoURL(id), recordingDelegate: self)
         } catch {
             if generation == commandGeneration {
@@ -384,11 +514,27 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
     }
 
     func receiveAgain(_ id: UUID) async {
-        do { _ = try await request(["command": "stop", "id": id.uuidString]); message = String(localized: "正在接收采样…") }
-        catch { message = error.localizedDescription }
+        guard history.contains(where: { $0.id == id && !$0.sensorComplete }),
+              !uploading, sampleReceiveStates[id]?.isReceiving != true else { return }
+        let attempt = CaptureSampleReceiveState.receiving(UUID())
+        sampleReceiveStates[id] = attempt
+        do {
+            _ = try await request(["command": "stop", "id": id.uuidString])
+            guard sampleReceiveStates[id] == attempt else { return }
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(30))
+                guard let self, self.sampleReceiveStates[id] == attempt else { return }
+                self.sampleReceiveStates[id] = .failed(String(localized: "采样接收超时，请保持手机与手表连接后重试"))
+            }
+        } catch {
+            guard sampleReceiveStates[id] == attempt else { return }
+            sampleReceiveStates[id] = .failed(error.localizedDescription)
+        }
     }
     func markReference(_ id: UUID, at seconds: Double) {
         guard var item = history.first(where: { $0.id == id }), seconds.isFinite, seconds >= 0,
+              !["rest", "walking", "other"].contains(item.exercise),
+              item.referenceEvents.count < 500,
               item.videoDuration.map({ seconds <= $0 }) ?? false,
               item.referenceEvents.last.map({ seconds > $0 + 0.2 }) ?? true else { return }
         item.referenceEvents.append(seconds); item.actualCount = item.referenceEvents.count; save(item)
@@ -403,14 +549,36 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         guard var item = history.first(where: { $0.id == id }) else { return }
         item.alignmentCorrection += seconds; save(item)
     }
-    func setActual(_ value: Int, for id: UUID) {
-        guard var item = history.first(where: { $0.id == id }) else { return }
-        let value = item.exercise == "other" ? 0 : value
-        item.actualCount = value; save(item)
-        // Preserve protocol v2; apply label only to the local sensor copy when available.
-        if let data = try? Data(contentsOf: sensorURL(id)), var json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
-            json["actual_count"] = value
-            if let encoded = try? JSONSerialization.data(withJSONObject: json) { try? encoded.write(to: sensorURL(id), options: .atomic) }
+    @discardableResult
+    func setActual(_ value: Int, for id: UUID) -> Bool {
+        let failure = String(localized: "记录保存失败，请保留应用并检查存储空间")
+        guard var item = history.first(where: { $0.id == id }) else {
+            actualCountErrors[id] = failure
+            return false
+        }
+        let value = ["rest", "walking", "other"].contains(item.exercise) ? 0 : min(500, max(0, value))
+        item.actualCount = value
+        do {
+            // Preserve protocol v2; apply the label only to the local sensor copy.
+            let sensor = sensorURL(id)
+            if item.sensorComplete || FileManager.default.fileExists(atPath: sensor.path) {
+                let data = try Data(contentsOf: sensor)
+                guard var json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    throw CaptureError.text(failure)
+                }
+                json["actual_count"] = value
+                try JSONSerialization.data(withJSONObject: json).write(to: sensor, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            }
+            guard save(item) else {
+                actualCountErrors[id] = message
+                return false
+            }
+            actualCountErrors.removeValue(forKey: id)
+            return true
+        } catch {
+            message = failure
+            actualCountErrors[id] = failure
+            return false
         }
     }
     func upload(_ id: UUID) async {
@@ -430,12 +598,16 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         watchFeedback("upload", message: message)
         do {
             let confirmedSensor = folder(id).appendingPathComponent("uploaded-motion.json")
-            let sensorData = try Data(contentsOf: FileManager.default.fileExists(atPath: confirmedSensor.path) ? confirmedSensor : sensorURL(id))
-            let uploadedCount = ((try JSONSerialization.jsonObject(with: sensorData)) as? [String: Any])?["actual_count"] as? Int
+            let localSensor = sensorURL(id)
+            let (sensorData, uploadedCount) = try await WorkoutFileIO.shared.perform { () -> (Data, Int?) in
+                let bytes = try Data(contentsOf: FileManager.default.fileExists(atPath: confirmedSensor.path) ? confirmedSensor : localSensor)
+                let count = ((try JSONSerialization.jsonObject(with: bytes)) as? [String: Any])?["actual_count"] as? Int
+                return (bytes, count)
+            }
             let data = try await CaptureCloudUpload.post("sessions", body: sensorData)
             let reply = try JSONDecoder().decode(CaptureCloudUpload.SensorReply.self, from: data)
             guard reply.session_id == id else { throw CaptureError.text(String(localized: "采样关联失败，请重试")) }
-            try sensorData.write(to: confirmedSensor, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try await WorkoutFileIO.shared.perform { try sensorData.write(to: confirmedSensor, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) }
             item.cloudRecordID = reply.id; save(item)
             guard item.videoComplete else { throw CaptureError.text(String(localized: "采样已上传，录像尚未保存完整")) }
             message = String(localized: "正在上传录像…")
@@ -578,7 +750,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
 
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         Task { @MainActor in
-            if activationState == .activated { self.workoutSyncState = .idle; self.requestWorkoutHistory() }
+            if activationState == .activated { self.workoutSyncState = .idle; await self.drainWorkoutInbox(); await self.drainTimelineInbox(); self.requestWorkoutHistory() }
             else if error != nil { self.workoutSyncState = .failed; self.workoutSyncMessage = String(localized: "连接手表失败，请重试") }
         }
     }
@@ -588,32 +760,116 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             else if self.workoutSyncState == .receiving { self.workoutSyncState = .waiting; self.workoutSyncMessage = self.workoutSyncState.title }
         }
     }
+    nonisolated func sessionWatchStateDidChange(_ session: WCSession) {
+        Task { @MainActor in self.refreshWatchSetup(); self.requestWorkoutHistory() }
+    }
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
     nonisolated func sessionDidDeactivate(_ session: WCSession) { session.activate() }
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         Task { @MainActor in
-            if let receipt = self.receiveWorkoutHistory(message) { self.queueWorkoutReceipt(receipt); return }
+            if let receipt = await self.receiveWorkoutHistory(message) { self.queueWorkoutReceipt(receipt); return }
             self.status(message)
         }
     }
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
-        if Thread.isMainThread {
-            MainActor.assumeIsolated {
-                if let receipt = self.receiveWorkoutHistory(userInfo) { self.queueWorkoutReceipt(receipt) }
+        guard userInfo["kind"] as? String == WorkoutSync.batchKind else { return }
+        // WC removes a delivered item when this callback returns. Journal its
+        // bounded payload first; heavy parsing/merging follows on the file lane.
+        do {
+            _ = try WorkoutSync.decode(userInfo)
+            let data = try PropertyListSerialization.data(fromPropertyList: userInfo, format: .binary, options: 0)
+            guard data.count <= 128 * 1024 else { throw WorkoutSync.Failure.invalidPayload }
+            try FileManager.default.createDirectory(at: workoutInbox, withIntermediateDirectories: true)
+            let url = workoutInbox.appendingPathComponent(UUID().uuidString + ".plist")
+            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            Task { @MainActor in await self.drainWorkoutInbox() }
+        } catch {
+            Task { @MainActor in
+                self.workoutSyncState = .failed
+                self.workoutSyncMessage = String(localized: "手表记录保存失败，原记录仍保留在手表，请稍后重试")
             }
-        } else {
-            DispatchQueue.main.sync {
-                MainActor.assumeIsolated {
-                    if let receipt = self.receiveWorkoutHistory(userInfo) { self.queueWorkoutReceipt(receipt) }
+        }
+    }
+    private var workoutInboxRevision = 0
+    private var drainingInbox = false
+    private func drainWorkoutInbox() async {
+        workoutInboxRevision &+= 1
+        guard !drainingInbox else { return }
+        drainingInbox = true; defer { drainingInbox = false }
+        let directory = workoutInbox
+        var attempted: Set<URL> = []
+        while true {
+            let revision = workoutInboxRevision
+            let files = (try? await WorkoutFileIO.shared.perform {
+                try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).filter { $0.pathExtension == "plist" }
+            }) ?? []
+            let pending = files.filter { !attempted.contains($0) }
+            if pending.isEmpty {
+                if revision != workoutInboxRevision { continue }
+                break
+            }
+            for url in pending {
+                attempted.insert(url)
+                do {
+                    let payload = try await WorkoutFileIO.shared.perform {
+                        try PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: Any]
+                    }
+                    guard let payload, let receipt = await receiveWorkoutHistory(payload), receipt["kind"] as? String == WorkoutSync.receiptKind else { continue }
+                    queueWorkoutReceipt(receipt)
+                    try await WorkoutFileIO.shared.perform { try FileManager.default.removeItem(at: url) }
+                } catch { workoutSyncState = .failed }
+            }
+        }
+    }
+    private var timelineInboxRevision = 0
+    private var drainingTimelines = false
+    private func drainTimelineInbox() async {
+        timelineInboxRevision &+= 1
+        guard !drainingTimelines else { return }
+        drainingTimelines = true; defer { drainingTimelines = false }
+        let directory = workoutInbox.deletingLastPathComponent().appendingPathComponent("IncomingTimelines").appendingPathComponent(workoutReceiverID)
+        var attempted: Set<URL> = []
+        var attemptedRevision = timelineInboxRevision
+        while true {
+            let revision = timelineInboxRevision
+            if revision != attemptedRevision {
+                // A parent may have persisted while this drain was awaiting IO.
+                // Retry earlier files once for each new inbox revision.
+                attempted.removeAll(); attemptedRevision = revision
+            }
+            let files = (try? await WorkoutFileIO.shared.perform {
+                try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).filter { $0.pathExtension == "json" }
+            }) ?? []
+            let pending = files.filter { !attempted.contains($0) }
+            if pending.isEmpty {
+                if revision != timelineInboxRevision { continue }
+                break
+            }
+            for file in pending {
+                attempted.insert(file)
+                let parts = file.deletingPathExtension().lastPathComponent.split(separator: "_", maxSplits: 1)
+                var metadata: [String: Any] = ["receiver_id": workoutReceiverID]
+                if parts.count == 2 {
+                    guard let parentID = UUID(uuidString: String(parts[0])),
+                          let segmentID = UUID(uuidString: String(parts[1].prefix(36))) else { continue }
+                    metadata["kind"] = WorkoutReportSensors.fileKind
+                    metadata["id"] = segmentID.uuidString; metadata["workout_id"] = parentID.uuidString
+                } else {
+                    guard let id = UUID(uuidString: String(file.lastPathComponent.prefix(36))) else { continue }
+                    metadata["kind"] = WorkoutTimeline.fileKind; metadata["id"] = id.uuidString
+                }
+                if await receiveWorkoutTimeline(file, metadata: metadata) {
+                    try? await WorkoutFileIO.shared.perform { try FileManager.default.removeItem(at: file) }
                 }
             }
         }
     }
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
         Task { @MainActor in
-            if let receipt = self.receiveWorkoutHistory(message) {
+            if let receipt = await self.receiveWorkoutHistory(message) {
                 self.queueWorkoutReceipt(receipt); replyHandler(receipt); return
             }
+            #if DEBUG
             guard message["command"] as? String == "startFromWatch", let exercise = message["exercise"] as? String,
                   ["squat", "bench_press", "deadlift", "bicep_curl", "rest", "walking", "other"].contains(exercise),
                   self.captureScreenToken != nil, self.cameraReady, UIApplication.shared.applicationState == .active, !self.busy, !self.recording else {
@@ -622,23 +878,81 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             // Reply immediately: start() performs its own readiness/clock/start handshake.
             replyHandler(["accepted": true])
             await self.start(exercise: exercise)
+            #else
+            replyHandler(["error": String(localized: "无效指令")])
+            #endif
         }
     }
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) { Task { @MainActor in self.status(applicationContext) } }
     private func status(_ status: [String: Any]) {
         guard let text = status["id"] as? String, let id = UUID(uuidString: text) else { return }
         guard var item = active?.id == id ? active : history.first(where: { $0.id == id }) else { return }
+        guard lastCaptureStatus[id] != (status as NSDictionary) else { return }
         if let count = status["count"] as? Int { item.detectedCount = count; if active?.id == id { self.count = count } }
         if let origin = status["sample_origin"] as? Double, origin > 0 { item.sampleOriginOnPhone = origin - item.watchClockOffset }
         if let error = status["error"] as? String { item.error = error }
         if active?.id == id { active = item }
-        save(item)
+        if save(item) { lastCaptureStatus[id] = status as NSDictionary }
         if status["recording"] as? Bool == false, active?.id == id, recording || busy { Task { await stop() } }
     }
     nonisolated func session(_ session: WCSession, didReceive file: WCSessionFile) {
         // WCSession removes its temporary file after this delegate returns.
-        let data = try? Data(contentsOf: file.fileURL)
         let metadata = file.metadata ?? [:]
+        if metadata["kind"] as? String == WorkoutSync.reportFileKind {
+            // A transfer from a previous phone installation must not acknowledge
+            // this installation's history. The Watch retains and resends its source.
+            guard metadata["receiver_id"] as? String == workoutReceiverID else { return }
+            do {
+                let values = try file.fileURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
+                guard values.isRegularFile == true, values.isSymbolicLink != true,
+                      let size = values.fileSize, size <= WorkoutSync.maximumReportFileBytes + 4096 else { throw WorkoutSync.Failure.invalidPayload }
+                try FileManager.default.createDirectory(at: workoutInbox, withIntermediateDirectories: true)
+                let url = workoutInbox.appendingPathComponent(UUID().uuidString + ".plist")
+                let staged = workoutInbox.appendingPathComponent(".incoming-" + UUID().uuidString)
+                defer { try? FileManager.default.removeItem(at: staged) }
+                try FileManager.default.copyItem(at: file.fileURL, to: staged)
+                try FileManager.default.moveItem(at: staged, to: url)
+                Task { @MainActor in await self.drainWorkoutInbox() }
+            } catch {
+                Task { @MainActor in
+                    self.workoutSyncState = .failed
+                    self.workoutSyncMessage = String(localized: "训练报告接收失败，请重试同步")
+                }
+            }
+            return
+        }
+        if [WorkoutTimeline.fileKind, WorkoutReportSensors.fileKind].contains(metadata["kind"] as? String ?? "") {
+            do {
+                let values = try file.fileURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
+                guard values.isRegularFile == true, values.isSymbolicLink != true,
+                      let size = values.fileSize, size <= WorkoutTimeline.maximumFileBytes,
+                      let text = metadata["id"] as? String, let id = UUID(uuidString: text),
+                      metadata["receiver_id"].map({ ($0 as? String) == workoutReceiverID }) ?? true else { throw WorkoutSync.Failure.invalidPayload }
+                var prefix = id.uuidString
+                if metadata["kind"] as? String == WorkoutReportSensors.fileKind {
+                    guard metadata["receiver_id"] as? String == workoutReceiverID,
+                          let text = metadata["workout_id"] as? String, let parentID = UUID(uuidString: text) else {
+                        throw WorkoutSync.Failure.invalidPayload
+                    }
+                    prefix = parentID.uuidString + "_" + id.uuidString
+                }
+                let directory = workoutInbox.deletingLastPathComponent().appendingPathComponent("IncomingTimelines").appendingPathComponent(workoutReceiverID)
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                let destination = directory.appendingPathComponent(prefix + "-" + UUID().uuidString + ".json")
+                let staged = directory.appendingPathComponent(".incoming-" + UUID().uuidString)
+                defer { try? FileManager.default.removeItem(at: staged) }
+                try FileManager.default.copyItem(at: file.fileURL, to: staged)
+                try FileManager.default.moveItem(at: staged, to: destination)
+                Task { @MainActor in await self.drainTimelineInbox() }
+            } catch {
+                Task { @MainActor in
+                    self.workoutSyncState = .failed
+                    self.workoutSyncMessage = String(localized: "训练时间轴接收失败，请重试同步")
+                }
+            }
+            return
+        }
+        let data = try? Data(contentsOf: file.fileURL)
         Task { @MainActor in
             guard let data, let text = metadata["id"] as? String, let id = UUID(uuidString: text),
                   var item = self.active?.id == id ? self.active : self.history.first(where: { $0.id == id }),
@@ -648,12 +962,24 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
                 if let actual = item.actualCount { json["actual_count"] = actual }
                 try JSONSerialization.data(withJSONObject: json).write(to: self.sensorURL(id), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
                 item.sensorComplete = true
+                if let error = item.error, [
+                    "手表结束未确认；可在记录页重试接收数据",
+                    "The Watch did not confirm completion. Retry receiving data from the recording page."
+                ].contains(error) { item.error = nil }
                 if let origin = metadata["sample_origin"] as? Double, origin > 0 { item.sampleOriginOnPhone = origin - item.watchClockOffset }
                 if let detected = json["detected_count"] as? Int { item.detectedCount = detected }
                 if self.active?.id == id { self.active = item }
-                self.save(item); self.message = String(localized: "已保存")
+                guard self.save(item) else {
+                    self.sampleReceiveStates[id] = .failed(self.message)
+                    return
+                }
+                self.message = String(localized: "已保存")
+                self.sampleReceiveStates[id] = .succeeded
                 await self.reviewBench(id)
-            } catch { self.message = String(localized: "手表采样保存失败，请重试接收") }
+            } catch {
+                self.message = String(localized: "手表采样保存失败，请重试接收")
+                self.sampleReceiveStates[id] = .failed(self.message)
+            }
         }
     }
 }

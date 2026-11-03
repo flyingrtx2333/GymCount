@@ -9,7 +9,7 @@ import SwiftUI
 import WatchKit
 import HealthKit
 
-#if DEBUG || GYMCOUNT_CAPTURE
+#if DEBUG
 final class GymCountWatchDelegate: NSObject, WKApplicationDelegate {
     func handle(_ workoutConfiguration: HKWorkoutConfiguration) {
         guard workoutConfiguration.activityType == .traditionalStrengthTraining else { return }
@@ -28,7 +28,10 @@ struct GymCount_Watch_AppApp: App {
     @StateObject private var dataManager = DataManager.shared
     @StateObject private var notificationManager = NotificationManager.shared
     #if DEBUG || GYMCOUNT_CAPTURE
+    // The companion Release build also uses this object for normal workout sync.
     @StateObject private var captureLink = WatchCaptureLink.shared
+    #endif
+    #if DEBUG
     @WKApplicationDelegateAdaptor(GymCountWatchDelegate.self) private var watchDelegate
     #endif
     
@@ -40,9 +43,9 @@ struct GymCount_Watch_AppApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-            #if DEBUG || GYMCOUNT_CAPTURE
+            #if DEBUG
             if captureLink.showingCapture {
-                CollectionView(onClose: { captureLink.showingCapture = false })
+                NavigationStack { CollectionView(onClose: { captureLink.showingCapture = false }) }
             } else {
                 mainContent
             }
@@ -50,7 +53,17 @@ struct GymCount_Watch_AppApp: App {
             mainContent
             #endif
             }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { notificationManager.scheduleDailyReminder() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+                notificationManager.scheduleDailyReminder()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+                notificationManager.scheduleDailyReminder()
+            }
             #if DEBUG || GYMCOUNT_CAPTURE
+            .onAppear { _ = captureLink }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { captureLink.syncWorkouts(retry: true) }
             }
@@ -91,14 +104,10 @@ struct GymCount_Watch_AppApp: App {
     private func requestInitialPermissions() async {
         print("🔔 开始请求初始权限...")
         
-        // 请求通知权限
-        let notificationGranted = await notificationManager.requestNotificationPermission()
-        print("🔔 通知权限请求完成: \(notificationGranted)")
-        
-        // 如果通知权限授权成功，设置每日提醒
-        if notificationGranted {
-            notificationManager.scheduleDailyReminder()
+        if notificationManager.dailyReminderEnabled {
+            _ = await notificationManager.requestNotificationPermission()
         }
+        notificationManager.scheduleDailyReminder()
         
         // 请求 HealthKit 权限（如果启用）
         if dataManager.settings.healthKitSyncEnabled {

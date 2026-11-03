@@ -1,225 +1,144 @@
 import Foundation
 import UserNotifications
+import Combine
 
-class NotificationManager: ObservableObject {
+class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationManager()
-    
     @Published var authorizationStatus: UNAuthorizationStatus = .notDetermined
     @Published var isAuthorized = false
-    
-    private init() {
+    @Published private(set) var reminderError: String?
+    // The phone owns the default reminder; Watch-local reminders are opt-in.
+    var dailyReminderEnabled: Bool { UserDefaults.standard.object(forKey: "notifications.daily.enabled") as? Bool ?? false }
+    var dailyReminderTime: Date {
+        Calendar.current.date(bySettingHour: UserDefaults.standard.object(forKey: "notifications.daily.hour") as? Int ?? 20,
+            minute: UserDefaults.standard.object(forKey: "notifications.daily.minute") as? Int ?? 0, second: 0, of: Date()) ?? Date()
+    }
+    private var reminderGeneration = UUID()
+    private var updatingReminder = false
+    private let dailyScheduler = TrainingReminderScheduler()
+
+    private override init() {
+        super.init()
+        UNUserNotificationCenter.current().delegate = self
         checkAuthorizationStatus()
     }
-    
-    // MARK: - 权限检查
-    func checkAuthorizationStatus() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            DispatchQueue.main.async {
-                self.authorizationStatus = settings.authorizationStatus
-                self.isAuthorized = settings.authorizationStatus == .authorized
-                print("🔔 通知权限状态: \(self.statusDescription(settings.authorizationStatus))")
-            }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        Task { @MainActor in
+            let id = notification.request.identifier
+            let isTraining = id.hasPrefix("watch.training.daily.") || id == "daily_reminder"
+            let suppressed = isTraining && (!dailyReminderEnabled || TrainingStreak(dates: DataManager.shared.trainingDates).trainedToday)
+            completionHandler(suppressed ? [] : [.banner, .sound])
         }
     }
-    
-    // MARK: - 请求通知权限
+
+    private func updateAuthorization(_ status: UNAuthorizationStatus) {
+        authorizationStatus = status
+        isAuthorized = status == .authorized || status == .provisional
+    }
+
+    func checkAuthorizationStatus() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async { self.updateAuthorization(settings.authorizationStatus) }
+        }
+    }
+
     func requestNotificationPermission() async -> Bool {
-        // 先检查当前状态
-        let currentSettings = await UNUserNotificationCenter.current().notificationSettings()
-        print("🔔 当前通知权限状态: \(statusDescription(currentSettings.authorizationStatus))")
-        
-        // 如果已经是 authorized，不需要再次请求
-        if currentSettings.authorizationStatus == .authorized {
-            print("🔔 通知权限已完全授权，无需重复请求")
-            await MainActor.run {
-                self.checkAuthorizationStatus()
+        let center = UNUserNotificationCenter.current()
+        var settings = await center.notificationSettings()
+        if settings.authorizationStatus == .notDetermined {
+            _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+            settings = await center.notificationSettings()
+        }
+        let status = settings.authorizationStatus
+        await MainActor.run { updateAuthorization(status) }
+        return status == .authorized || status == .provisional
+    }
+
+    @MainActor
+    func updateDailyReminder(enabled: Bool, time: Date) async -> Bool {
+        guard !updatingReminder else { return false }
+        updatingReminder = true
+        defer { updatingReminder = false }
+        if enabled { _ = await requestNotificationPermission() }
+        let generation = UUID(); reminderGeneration = generation
+        guard await configureDailyReminder(generation, enabled: enabled, time: time) else { return false }
+        let values = Calendar.current.dateComponents([.hour, .minute], from: time)
+        UserDefaults.standard.set(enabled, forKey: "notifications.daily.enabled")
+        UserDefaults.standard.set(values.hour ?? 20, forKey: "notifications.daily.hour")
+        UserDefaults.standard.set(values.minute ?? 0, forKey: "notifications.daily.minute")
+        scheduleDailyReminder()
+        return true
+    }
+
+    func scheduleDailyReminder() {
+        Task { @MainActor in
+            if TrainingStreak(dates: DataManager.shared.trainingDates).trainedToday {
+                dailyScheduler.cancelToday(prefix: "watch.training.daily")
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["daily_reminder"])
             }
-            return true
+            guard !updatingReminder else { return }
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            guard !updatingReminder else { return }
+            updateAuthorization(settings.authorizationStatus)
+            let generation = UUID(); reminderGeneration = generation
+            _ = await configureDailyReminder(generation, enabled: dailyReminderEnabled, time: dailyReminderTime)
         }
-        
-        // 如果是 provisional 状态，尝试请求完全授权
-        if currentSettings.authorizationStatus == .provisional {
-            print("🔔 当前为临时授权状态，尝试请求完全授权...")
-        }
-        
+    }
+
+    @MainActor
+    private func configureDailyReminder(_ generation: UUID, enabled: Bool, time: Date) async -> Bool {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        guard reminderGeneration == generation else { return false }
+        updateAuthorization(settings.authorizationStatus)
+        reminderError = nil
+        let components = Calendar.current.dateComponents([.hour, .minute], from: time)
         do {
-            let granted = try await UNUserNotificationCenter.current().requestAuthorization(
-                options: [.alert, .sound, .badge]
-            )
-            
-            await MainActor.run {
-                self.checkAuthorizationStatus()
-            }
-            
-            print("🔔 通知权限请求结果: \(granted ? "已授权" : "已拒绝")")
-            return granted
+            try await dailyScheduler.replace(dates: DataManager.shared.trainingDates, enabled: enabled,
+                hour: components.hour ?? 20, minute: components.minute ?? 0,
+                prefix: "watch.training.daily", legacyIDs: ["daily_reminder"])
+            guard reminderGeneration == generation else { return false }
+            return true
         } catch {
-            print("❌ 请求通知权限失败: \(error)")
+            guard reminderGeneration == generation else { return false }
+            reminderError = error.localizedDescription
             return false
         }
     }
-    
-    // MARK: - 设置每日提醒通知
-    func scheduleDailyReminder() {
-        guard isAuthorized else {
-            print("❌ 通知权限未授权，无法设置每日提醒")
-            return
-        }
-        
-        // 清除之前的每日提醒
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["daily_reminder"])
-        
-        // 生成个性化的鼓励消息
-        let dataManager = DataManager.shared
-        let (title, message) = dataManager.generateDailyEncouragementMessage()
-        
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = message
-        content.sound = .default
-        content.badge = 1
-        
-        // 设置每天下午2:29触发
-        var dateComponents = DateComponents()
-        dateComponents.hour = 14
-        dateComponents.minute = 29
-        
-        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-        
-        let request = UNNotificationRequest(
-            identifier: "daily_reminder",
-            content: content,
-            trigger: trigger
-        )
-        
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("❌ 设置每日提醒失败: \(error)")
-            } else {
-                print("✅ 每日提醒已设置（每天下午2:29）")
-            }
-        }
-    }
-    
-    // MARK: - 发送每日鼓励通知
+
     func sendDailyEncouragementNotification() {
-        guard isAuthorized else {
-            print("❌ 通知权限未授权，无法发送通知")
-            return
-        }
-        
-        let dataManager = DataManager.shared
-        let (title, message) = dataManager.generateDailyEncouragementMessage()
-        
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = message
-        content.sound = .default
-        content.badge = 1
-        
-        let request = UNNotificationRequest(
-            identifier: "daily_encouragement_\(Date().timeIntervalSince1970)",
-            content: content,
-            trigger: nil
-        )
-        
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("❌ 发送每日鼓励通知失败: \(error)")
-            } else {
-                print("✅ 每日鼓励通知已发送")
-            }
-        }
+        sendReminderNotification(message: String(localized: "有空时，动一动。"))
     }
-    
-    // MARK: - 发送提醒通知
+
     func sendReminderNotification(message: String) {
-        guard isAuthorized else {
-            print("❌ 通知权限未授权，无法发送通知")
-            return
-        }
-        
+        guard isAuthorized else { return }
         let content = UNMutableNotificationContent()
-        content.title = NSLocalizedString("reminder", comment: "提醒")
+        content.title = String(localized: "训练提醒")
         content.body = message
         content.sound = .default
-        
-        let request = UNNotificationRequest(
-            identifier: "reminder_\(Date().timeIntervalSince1970)",
-            content: content,
-            trigger: nil
-        )
-        
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("❌ 发送提醒通知失败: \(error)")
-            } else {
-                print("✅ 提醒通知已发送")
-            }
-        }
+        UNUserNotificationCenter.current().add(UNNotificationRequest(
+            identifier: "reminder_\(UUID().uuidString)", content: content, trigger: nil))
     }
-    
-    // MARK: - 清除所有通知
+
     func clearAllNotifications() {
+        reminderGeneration = UUID()
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
-        print("✅ 已清除所有通知")
-    }
-    
-    // MARK: - 状态描述
-    private func statusDescription(_ status: UNAuthorizationStatus) -> String {
-        switch status {
-        case .notDetermined:
-            return NSLocalizedString("not_determined", comment: "未确定")
-        case .denied:
-            return NSLocalizedString("denied", comment: "已拒绝")
-        case .authorized:
-            return NSLocalizedString("authorized", comment: "已授权")
-        case .provisional:
-            return NSLocalizedString("provisional", comment: "临时授权")
-        case .ephemeral:
-            return NSLocalizedString("ephemeral", comment: "临时授权")
-        @unknown default:
-            return NSLocalizedString("unknown_status", comment: "未知")
-        }
     }
 
     func sendTestNotification() {
+        guard isAuthorized else { return }
         let content = UNMutableNotificationContent()
         content.title = String(localized: "测试通知")
         content.body = String(localized: "这是一条测试通知，5秒后显示")
         content.sound = .default
-        
-        // 5秒后触发,给你时间切换到后台
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
-        
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: trigger
-        )
-        
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("❌ 测试通知失败: \(error)")
-            } else {
-                print("✅ 测试通知将在5秒后显示，请切换到后台")
-            }
-        }
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "notification_test", content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
     }
-    
-    // MARK: - 调试方法
+
     func debugPendingNotifications() {
-        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
-            print("📋 当前待发送的通知数量: \(requests.count)")
-            for (index, request) in requests.enumerated() {
-                print("  \(index + 1). ID: \(request.identifier)")
-                print("     标题: \(request.content.title)")
-                print("     内容: \(request.content.body)")
-                if let trigger = request.trigger as? UNCalendarNotificationTrigger {
-                    print("     触发时间: \(trigger.dateComponents)")
-                }
-            }
-        }
+        UNUserNotificationCenter.current().getPendingNotificationRequests { print("Pending notifications: \($0.count)") }
     }
 }

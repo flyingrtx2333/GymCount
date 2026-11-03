@@ -31,13 +31,13 @@ struct SplashView: View {
                 // 应用名称
                 Text(NSLocalizedString("app_name", comment: "健身计数器"))
                     .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundColor(GymStyle.ink)
                     .opacity(textOpacity)
 
                 // 标语
                 Text(NSLocalizedString("app_slogan", comment: "应用标语"))
                     .font(GymStyle.detail)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(GymStyle.muted)
                     .opacity(textOpacity)
             }
             .onAppear {

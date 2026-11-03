@@ -11,71 +11,36 @@ struct HelpView: View {
     @Environment(\.presentationMode) var presentationMode
 
     private let sections: [(icon: String, title: String, key: String, items: [String])] = [
-        (
-            icon: "star.fill",
-            title: NSLocalizedString("help_features_title", comment: "功能介绍"),
-            key: "features",
-            items: [
-                NSLocalizedString("help_feature_1", comment: "• 支持卧推和深蹲计数"),
-                NSLocalizedString("help_feature_2", comment: "• 自动运动检测（可选）"),
-                NSLocalizedString("help_feature_3", comment: "• 重量记录和调整"),
-                NSLocalizedString("help_feature_4", comment: "• 锻炼历史统计"),
-                NSLocalizedString("help_feature_5", comment: "• 触觉反馈提醒")
-            ]
-        ),
-        (
-            icon: "hand.tap.fill",
-            title: NSLocalizedString("help_usage_title", comment: "使用方法"),
-            key: "usage",
-            items: [
-                NSLocalizedString("help_usage_1", comment: "1. 选择锻炼类型"),
-                NSLocalizedString("help_usage_2", comment: "2. 点击开始按钮"),
-                NSLocalizedString("help_usage_3", comment: "3. 点击+按钮计数"),
-                NSLocalizedString("help_usage_4", comment: "4. 点击停止完成"),
-                NSLocalizedString("help_usage_5", comment: "5. 查看历史记录")
-            ]
-        ),
-        (
-            icon: "waveform.path",
-            title: NSLocalizedString("help_auto_detection_title", comment: "自动检测"),
-            key: "detect",
-            items: [
-                NSLocalizedString("help_auto_1", comment: "• 在设置中开启自动检测"),
-                NSLocalizedString("help_auto_2", comment: "• 手表会自动识别运动动作"),
-                NSLocalizedString("help_auto_3", comment: "• 绿色指示灯表示检测正常"),
-                NSLocalizedString("help_auto_4", comment: "• 建议在安静环境下使用")
-            ]
-        ),
-        (
-            icon: "mic.fill",
-            title: NSLocalizedString("help_shortcuts_title", comment: "快捷指令"),
-            key: "shortcuts",
-            items: [
-                NSLocalizedString("help_shortcuts_1", comment: "• 在快捷指令应用中创建"),
-                NSLocalizedString("help_shortcuts_2", comment: "• 对 Siri 说：开始记录深蹲"),
-                NSLocalizedString("help_shortcuts_3", comment: "• 或创建自定义快捷指令"),
-                NSLocalizedString("help_shortcuts_4", comment: "• 详细指南见应用文档")
-            ]
-        ),
-        (
-            icon: "exclamationmark.triangle.fill",
-            title: NSLocalizedString("help_notes_title", comment: "注意事项"),
-            key: "notes",
-            items: [
-                NSLocalizedString("help_note_1", comment: "• 确保手表佩戴牢固"),
-                NSLocalizedString("help_note_2", comment: "• 避免剧烈晃动影响检测"),
-                NSLocalizedString("help_note_3", comment: "• 定期查看历史记录"),
-                NSLocalizedString("help_note_4", comment: "• 根据情况调整重量")
-            ]
-        )
+        (icon: "figure.strengthtraining.traditional", title: String(localized: "开始训练"), key: "training", items: [
+            String(localized: "选择卧推、深蹲或硬拉，点「开始」。"),
+            String(localized: "按实际器械重量设置，佩戴手表完成动作。"),
+            String(localized: "各组自动记录；换动作或重量时点顶部。"),
+            String(localized: "用＋／－核对本组次数，全部完成后点「结束」。")
+        ]),
+        (icon: "waveform", title: "Siri", key: "siri", items: [
+            String(localized: "对手表说「开始健身计数」，再选择动作。"),
+            String(localized: "也可以说「用健身计数开始卧推」。"),
+            String(localized: "完成后说「结束健身计数」。")
+        ]),
+        (icon: "list.bullet.rectangle", title: String(localized: "查看记录"), key: "records", items: [
+            String(localized: "在手表首页打开历史，查看已保存的训练。"),
+            String(localized: "在 iPhone 的「记录」页查看、补记和编辑训练。"),
+            String(localized: "记录未出现时，在手机设置中点「手表同步」。")
+        ]),
+        (icon: "heart", title: String(localized: "健康同步"), key: "health", items: [
+            String(localized: "在设置中开启「同步到运动圆环」，允许写入体能训练。"),
+            String(localized: "需要补传时，点「立即同步所有记录」。")
+        ]),
+        (icon: "hand.tap", title: String(localized: "计数核对"), key: "review", items: [
+            String(localized: "自动计数在结束时核准，请按实际完成次数核对。"),
+            String(localized: "保存后，可从结果提示进入「计数反馈」。")
+        ])
     ]
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: GymStyle.spacing) {
-                    GymHeader(title: NSLocalizedString("help_title", comment: "使用帮助"),
-                              back: { presentationMode.wrappedValue.dismiss() })
                     ForEach(sections, id: \.key) { section in
                         HelpCard(
                             icon: section.icon,
@@ -84,13 +49,11 @@ struct HelpView: View {
                         )
                     }
                 }
-                .gymPageContent(fullWidthHeader: true)
+                .gymPageContent()
             }
-            .navigationTitle(NSLocalizedString("help_title", comment: "使用帮助"))
-            .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
-            .toolbar(.hidden)
             .gymPage()
+            .gymNavigationTitle(NSLocalizedString("help_title", comment: "使用帮助"), back: { presentationMode.wrappedValue.dismiss() })
         }
     }
 }
@@ -108,10 +71,10 @@ struct HelpCard: View {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(GymStyle.detail)
-                    .foregroundStyle(GymStyle.mint)
+                    .foregroundStyle(GymStyle.accent)
                 Text(title)
                     .font(GymStyle.button)
-                    .foregroundColor(.white)
+                    .foregroundColor(GymStyle.ink)
             }
 
             // 内容

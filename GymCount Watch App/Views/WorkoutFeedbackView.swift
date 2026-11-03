@@ -6,28 +6,31 @@ struct WorkoutFeedbackView: View {
     @ObservedObject private var store = WorkoutFeedbackStore.shared
     @State private var actual = 0
     @State private var confirmed = false
+    @State private var loaded = false
     @State private var entry: WorkoutFeedbackArchive.Entry?
 
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
-                GymHeader(title: String(localized: "计数反馈"), back: { dismiss() })
                 Text(workout.exerciseType.displayName).font(GymStyle.section)
                 Text(workout.date, format: .dateTime.month().day().hour().minute())
-                    .font(GymStyle.detail).foregroundStyle(.secondary)
+                    .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
                 Text(String(localized: "手表记录：\(workout.totalReps) 次"))
                     .font(GymStyle.body)
-                if let entry, entry.serverID != nil {
+                if !loaded {
+                    ProgressView()
+                } else if let entry, entry.serverID != nil {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).font(.largeTitle)
                     Text(String(localized: "反馈已提交，谢谢！")).font(GymStyle.body)
                     Text(String(localized: "实际次数：\(entry.actualCount ?? 0) 次")).font(GymStyle.body)
                     Button(String(localized: "完成")) { dismiss() }.buttonStyle(GymActionStyle())
                 } else if entry?.recording != nil {
-                    Text(String(localized: "实际次数")).font(GymStyle.caption).foregroundStyle(.secondary)
+                    Text(String(localized: "实际次数")).font(GymStyle.caption).foregroundStyle(GymStyle.muted)
                     HStack(spacing: 4) {
                         CircleButton(icon: "minus", disabled: actual == 0 || locked) { actual -= 1 }
                             .accessibilityLabel(String(localized: "减少实际次数"))
-                        Text("\(actual)").font(GymStyle.counter).monospacedDigit().frame(maxWidth: .infinity)
+                        Text("\(actual)").font(GymStyle.counter).monospacedDigit()
+                            .lineLimit(1).minimumScaleFactor(0.6).frame(maxWidth: .infinity)
                             .accessibilityIdentifier("feedback.actual")
                         CircleButton(icon: "plus", disabled: actual == 500 || locked) { actual += 1 }
                             .accessibilityLabel(String(localized: "增加实际次数"))
@@ -36,7 +39,7 @@ struct WorkoutFeedbackView: View {
                         Toggle(String(localized: "已核对次数"), isOn: $confirmed).font(GymStyle.body)
                             .disabled(locked)
                         Text(String(localized: "上传本次运动采样和实际次数"))
-                            .font(GymStyle.detail).foregroundStyle(.secondary)
+                            .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
                     }
                     if store.errorID == workout.id, let error = store.errorMessage {
                         Text(error).font(GymStyle.caption).foregroundStyle(.orange).accessibilityIdentifier("feedback.error")
@@ -53,17 +56,20 @@ struct WorkoutFeedbackView: View {
                     }
                 } else {
                     Text(String(localized: "此记录没有可上传的采样"))
-                        .font(GymStyle.caption).foregroundStyle(.secondary)
+                        .font(GymStyle.caption).foregroundStyle(GymStyle.muted)
                 }
-            }.gymPageContent(fullWidthHeader: true)
+            }.gymPageContent()
         }
-        .gymPage().toolbar(.hidden)
-        .onAppear { store.clearError(); reload(); actual = entry?.actualCount ?? min(500, workout.totalReps) }
-        .onChange(of: store.revision) { _, _ in reload() }
+        .gymPage().gymNavigationTitle(String(localized: "计数反馈"), back: { dismiss() })
+        .onAppear { store.clearError() }
+        .task(id: store.revision) {
+            let archive = store.archive, id = workout.id
+            entry = try? await WorkoutFileIO.shared.perform { try archive.load(id) }
+            if !loaded { actual = entry?.actualCount ?? min(500, workout.totalReps); loaded = true }
+        }
     }
 
     private var locked: Bool { entry?.actualCount != nil || store.uploadingID != nil }
-    private func reload() { entry = try? store.archive.load(workout.id) }
 }
 
 struct WorkoutSavedBanner: View {
@@ -93,7 +99,7 @@ struct WorkoutSavedBanner: View {
                 Button(action: close) {
                     Image(systemName: "xmark")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(GymStyle.muted)
                         .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
                 .buttonStyle(WorkoutSavedButtonStyle())
@@ -101,22 +107,22 @@ struct WorkoutSavedBanner: View {
                 .accessibilityIdentifier("workout.saved.close")
             }
             .padding(.leading, 10).padding(.trailing, 2).frame(minHeight: 44)
-            Rectangle().fill(.white.opacity(0.12)).frame(height: 0.5).accessibilityHidden(true)
+            Rectangle().fill(GymStyle.line).frame(height: 0.5).accessibilityHidden(true)
             Button(action: feedback) {
                 HStack {
                     Text(String(localized: "计数反馈")).font(.system(size: textSize))
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .medium))
                 }
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(GymStyle.accent)
                 .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(WorkoutSavedButtonStyle())
             .accessibilityIdentifier("workout.saved.feedback")
         }
-        .foregroundStyle(.white)
-        .background(Color(red: 26 / 255, green: 28 / 255, blue: 29 / 255), in: RoundedRectangle(cornerRadius: 14))
+        .foregroundStyle(GymStyle.ink)
+        .background(GymStyle.surface, in: RoundedRectangle(cornerRadius: 14))
         .clipShape(RoundedRectangle(cornerRadius: 14)).padding(.horizontal, 8)
         .onAppear { if voiceOver { resultFocused = true } }
     }

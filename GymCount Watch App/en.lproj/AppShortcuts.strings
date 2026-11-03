@@ -1,0 +1,9 @@
+"Start ${applicationName}" = "Start ${applicationName}";
+"Start counting with ${applicationName}" = "Start counting with ${applicationName}";
+"Start ${exerciseType} with ${applicationName}" = "Start ${exerciseType} with ${applicationName}";
+"Start recording workout with ${applicationName}" = "Start recording workout with ${applicationName}";
+"Begin workout using ${applicationName}" = "Begin workout using ${applicationName}";
+
+"Finish ${applicationName}" = "Finish ${applicationName}";
+"End workout with ${applicationName}" = "End workout with ${applicationName}";
+"Stop counting with ${applicationName}" = "Stop counting with ${applicationName}";

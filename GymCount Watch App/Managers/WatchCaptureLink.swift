@@ -47,11 +47,29 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
     var isCaptureWorkoutRunning: Bool { workout?.state == .running }
     private var activeID: UUID?
     private var timer: Timer?
+    private var lastPublishedStatus: NSDictionary?
     private var sampleOrigin: Double?
     private var completedFiles: [UUID: URL] = [:]
     private var phoneRequestID: UUID?
     private var attemptedInitialAuthorization = false
     private var submittedWorkouts: Set<UUID> = []
+    private var submittedTimelines: Set<UUID> = []
+    private var preparingLegacyTimelines = false
+    private var preparedLegacyTimelines = false
+    private var timelineReadFailed = false
+    private var timelineRetries: [UUID: Task<Void, Never>] = [:]
+    private var timelineAttempts: [UUID: Int] = [:]
+    private var reportSensorIndex: [UUID: [UUID]] = [:]
+    private var indexedReportIDs: Set<UUID>?
+    private var reportSensorScanTask: Task<Void, Never>?
+    private var reportSensorScanGeneration = UUID()
+    private var reportSensorSyncing = false
+    private var reportSensorSyncRequested = false
+    private var reportSensorReadFailed = false
+    private var failedReportSensorTransfers: Set<String> = []
+    private var submittedReportSensors: Set<String> = []
+    private var reportSensorAttempts: [String: Int] = [:]
+    private var reportSensorRetries: [String: Task<Void, Never>] = [:]
 
     init(activateConnectivity: Bool, authorization: CaptureHealthAuthorization? = nil) {
         self.authorization = authorization ?? .live(health)
@@ -78,6 +96,76 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             if error == nil { self.syncWorkouts() }
         }
     }
+    nonisolated func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: Error?) {
+        let metadata = fileTransfer.file.metadata ?? [:]
+        if metadata["kind"] as? String == WorkoutReportSensors.fileKind,
+           let text = metadata["id"] as? String, let id = UUID(uuidString: text),
+           let parentText = metadata["workout_id"] as? String, let parent = UUID(uuidString: parentText),
+           let receiver = metadata["receiver_id"] as? String {
+            Task { @MainActor [weak self] in
+                guard let self, self.acceptsReportSensors,
+                      receiver == UserDefaults.standard.string(forKey: "workoutSync.receiver"),
+                      DataManager.shared.workoutHistory.contains(where: { $0.id == parent }) else { return }
+                let key = self.reportSensorKey(parent, id)
+                guard !(UserDefaults.standard.stringArray(forKey: "reportSensorSync.received") ?? []).contains(key) else { return }
+                if error != nil { self.message = String(localized: "时间轴同步失败，将自动重试") }
+                self.scheduleReportSensorRetry(workoutID: parent, segmentID: id, receiver: receiver)
+                self.syncReportSensors()
+            }
+            return
+        }
+        if metadata["kind"] as? String == WorkoutSync.reportFileKind,
+           let text = metadata["id"] as? String, let id = UUID(uuidString: text) {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard let receiver = metadata["receiver_id"] as? String,
+                      receiver == UserDefaults.standard.string(forKey: "workoutSync.receiver"),
+                      self.acceptsWorkoutReports else {
+                    self.syncWorkouts()
+                    return
+                }
+                if (UserDefaults.standard.stringArray(forKey: "workoutSync.received") ?? []).contains(id.uuidString) {
+                    try? FileManager.default.removeItem(at: fileTransfer.file.fileURL)
+                    self.syncWorkouts()
+                    return
+                }
+                if error != nil { self.submittedWorkouts.remove(id); self.message = String(localized: "训练报告同步失败，请重试") }
+                // Receipt, rather than file delivery, confirms durable phone storage.
+                if error == nil {
+                    self.scheduleWorkoutReceiptRetry([id])
+                    self.syncWorkouts()
+                }
+            }
+            return
+        }
+        guard metadata["kind"] as? String == WorkoutTimeline.fileKind,
+              let text = metadata["id"] as? String, let id = UUID(uuidString: text) else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let defaults = UserDefaults.standard
+            let receiver = defaults.string(forKey: "workoutSync.receiver")
+            if let expected = metadata["receiver_id"] as? String, expected != receiver { return }
+            guard DataManager.shared.workoutHistory.contains(where: { $0.id == id }),
+                  !(defaults.stringArray(forKey: "timelineSync.received") ?? []).contains(id.uuidString) else { return }
+            if error != nil { self.message = String(localized: "时间轴同步失败，将自动重试") }
+            // Delivery is not an app receipt. A failed phone write or a lost
+            // receipt leaves this immutable file queued for a bounded retry.
+            self.syncWorkoutTimelines()
+            self.timelineRetries[id]?.cancel()
+            self.timelineRetries[id] = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled, let self,
+                      UserDefaults.standard.string(forKey: "workoutSync.receiver") == receiver else { return }
+                self.timelineRetries.removeValue(forKey: id)
+                guard (self.timelineAttempts[id] ?? 0) < 3 else {
+                    self.message = String(localized: "时间轴尚未同步，请重试")
+                    return
+                }
+                self.submittedTimelines.remove(id)
+                self.syncWorkoutTimelines()
+            }
+        }
+    }
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
         // Complete the app's receipt handling before WCSession drains this item.
         if Thread.isMainThread {
@@ -89,6 +177,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         Task { @MainActor in
             if self.handleWorkoutSync(message) { return }
+            #if DEBUG
             guard message["command"] as? String == "feedback" else { return }
             if self.showingCapture || (DataManager.shared.currentSession == nil && !CollectionStore.shared.recording && CollectionStore.shared.draft == nil) {
                 self.showCapturePage()
@@ -100,15 +189,40 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             default: return
             }
             if let text = message["message"] as? String { self.message = text }
+            #endif
         }
     }
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
         Task { @MainActor in
             if self.handleWorkoutSync(message) {
+                await self.prepareReportSensorIndex()
                 let acknowledged = Set((UserDefaults.standard.stringArray(forKey: "workoutSync.received") ?? []).compactMap(UUID.init(uuidString:)))
                 let history = DataManager.shared.workoutHistory
-                replyHandler(["workout_history_ready": true, "workout_history_count": history.count,
-                              "workout_history_pending": history.filter { !acknowledged.contains($0.id) }.count])
+                var response: [String: Any] = ["workout_history_ready": true, "workout_history_count": history.count,
+                              "workout_history_pending": history.filter { !acknowledged.contains($0.id) }.count,
+                              "workout_timeline_pending": self.pendingTimelineCount,
+                              "workout_timeline_failed": self.timelineReadFailed || self.reportSensorReadFailed || !self.failedReportSensorTransfers.isEmpty,
+                              "workout_report_version": 1,
+                              WorkoutReportSensors.capabilityKey: 1,
+                              "workout_report_sensor_pending": self.pendingReportSensorCount,
+                              "workout_report_sensor_failed": self.reportSensorReadFailed || !self.failedReportSensorTransfers.isEmpty]
+                if message["kind"] as? String == WorkoutSync.requestKind,
+                   message["workout_report_version"] as? Int != 1,
+                   history.contains(where: { $0.workoutReport != nil && !acknowledged.contains($0.id) }) {
+                    response["workout_report_update_required"] = true
+                }
+                if message["kind"] as? String == WorkoutSync.requestKind,
+                   message[WorkoutReportSensors.capabilityKey] as? Int != 1,
+                   self.reportSensorIndex.values.contains(where: { !$0.isEmpty }) {
+                    response["report_sensors_update_required"] = true
+                }
+                if let text = message["timeline_id"] as? String, let id = UUID(uuidString: text) {
+                    response["workout_timeline_id"] = text
+                    response["workout_timeline_available"] = history.first(where: { $0.id == id })?.workoutReport != nil
+                        ? !(self.reportSensorIndex[id] ?? []).isEmpty
+                        : FileManager.default.fileExists(atPath: DataManager.shared.timelineArchive.fileURL(id).path)
+                }
+                replyHandler(response)
                 return
             }
             await self.handle(message, reply: replyHandler)
@@ -118,30 +232,299 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
     // Reuse the existing WCSession delegate. Workout messages never replace the
     // application context used by synchronized video capture.
     func syncWorkouts(retry: Bool = false) {
-        if retry { submittedWorkouts = [] }
+        if retry {
+            submittedWorkouts = []; submittedTimelines = []
+            reportAttempts = [:]; reportRetries.values.forEach { $0.cancel() }; reportRetries = [:]
+            timelineAttempts = [:]
+            timelineReadFailed = false; preparedLegacyTimelines = false
+            timelineRetries.values.forEach { $0.cancel() }; timelineRetries = [:]
+            resetReportSensorRetry()
+        }
         let session = WCSession.default
         guard allowsAutomaticAuthorization, session.activationState == .activated, session.isCompanionAppInstalled else { return }
+        syncWorkoutTimelines()
+        syncReportSensors()
         let defaults = UserDefaults.standard
+        let receiver = defaults.string(forKey: "workoutSync.receiver")
         let acknowledged = Set((defaults.stringArray(forKey: "workoutSync.received") ?? []).compactMap(UUID.init(uuidString:)))
         let transfers = session.outstandingUserInfoTransfers.filter { $0.userInfo["kind"] as? String == WorkoutSync.batchKind }
+        let reportTransfers = session.outstandingFileTransfers.filter { $0.file.metadata?["kind"] as? String == WorkoutSync.reportFileKind }
         if retry && session.isReachable {
             for transfer in transfers { sendWorkoutBatchImmediately(transfer.userInfo) }
         }
-        let queued = transfers.reduce(into: Set<UUID>()) { $0.formUnion(WorkoutSync.ids($1.userInfo)) }
+        var queued = transfers.reduce(into: Set<UUID>()) { $0.formUnion(WorkoutSync.ids($1.userInfo)) }
+        queued.formUnion(reportTransfers.filter { $0.file.metadata?["receiver_id"] as? String == receiver }
+            .compactMap { ($0.file.metadata?["id"] as? String).flatMap(UUID.init(uuidString:)) })
         let pending = DataManager.shared.workoutHistory.filter {
-            !acknowledged.contains($0.id) && !queued.contains($0.id) && !submittedWorkouts.contains($0.id)
+            !acknowledged.contains($0.id) && !queued.contains($0.id) && !submittedWorkouts.contains($0.id) &&
+                ($0.workoutReport == nil || acceptsWorkoutReports)
         }
-        let slots = max(0, 3 - transfers.count)
+        let slots = max(0, 3 - transfers.count - reportTransfers.count)
         guard slots > 0 else { return }
-        for offset in stride(from: 0, to: min(pending.count, slots * WorkoutSync.maximumBatchSize), by: WorkoutSync.maximumBatchSize) {
-            let records = pending[offset..<min(offset + WorkoutSync.maximumBatchSize, pending.count)].map {
-                WorkoutSync.Record(id: $0.id, date: $0.date, exercise: $0.exerciseType.rawValue,
-                    totalReps: $0.totalReps, maxWeight: $0.maxWeight, duration: $0.duration, activeDuration: $0.activeDuration)
-            }
-            guard let payload = try? WorkoutSync.message(records) else { continue }
-            submittedWorkouts.formUnion(records.map(\.id))
+        var batch: [WorkoutSync.Record] = []
+        var submitted = 0
+        func sendBatch() {
+            guard !batch.isEmpty, submitted < slots, let payload = try? WorkoutSync.message(batch) else { return }
+            submittedWorkouts.formUnion(batch.map(\.id))
             session.transferUserInfo(payload)
             if session.isReachable { sendWorkoutBatchImmediately(payload) }
+            submitted += 1; batch = []
+        }
+        for history in pending {
+            guard submitted < slots else { break }
+            let record = WorkoutSync.Record(id: history.id, date: history.date, exercise: history.exerciseType.rawValue,
+                totalReps: history.totalReps, maxWeight: history.maxWeight, duration: history.duration,
+                activeDuration: history.activeDuration, totalWeight: history.totalWeight, workoutReport: history.workoutReport)
+            if record.workoutReport != nil || (try? WorkoutSync.message([record])) == nil {
+                guard acceptsWorkoutReports, let receiver else { continue }
+                sendBatch()
+                guard submitted < slots else { break }
+                do {
+                    var payload = try WorkoutSync.message([record], asFile: true)
+                    payload["receiver_id"] = receiver
+                    let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                        .appendingPathComponent("WorkoutReportOutbox").appendingPathComponent(receiver)
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    let url = folder.appendingPathComponent(record.id.uuidString + ".plist")
+                    try PropertyListSerialization.data(fromPropertyList: payload, format: .binary, options: 0).write(to: url, options: .atomic)
+                    session.transferFile(url, metadata: ["kind": WorkoutSync.reportFileKind,
+                        "id": record.id.uuidString, "receiver_id": receiver])
+                    submittedWorkouts.insert(record.id); submitted += 1
+                } catch { message = String(localized: "训练报告同步失败，请重试") }
+            } else {
+                if batch.count == WorkoutSync.maximumBatchSize || (try? WorkoutSync.message(batch + [record])) == nil { sendBatch() }
+                guard submitted < slots else { break }
+                batch.append(record)
+            }
+        }
+        sendBatch()
+    }
+
+    private var acceptsWorkoutReports: Bool {
+        let defaults = UserDefaults.standard
+        guard let receiver = defaults.string(forKey: "workoutSync.receiver") else { return false }
+        return defaults.string(forKey: "workoutReportSync.receiver") == receiver
+    }
+
+    private var pendingTimelineCount: Int {
+        guard acceptsWorkoutTimelines else { return pendingReportSensorCount }
+        if !preparedLegacyTimelines || preparingLegacyTimelines { return 1 + pendingReportSensorCount }
+        let acknowledged = Set((UserDefaults.standard.stringArray(forKey: "timelineSync.received") ?? []).compactMap(UUID.init(uuidString:)))
+        return DataManager.shared.workoutHistory.filter {
+            !acknowledged.contains($0.id) &&
+            FileManager.default.fileExists(atPath: DataManager.shared.timelineArchive.fileURL($0.id).path)
+        }.count + pendingReportSensorCount
+    }
+
+    private var acceptsWorkoutTimelines: Bool {
+        let defaults = UserDefaults.standard
+        guard let receiver = defaults.string(forKey: "workoutSync.receiver") else { return false }
+        return defaults.string(forKey: "timelineSync.receiver") == receiver
+    }
+
+    private func syncWorkoutTimelines() {
+        let session = WCSession.default
+        guard allowsAutomaticAuthorization, session.activationState == .activated,
+              session.isCompanionAppInstalled, acceptsWorkoutTimelines else { return }
+        if !preparedLegacyTimelines {
+            guard !preparingLegacyTimelines else { return }
+            preparingLegacyTimelines = true
+            Task { @MainActor in
+                do { try await DataManager.shared.prepareWorkoutTimelines() }
+                catch {
+                    timelineReadFailed = true
+                    message = String(localized: "部分时间轴读取失败，请重试同步")
+                }
+                preparedLegacyTimelines = true
+                preparingLegacyTimelines = false
+                syncWorkoutTimelines()
+            }
+            return
+        }
+        let defaults = UserDefaults.standard
+        let receiver = defaults.string(forKey: "workoutSync.receiver")
+        let acknowledged = Set((defaults.stringArray(forKey: "timelineSync.received") ?? []).compactMap(UUID.init(uuidString:)))
+        let transfers = session.outstandingFileTransfers.filter { $0.file.metadata?["kind"] as? String == WorkoutTimeline.fileKind }
+        let queued = Set(transfers.compactMap { ($0.file.metadata?["id"] as? String).flatMap(UUID.init(uuidString:)) })
+        let slots = max(0, 3 - transfers.count)
+        guard slots > 0 else { return }
+        var submitted = 0
+        for workout in DataManager.shared.workoutHistory where !acknowledged.contains(workout.id) &&
+            !queued.contains(workout.id) && !submittedTimelines.contains(workout.id) && (timelineAttempts[workout.id] ?? 0) < 3 {
+            guard submitted < slots else { break }
+            do {
+                let url = DataManager.shared.timelineArchive.fileURL(workout.id)
+                guard FileManager.default.fileExists(atPath: url.path) else { continue }
+                let attributes = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
+                guard attributes.isRegularFile == true, attributes.isSymbolicLink != true,
+                      let size = attributes.fileSize, size <= WorkoutTimeline.maximumFileBytes else { throw WorkoutTimeline.Failure.invalid }
+                var metadata: [String: Any] = ["kind": WorkoutTimeline.fileKind, "id": workout.id.uuidString]
+                if let receiver { metadata["receiver_id"] = receiver }
+                session.transferFile(url, metadata: metadata)
+                submittedTimelines.insert(workout.id)
+                timelineAttempts[workout.id, default: 0] += 1
+                submitted += 1
+            } catch {
+                timelineReadFailed = true
+                message = String(localized: "部分时间轴读取失败，请重试同步")
+            }
+        }
+    }
+
+    private var acceptsReportSensors: Bool {
+        guard acceptsWorkoutReports, let receiver = UserDefaults.standard.string(forKey: "workoutSync.receiver") else { return false }
+        return UserDefaults.standard.string(forKey: "reportSensorSync.receiver") == receiver
+    }
+    private func reportSensorKey(_ workoutID: UUID, _ segmentID: UUID) -> String {
+        workoutID.uuidString + "/" + segmentID.uuidString
+    }
+    private var pendingReportSensorCount: Int {
+        guard acceptsReportSensors else { return 0 }
+        let ids = Set(DataManager.shared.workoutHistory.filter { $0.workoutReport != nil }.map(\.id))
+        guard indexedReportIDs == ids else { return ids.isEmpty ? 0 : 1 }
+        let acknowledged = Set(UserDefaults.standard.stringArray(forKey: "reportSensorSync.received") ?? [])
+        return reportSensorIndex.reduce(0) { count, entry in
+            count + entry.value.filter { !acknowledged.contains(reportSensorKey(entry.key, $0)) }.count
+        }
+    }
+    private func invalidateReportSensorIndex() {
+        reportSensorScanGeneration = UUID()
+        reportSensorScanTask?.cancel(); reportSensorScanTask = nil
+        indexedReportIDs = nil; reportSensorIndex = [:]; reportSensorReadFailed = false
+    }
+    private func resetReportSensorRetry() {
+        submittedReportSensors = []; reportSensorAttempts = [:]
+        failedReportSensorTransfers = []
+        reportSensorRetries.values.forEach { $0.cancel() }; reportSensorRetries = [:]
+        invalidateReportSensorIndex()
+    }
+    private func prepareReportSensorIndex() async {
+        let sources = DataManager.shared.workoutHistory.filter { $0.workoutReport != nil }.map {
+            WorkoutSync.Record(id: $0.id, date: $0.date, exercise: $0.exerciseType.rawValue,
+                totalReps: $0.totalReps, maxWeight: $0.maxWeight, duration: $0.duration,
+                activeDuration: $0.activeDuration, totalWeight: $0.totalWeight, workoutReport: $0.workoutReport)
+        }
+        let ids = Set(sources.map(\.id))
+        if indexedReportIDs == ids { return }
+        if let task = reportSensorScanTask { await task.value; return }
+        let archive = DataManager.shared.reportSensorArchive, generation = reportSensorScanGeneration
+        let task = Task { @MainActor [weak self] in
+            do {
+                let result = try await WorkoutFileIO.shared.perform { () -> ([UUID: [UUID]], Bool) in
+                    var index: [UUID: [UUID]] = [:], failed = false
+                    for source in sources {
+                        do { index[source.id] = try archive.index(for: source).map(\.id) }
+                        catch { failed = true }
+                    }
+                    return (index, failed)
+                }
+                guard !Task.isCancelled, let self, self.reportSensorScanGeneration == generation else { return }
+                self.reportSensorIndex = result.0; self.reportSensorReadFailed = result.1
+                self.indexedReportIDs = ids; self.reportSensorScanTask = nil
+                if result.1 { self.message = String(localized: "部分时间轴读取失败，请重试同步") }
+            } catch {
+                guard !Task.isCancelled, let self, self.reportSensorScanGeneration == generation else { return }
+                self.reportSensorReadFailed = true; self.reportSensorScanTask = nil
+                self.message = String(localized: "部分时间轴读取失败，请重试同步")
+            }
+        }
+        reportSensorScanTask = task
+        await task.value
+    }
+    private func syncReportSensors() {
+        let session = WCSession.default
+        guard allowsAutomaticAuthorization, session.activationState == .activated,
+              session.isCompanionAppInstalled, acceptsReportSensors,
+              let receiver = UserDefaults.standard.string(forKey: "workoutSync.receiver") else { return }
+        if reportSensorSyncing { reportSensorSyncRequested = true; return }
+        reportSensorSyncing = true
+        Task { @MainActor in
+            defer {
+                reportSensorSyncing = false
+                if reportSensorSyncRequested { reportSensorSyncRequested = false; syncReportSensors() }
+            }
+            await prepareReportSensorIndex()
+            guard acceptsReportSensors, receiver == UserDefaults.standard.string(forKey: "workoutSync.receiver") else { return }
+            let known = Set(DataManager.shared.workoutHistory.filter { $0.workoutReport != nil }.map(\.id))
+            let parents = Set((UserDefaults.standard.stringArray(forKey: "workoutSync.received") ?? []).compactMap(UUID.init(uuidString:)))
+            let received = Set(UserDefaults.standard.stringArray(forKey: "reportSensorSync.received") ?? [])
+            let transfers = session.outstandingFileTransfers.filter { $0.file.metadata?["kind"] as? String == WorkoutReportSensors.fileKind }
+            var queued = Set<String>()
+            for transfer in transfers {
+                let metadata = transfer.file.metadata ?? [:]
+                guard metadata["receiver_id"] as? String == receiver,
+                      let text = metadata["workout_id"] as? String, let parent = UUID(uuidString: text), known.contains(parent),
+                      let childText = metadata["id"] as? String, let child = UUID(uuidString: childText) else { transfer.cancel(); continue }
+                queued.insert(reportSensorKey(parent, child))
+            }
+            var slots = max(0, 3 - queued.count)
+            for parent in reportSensorIndex.keys.sorted(by: { $0.uuidString < $1.uuidString }) where known.contains(parent) && parents.contains(parent) {
+                for segment in reportSensorIndex[parent] ?? [] {
+                    guard slots > 0 else { return }
+                    let key = reportSensorKey(parent, segment)
+                    guard !received.contains(key), !queued.contains(key), !submittedReportSensors.contains(key),
+                          (reportSensorAttempts[key] ?? 0) < 3 else { continue }
+                    let url = DataManager.shared.reportSensorArchive.fileURL(workoutID: parent, segmentID: segment)
+                    guard FileManager.default.fileExists(atPath: url.path) else { continue }
+                    session.transferFile(url, metadata: ["kind": WorkoutReportSensors.fileKind,
+                        "id": segment.uuidString, "workout_id": parent.uuidString, "receiver_id": receiver])
+                    submittedReportSensors.insert(key); reportSensorAttempts[key, default: 0] += 1; slots -= 1
+                }
+            }
+        }
+    }
+    private func scheduleReportSensorRetry(workoutID: UUID, segmentID: UUID, receiver: String) {
+        let key = reportSensorKey(workoutID, segmentID)
+        reportSensorRetries[key]?.cancel()
+        reportSensorRetries[key] = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled, let self, self.acceptsReportSensors,
+                  UserDefaults.standard.string(forKey: "workoutSync.receiver") == receiver,
+                  DataManager.shared.workoutHistory.contains(where: { $0.id == workoutID }),
+                  !(UserDefaults.standard.stringArray(forKey: "reportSensorSync.received") ?? []).contains(key) else { return }
+            self.reportSensorRetries.removeValue(forKey: key)
+            guard (self.reportSensorAttempts[key] ?? 0) < 3 else {
+                self.failedReportSensorTransfers.insert(key)
+                self.message = String(localized: "时间轴尚未同步，请重试"); return
+            }
+            self.submittedReportSensors.remove(key); self.syncReportSensors()
+        }
+    }
+    func cancelReportSensors(workoutIDs: Set<UUID>) {
+        failedReportSensorTransfers = failedReportSensorTransfers.filter { key in
+            !workoutIDs.contains(where: { key.hasPrefix($0.uuidString + "/") })
+        }
+        for transfer in WCSession.default.outstandingFileTransfers where transfer.file.metadata?["kind"] as? String == WorkoutReportSensors.fileKind {
+            if let text = transfer.file.metadata?["workout_id"] as? String, let id = UUID(uuidString: text), workoutIDs.contains(id) { transfer.cancel() }
+        }
+        for key in Array(reportSensorRetries.keys) where workoutIDs.contains(where: { key.hasPrefix($0.uuidString + "/") }) {
+            reportSensorRetries.removeValue(forKey: key)?.cancel(); reportSensorAttempts.removeValue(forKey: key)
+            submittedReportSensors.remove(key)
+        }
+        let received = UserDefaults.standard.stringArray(forKey: "reportSensorSync.received") ?? []
+        UserDefaults.standard.set(received.filter { key in !workoutIDs.contains(where: { key.hasPrefix($0.uuidString + "/") }) }, forKey: "reportSensorSync.received")
+        invalidateReportSensorIndex()
+    }
+
+    private var reportRetries: [UUID: Task<Void, Never>] = [:]
+    private var reportAttempts: [UUID: Int] = [:]
+    private func scheduleWorkoutReceiptRetry(_ ids: Set<UUID>) {
+        guard acceptsWorkoutReports,
+              let receiver = UserDefaults.standard.string(forKey: "workoutSync.receiver") else { return }
+        for id in ids {
+            reportRetries[id]?.cancel()
+            guard (reportAttempts[id] ?? 0) < 3 else { continue }
+            reportAttempts[id, default: 0] += 1
+            reportRetries[id] = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled, let self, self.acceptsWorkoutReports,
+                      UserDefaults.standard.string(forKey: "workoutSync.receiver") == receiver else { return }
+                self.reportRetries.removeValue(forKey: id)
+                let received = UserDefaults.standard.stringArray(forKey: "workoutSync.received") ?? []
+                guard !received.contains(id.uuidString) else { return }
+                self.submittedWorkouts.remove(id)
+                self.syncWorkouts()
+            }
         }
     }
 
@@ -165,23 +548,113 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
     @discardableResult
     private func handleWorkoutSync(_ payload: [String: Any]) -> Bool {
         guard let kind = payload["kind"] as? String,
-              kind == WorkoutSync.requestKind || kind == WorkoutSync.receiptKind else { return false }
+              kind == WorkoutSync.requestKind || kind == WorkoutSync.receiptKind ||
+              kind == WorkoutTimeline.receiptKind || kind == WorkoutReportSensors.receiptKind else { return false }
         guard let receiver = payload["receiver_id"] as? String, UUID(uuidString: receiver) != nil else { return true }
         let defaults = UserDefaults.standard
         let previous = defaults.string(forKey: "workoutSync.receiver")
+        if kind == WorkoutReportSensors.receiptKind {
+            guard previous == receiver, acceptsReportSensors,
+                  let parentText = payload["workout_id"] as? String, let parent = UUID(uuidString: parentText),
+                  DataManager.shared.workoutHistory.contains(where: { $0.id == parent && $0.workoutReport != nil }) else { return true }
+            let received = WorkoutSync.ids(payload).filter {
+                FileManager.default.fileExists(atPath: DataManager.shared.reportSensorArchive.fileURL(workoutID: parent, segmentID: $0).path)
+            }
+            var acknowledged = Set(defaults.stringArray(forKey: "reportSensorSync.received") ?? [])
+            for segment in received {
+                let key = reportSensorKey(parent, segment)
+                acknowledged.insert(key); submittedReportSensors.remove(key)
+                failedReportSensorTransfers.remove(key)
+                reportSensorRetries.removeValue(forKey: key)?.cancel(); reportSensorAttempts.removeValue(forKey: key)
+            }
+            defaults.set(Array(acknowledged), forKey: "reportSensorSync.received")
+            for transfer in WCSession.default.outstandingFileTransfers where transfer.file.metadata?["kind"] as? String == WorkoutReportSensors.fileKind && transfer.file.metadata?["workout_id"] as? String == parent.uuidString {
+                if let text = transfer.file.metadata?["id"] as? String, let id = UUID(uuidString: text), received.contains(id) { transfer.cancel() }
+            }
+            syncReportSensors()
+            return true
+        }
+        if kind == WorkoutTimeline.receiptKind {
+            guard previous == nil || previous == receiver else { return true }
+            defaults.set(receiver, forKey: "workoutSync.receiver")
+            let known = Set(DataManager.shared.workoutHistory.map(\.id))
+            let received = WorkoutSync.ids(payload).intersection(known)
+            var acknowledged = Set((defaults.stringArray(forKey: "timelineSync.received") ?? []).compactMap(UUID.init(uuidString:)))
+            acknowledged.formUnion(received)
+            defaults.set(acknowledged.map(\.uuidString), forKey: "timelineSync.received")
+            submittedTimelines.subtract(received)
+            for id in received {
+                timelineRetries.removeValue(forKey: id)?.cancel()
+                timelineAttempts.removeValue(forKey: id)
+            }
+            for transfer in WCSession.default.outstandingFileTransfers where transfer.file.metadata?["kind"] as? String == WorkoutTimeline.fileKind {
+                if let text = transfer.file.metadata?["id"] as? String, let id = UUID(uuidString: text), received.contains(id) { transfer.cancel() }
+            }
+            syncWorkoutTimelines()
+            return true
+        }
         if kind == WorkoutSync.requestKind {
-            submittedWorkouts = []
+            submittedWorkouts = []; submittedTimelines = []
+            timelineAttempts = [:]
+            timelineReadFailed = false; preparedLegacyTimelines = false
+            timelineRetries.values.forEach { $0.cancel() }; timelineRetries = [:]
+            if payload["timeline_version"] as? Int == 1 { defaults.set(receiver, forKey: "timelineSync.receiver") }
+            else if previous != receiver { defaults.removeObject(forKey: "timelineSync.receiver") }
+            if payload["workout_report_version"] as? Int == 1 {
+                defaults.set(receiver, forKey: "workoutReportSync.receiver")
+                if message == String(localized: "请更新 iPhone App 以同步训练报告") { message = "" }
+            } else {
+                defaults.removeObject(forKey: "workoutReportSync.receiver")
+                let received = Set((defaults.stringArray(forKey: "workoutSync.received") ?? []).compactMap(UUID.init(uuidString:)))
+                if DataManager.shared.workoutHistory.contains(where: {
+                    $0.workoutReport != nil && (previous != receiver || !received.contains($0.id))
+                }) { message = String(localized: "请更新 iPhone App 以同步训练报告") }
+            }
+            if payload[WorkoutReportSensors.capabilityKey] as? Int == 1, payload["workout_report_version"] as? Int == 1 {
+                defaults.set(receiver, forKey: "reportSensorSync.receiver")
+            } else { defaults.removeObject(forKey: "reportSensorSync.receiver") }
+            for transfer in WCSession.default.outstandingFileTransfers where transfer.file.metadata?["kind"] as? String == WorkoutReportSensors.fileKind {
+                if transfer.file.metadata?["receiver_id"] as? String != receiver || payload[WorkoutReportSensors.capabilityKey] as? Int != 1 || payload["workout_report_version"] as? Int != 1 { transfer.cancel() }
+            }
+            for transfer in WCSession.default.outstandingFileTransfers where transfer.file.metadata?["kind"] as? String == WorkoutSync.reportFileKind {
+                if transfer.file.metadata?["receiver_id"] as? String != receiver || payload["workout_report_version"] as? Int != 1 {
+                    transfer.cancel()
+                }
+            }
             if previous != receiver || payload["force"] as? Bool == true {
-                defaults.set([String](), forKey: "workoutSync.received")
+                if previous == receiver, let text = payload["timeline_id"] as? String, let id = UUID(uuidString: text) {
+                    // A missing phone file can be retried without replaying every workout.
+                    let received = defaults.stringArray(forKey: "timelineSync.received") ?? []
+                    defaults.set(received.filter { UUID(uuidString: $0) != id }, forKey: "timelineSync.received")
+                    let segments = defaults.stringArray(forKey: "reportSensorSync.received") ?? []
+                    defaults.set(segments.filter { !$0.hasPrefix(id.uuidString + "/") }, forKey: "reportSensorSync.received")
+                } else {
+                    defaults.set([String](), forKey: "workoutSync.received")
+                    defaults.set([String](), forKey: "timelineSync.received")
+                    defaults.set([String](), forKey: "reportSensorSync.received")
+                }
+                preparedLegacyTimelines = false
+                for transfer in WCSession.default.outstandingFileTransfers where transfer.file.metadata?["kind"] as? String == WorkoutTimeline.fileKind {
+                    if transfer.file.metadata?["receiver_id"] as? String != receiver { transfer.cancel() }
+                }
             }
             defaults.set(receiver, forKey: "workoutSync.receiver")
         } else {
             guard previous == nil || previous == receiver else { return true }
             defaults.set(receiver, forKey: "workoutSync.receiver")
-            let known = Set(DataManager.shared.workoutHistory.map(\.id))
+            let known = Set(DataManager.shared.workoutHistory.filter {
+                $0.workoutReport == nil || (acceptsWorkoutReports && payload["workout_report_version"] as? Int == 1)
+            }.map(\.id))
             var acknowledged = Set((defaults.stringArray(forKey: "workoutSync.received") ?? []).compactMap(UUID.init(uuidString:)))
             acknowledged.formUnion(WorkoutSync.ids(payload).intersection(known))
             defaults.set(acknowledged.map(\.uuidString), forKey: "workoutSync.received")
+            for id in WorkoutSync.ids(payload).intersection(known) {
+                reportRetries[id]?.cancel(); reportRetries.removeValue(forKey: id); reportAttempts.removeValue(forKey: id)
+                let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                    .appendingPathComponent("WorkoutReportOutbox").appendingPathComponent(receiver).appendingPathComponent(id.uuidString + ".plist")
+                let inFlight = WCSession.default.outstandingFileTransfers.contains { $0.file.fileURL == url }
+                if !inFlight { try? FileManager.default.removeItem(at: url) }
+            }
             for transfer in WCSession.default.outstandingUserInfoTransfers where transfer.userInfo["kind"] as? String == WorkoutSync.batchKind {
                 if WorkoutSync.ids(transfer.userInfo).isSubset(of: acknowledged) { transfer.cancel() }
             }
@@ -201,6 +674,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
     }
 
     func handle(_ message: [String: Any], reply: @escaping ([String: Any]) -> Void) async {
+        #if DEBUG
         let received = Date().timeIntervalSince1970
         guard let command = message["command"] as? String else { reply(["error": String(localized: "无效指令")]); return }
         let store = CollectionStore.shared
@@ -265,6 +739,9 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             store.finish()
             reply(["stopped": true])
         } else { reply(["error": String(localized: "未知指令")]) }
+        #else
+        reply(["error": String(localized: "无效指令")])
+        #endif
     }
 
     func startStandaloneCapture(exercise: String, notes: String) async {
@@ -343,6 +820,8 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
         let status: [String: Any] = ["id": id.uuidString, "count": CollectionStore.shared.detected,
                                    "recording": CollectionStore.shared.recording,
                                    "sample_origin": sampleOrigin ?? 0]
+        guard lastPublishedStatus != status as NSDictionary else { return }
+        lastPublishedStatus = status as NSDictionary
         try? WCSession.default.updateApplicationContext(status)
         if WCSession.default.isReachable { WCSession.default.sendMessage(status, replyHandler: nil, errorHandler: nil) }
     }

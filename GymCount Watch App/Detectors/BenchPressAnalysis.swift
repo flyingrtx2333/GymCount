@@ -234,6 +234,7 @@ final class BenchPressStream {
 // labels. A full lower/press/held return is required before emitting one event.
 final class BenchPressFeedback {
     static let version = "bench-live-top-return-20261021-v1"
+    private(set) var lastCycle: BenchCycle?
     private var last: Double?
     private var top: SIMD3<Double>?
     private var quiet: [(Double, SIMD3<Double>)] = []
@@ -246,7 +247,7 @@ final class BenchPressFeedback {
     private func norm(_ v: SIMD3<Double>) -> Double { sqrt(dot(v, v)) }
     private func angle(_ a: SIMD3<Double>, _ b: SIMD3<Double>) -> Double { acos(max(-1, min(1, dot(a, b)))) }
     private func clearPhase() {
-        top = nil; quiet = []; state = 0; velocity = 0; acceleration = 0; heldSince = nil
+        top = nil; quiet = []; state = 0; velocity = 0; acceleration = 0; heldSince = nil; lastCycle = nil
     }
     func reset() { clearPhase(); last = nil }
 
@@ -296,6 +297,7 @@ final class BenchPressFeedback {
                    span >= 0.15, min(down, up) >= 0.04 {
                     if heldSince == nil { heldSince = sample.t }
                     if sample.t - heldSince! >= 0.25 {
+                        lastCycle = BenchCycle(start: start, turn: turn, end: sample.t)
                         state = 0; velocity = 0; acceleration = 0; heldSince = nil
                         return sample.t
                     }

@@ -1,10 +1,30 @@
 import SwiftUI
 import UIKit
 
-// One semantic palette shared by records, tools and upload sheets.
+// Shipping iOS visual contract. See docs/ios-design-system.md.
 enum Studio {
-    static let inset: CGFloat = 20
+    static let inset: CGFloat = 16
     static let spacing: CGFloat = 16
+    static let wideInset: CGFloat = 28
+    static let wideSidebarInset: CGFloat = 24
+    static let wideTopInset: CGFloat = 8
+    static let controlHeight: CGFloat = 44
+    static let rowHeight: CGFloat = 68
+    static let controlRadius: CGFloat = 8
+    static let mediaRadius: CGFloat = 12
+    static let hairline: CGFloat = 0.5
+    enum Fonts {
+        static let title = Font.title2.weight(.semibold)
+        static let modalTitle = Font.title3.weight(.semibold)
+        static let section = Font.subheadline.weight(.semibold)
+        static let body = Font.subheadline
+        static let control = Font.caption.weight(.medium)
+        static let primaryAction = Font.subheadline.weight(.semibold)
+        static let metric = Font.title2.weight(.medium)
+        static let rowMetric = Font.title3.weight(.medium)
+        static let caption = Font.caption
+        static let axis = Font.caption2
+    }
     static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
         Color(uiColor: UIColor { trait in
             let hex = trait.userInterfaceStyle == .dark ? dark : light
@@ -18,6 +38,55 @@ enum Studio {
     static let accent = adaptive(0x806124, 0xD5BE86)
     static let line = adaptive(0xE4E1D7, 0x3B3B35)
     static let onAccent = adaptive(0xFFFFFF, 0x222019)
+}
+
+// All three root pages share the same title metrics and action alignment.
+// Only constrained widths and accessibility text sizes add a second row.
+struct RecordPageHeader<Actions: View>: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let title: String
+    let identifier: String
+    private let actions: Actions
+
+    init(title: String, identifier: String, @ViewBuilder actions: () -> Actions) {
+        self.title = title
+        self.identifier = identifier
+        self.actions = actions()
+    }
+
+    var body: some View {
+        Group {
+            if typeSize.isAccessibilitySize {
+                stacked
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 12) {
+                        heading.fixedSize()
+                        Spacer(minLength: 8)
+                        actions.fixedSize()
+                    }
+                    stacked
+                }
+            }
+        }.frame(maxWidth: .infinity, minHeight: Studio.controlHeight, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, Studio.inset).background(Studio.background)
+            .font(Studio.Fonts.control).foregroundStyle(Studio.ink).buttonStyle(RecordPressStyle())
+            .transaction { $0.animation = nil; $0.disablesAnimations = true }
+    }
+
+    private var stacked: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            heading
+            actions.frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    private var heading: some View {
+        Text(title).font(Studio.Fonts.title)
+            .fixedSize(horizontal: false, vertical: true).frame(minHeight: Studio.controlHeight, alignment: .leading)
+            .accessibilityAddTraits(.isHeader).accessibilityIdentifier(identifier)
+    }
 }
 
 enum RecordAppearance: String, CaseIterable {
@@ -61,9 +130,53 @@ extension ExerciseType {
 }
 
 extension View {
+    func recordCanvasSpacing(sidebar: Bool = false, wide: Bool? = nil) -> some View {
+        modifier(RecordCanvasSpacing(sidebar: sidebar, wide: wide))
+    }
     func recordListStyle() -> some View {
-        self.scrollContentBackground(.hidden).background(Studio.background).listSectionSpacing(16)
+        self.scrollContentBackground(.hidden).background(Studio.background).listSectionSpacing(Studio.spacing)
             .listRowSeparatorTint(Studio.line).tint(Studio.accent)
+    }
+    func recordSectionStyle() -> some View {
+        self.listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 8, leading: Studio.inset, bottom: 8, trailing: Studio.inset))
+    }
+}
+
+private struct RecordCanvasSpacing: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var widthClass
+    var sidebar: Bool
+    var wide: Bool?
+    func body(content: Content) -> some View {
+        let expanded = wide ?? (widthClass == .regular)
+        content
+            .padding(.horizontal, expanded ? (sidebar ? Studio.wideSidebarInset : Studio.wideInset) - Studio.inset : 0)
+            .padding(.top, expanded ? Studio.wideTopInset : 0)
+            .background(Studio.background)
+    }
+}
+
+struct RecordSectionTitle: View {
+    let title: String
+    init(_ title: String) { self.title = title }
+    var body: some View {
+        Text(title).font(Studio.Fonts.section).foregroundStyle(Studio.ink)
+            .textCase(nil).fixedSize(horizontal: false, vertical: true)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+// A missing local measurement should not dominate a populated page.
+struct RecordInlineState: View {
+    let title: String
+    let systemImage: String
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage).font(Studio.Fonts.body).accessibilityHidden(true)
+            Text(title).font(Studio.Fonts.body).fixedSize(horizontal: false, vertical: true)
+        }.foregroundStyle(Studio.muted)
+            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+            .accessibilityElement(children: .combine)
     }
 }
 
@@ -71,46 +184,45 @@ struct RecordMetric: View {
     let title: String
     let value: String
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title).font(.caption).foregroundStyle(Studio.muted)
-            Text(value).font(.title2.weight(.semibold)).monospacedDigit().foregroundStyle(Studio.ink)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(Studio.Fonts.caption).foregroundStyle(Studio.muted)
+            RecordNumberText(value: value).foregroundStyle(Studio.ink)
         }.frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
     }
 }
 
-struct RecordOverviewMetric: View {
-    let title: String
+// Keep localized values intact while giving numerals and units different emphasis.
+struct RecordNumberText: View {
     let value: String
-    var unit: String? = nil
-    @ScaledMetric(relativeTo: .title) private var numberSize: CGFloat = 24
+    var numberFont: Font = Studio.Fonts.metric
+    var unitFont: Font = Studio.Fonts.caption
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) { number; unitLabel }
-                VStack(alignment: .leading, spacing: 2) { number; unitLabel }
+    private var attributed: AttributedString {
+        var text = AttributedString(value)
+        text.font = unitFont
+        for index in text.characters.indices {
+            let character = text.characters[index]
+            if character.isNumber || ".,:٫٬".contains(character) {
+                let next = text.characters.index(after: index)
+                text[index..<next].font = numberFont
             }
-            Text(title).font(.caption).foregroundStyle(Studio.muted)
-        }.frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
+        }
+        return text
     }
-    private var number: some View {
-        Text(value).font(.system(size: numberSize, weight: .semibold, design: .rounded))
-            .monospacedDigit().foregroundStyle(Studio.ink).fixedSize(horizontal: true, vertical: false)
-    }
-    @ViewBuilder private var unitLabel: some View {
-        if let unit { Text(unit).font(.caption).foregroundStyle(Studio.muted) }
-    }
+    var body: some View { Text(attributed).monospacedDigit() }
 }
 
 // The same vector asset names are owned by shared ExerciseType and used by Watch.
 struct RecordExerciseIcon: View {
     let exercise: ExerciseType
     var size: CGFloat = 24
+    var color: Color = Studio.accent
+    @ScaledMetric(relativeTo: .body) private var textScale: CGFloat = 1
+    private var dimension: CGFloat { max(26, size) * min(1.3, max(1, textScale)) }
     var body: some View {
         Image(exercise.icon).renderingMode(.template).resizable().scaledToFit()
-            .frame(width: size, height: size).foregroundStyle(Studio.accent)
+            .frame(width: dimension, height: dimension).foregroundStyle(color)
             .accessibilityHidden(true)
     }
 }
@@ -118,9 +230,10 @@ struct RecordExerciseIcon: View {
 struct RecordExerciseLabel: View {
     let exercise: ExerciseType
     var size: CGFloat = 24
+    var color: Color = Studio.accent
     var body: some View {
         HStack(spacing: 8) {
-            RecordExerciseIcon(exercise: exercise, size: size)
+            RecordExerciseIcon(exercise: exercise, size: size, color: color)
             Text(exercise.recordName).fixedSize(horizontal: false, vertical: true)
         }.accessibilityElement(children: .combine)
     }
@@ -130,11 +243,11 @@ struct RecordFilterLabel: View {
     let title: String
     var exercise: ExerciseType? = nil
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             if let exercise { RecordExerciseIcon(exercise: exercise, size: 20) }
-            Text(title).font(.subheadline.weight(.medium))
-            Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(Studio.muted)
-        }.foregroundStyle(Studio.ink).frame(minHeight: 44).contentShape(Rectangle())
+            Text(title).font(Studio.Fonts.control).fixedSize(horizontal: false, vertical: true)
+            Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Studio.muted)
+        }.foregroundStyle(Studio.ink).frame(minWidth: Studio.controlHeight, minHeight: Studio.controlHeight).contentShape(Rectangle())
     }
 }
 
@@ -142,21 +255,25 @@ struct StudioPrimaryButton: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.headline).foregroundStyle(Studio.onAccent)
-            .padding(.horizontal, 20).frame(minHeight: 48)
-            .background(Studio.accent, in: RoundedRectangle(cornerRadius: 14))
-            .opacity(!enabled ? 0.4 : configuration.isPressed ? 0.8 : 1)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
+        configuration.label.font(Studio.Fonts.primaryAction).foregroundStyle(Studio.onAccent)
+            .padding(.horizontal, Studio.inset).frame(minHeight: Studio.controlHeight)
+            .background(Studio.accent, in: RoundedRectangle(cornerRadius: Studio.controlRadius))
+            .opacity(!enabled ? 0.4 : configuration.isPressed ? 0.76 : 1)
+            .scaleEffect(reduceMotion || !configuration.isPressed ? 1 : 0.99)
+            .animation(RecordMotion.press(reduced: reduceMotion), value: configuration.isPressed)
     }
 }
 struct StudioSecondaryButton: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.headline).foregroundStyle(Studio.accent)
-            .padding(.horizontal, 16).frame(minHeight: 44)
-            .background(Studio.surface, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Studio.line, lineWidth: 1))
-            .opacity(!enabled ? 0.4 : configuration.isPressed ? 0.7 : 1)
+        configuration.label.font(Studio.Fonts.primaryAction).foregroundStyle(Studio.accent)
+            .padding(.horizontal, Studio.inset).frame(minHeight: Studio.controlHeight)
+            .background(Studio.surface, in: RoundedRectangle(cornerRadius: Studio.controlRadius))
+            .overlay(RoundedRectangle(cornerRadius: Studio.controlRadius).stroke(Studio.line, lineWidth: Studio.hairline))
+            .opacity(!enabled ? 0.4 : configuration.isPressed ? 0.76 : 1)
+            .scaleEffect(reduceMotion || !configuration.isPressed ? 1 : 0.99)
+            .animation(RecordMotion.press(reduced: reduceMotion), value: configuration.isPressed)
     }
 }
 
@@ -179,6 +296,7 @@ func recordChartDateFormat(first: Date?, last: Date?) -> Date.FormatStyle {
 enum RecordMotion {
     static func animation(reduced: Bool) -> Animation? { reduced ? nil : .spring(duration: 0.32, bounce: 0) }
     static func row(reduced: Bool) -> AnyTransition { reduced ? .identity : .move(edge: .top).combined(with: .opacity) }
+    static func press(reduced: Bool) -> Animation? { reduced ? nil : .easeOut(duration: 0.16) }
 }
 
 struct RecordPressStyle: ButtonStyle {
@@ -187,9 +305,12 @@ struct RecordPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(Studio.accent)
+            .font(Studio.Fonts.control)
+            .frame(minWidth: Studio.controlHeight, minHeight: Studio.controlHeight)
+            .contentShape(Rectangle())
             .opacity(!enabled ? 0.4 : configuration.isPressed ? 0.76 : 1)
             .scaleEffect(reduced || !configuration.isPressed ? 1 : 0.99)
-            .animation(RecordMotion.animation(reduced: reduced), value: configuration.isPressed)
+            .animation(RecordMotion.press(reduced: reduced), value: configuration.isPressed)
     }
 }
 
@@ -200,18 +321,10 @@ struct RecordFocusOutline: ViewModifier {
     func body(content: Content) -> some View {
         content.overlay {
             if focused {
-                RoundedRectangle(cornerRadius: 8).stroke(Studio.accent, lineWidth: 1)
+                RoundedRectangle(cornerRadius: Studio.controlRadius).stroke(Studio.accent, lineWidth: 1)
                     .matchedGeometryEffect(id: "entry-focus", in: space, isSource: true)
                     .allowsHitTesting(false)
             }
         }.animation(RecordMotion.animation(reduced: reduced), value: focused)
-    }
-}
-
-extension View {
-    func recordPage(active: Bool, reduced: Bool) -> some View {
-        self.opacity(active ? 1 : 0).offset(x: active || reduced ? 0 : 18)
-            .allowsHitTesting(active).accessibilityHidden(!active)
-            .animation(RecordMotion.animation(reduced: reduced), value: active)
     }
 }

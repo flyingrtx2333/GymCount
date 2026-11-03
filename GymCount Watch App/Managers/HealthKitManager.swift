@@ -1,365 +1,182 @@
-//
-//  HealthKitManager.swift
-//  GymCount Watch App
-//
-//  Created by 向钧升 on 2025/9/26.
-//
-
 import Foundation
 import HealthKit
 import Combine
 
 class HealthKitManager: ObservableObject {
     static let shared = HealthKitManager()
-    
-    let healthStore = HKHealthStore() // 改为公共访问
+    let healthStore = HKHealthStore()
     @Published var isAuthorized = false
     @Published var authorizationStatus: HKAuthorizationStatus = .notDetermined
-    
-    private init() {
-        checkAuthorizationStatus()
-    }
-    
-    // MARK: - 权限检查
+    @Published private(set) var isSyncing = false
+    @Published private(set) var syncMessage: String?
+    private var pending: [UUID: Task<Void, Error>] = [:]
+    private var syncingBatch = false
+    @MainActor lazy var liveWorkout = LiveWorkoutMetrics(healthStore: healthStore)
+
+    private init() { checkAuthorizationStatus() }
+
     func checkAuthorizationStatus() {
-        guard HKHealthStore.isHealthDataAvailable() else {
-            print("❌ HealthKit 不可用")
-            isAuthorized = false
-            authorizationStatus = .notDetermined
-            return
-        }
-        
-        let workoutType = HKObjectType.workoutType()
-        authorizationStatus = healthStore.authorizationStatus(for: workoutType)
-        
-        // 检查所有可能的授权状态
-        print("🔍 原始授权状态: \(authorizationStatus.rawValue)")
-        print("🔍 .notDetermined: \(HKAuthorizationStatus.notDetermined.rawValue)")
-        print("🔍 .sharingDenied: \(HKAuthorizationStatus.sharingDenied.rawValue)")
-        print("🔍 .sharingAuthorized: \(HKAuthorizationStatus.sharingAuthorized.rawValue)")
-        
-        // 根据实际状态值判断是否已授权
-        isAuthorized = authorizationStatus.rawValue == 2 // 根据调试输出，2 表示已授权
-        
-        print("🔍 HealthKit 授权状态: \(authorizationStatus.rawValue), 是否已授权: \(isAuthorized)")
+        let status = HKHealthStore.isHealthDataAvailable()
+            ? healthStore.authorizationStatus(for: .workoutType()) : .notDetermined
+        authorizationStatus = status
+        isAuthorized = status == .sharingAuthorized
     }
-    
-    // MARK: - 强制刷新授权状态
-    func refreshAuthorizationStatus() {
-        checkAuthorizationStatus()
-    }
-    
-    // MARK: - 调试方法
-    func debugAuthorizationStatus() {
-        print("🔍 === HealthKit 授权状态调试信息 ===")
-        print("HealthKit 是否可用: \(HKHealthStore.isHealthDataAvailable())")
-        
-        let workoutType = HKObjectType.workoutType()
-        let currentStatus = healthStore.authorizationStatus(for: workoutType)
-        
-        print("当前授权状态: \(currentStatus.rawValue)")
-        print("状态描述: \(statusDescription(currentStatus))")
-        print("isAuthorized 属性: \(isAuthorized)")
-        print("authorizationStatus 属性: \(authorizationStatus.rawValue)")
-        print("=====================================")
-    }
-    
-    private func statusDescription(_ status: HKAuthorizationStatus) -> String {
-        switch status.rawValue {
-        case 0:
-            return "未确定"
-        case 1:
-            return "已拒绝"
-        case 2:
-            return "已授权"
-        default:
-            return "未知状态(\(status.rawValue))"
-        }
-    }
-    
-    // MARK: - 请求权限
+
+    func refreshAuthorizationStatus() { checkAuthorizationStatus() }
+    func debugAuthorizationStatus() { print("HealthKit: \(authorizationStatus.rawValue)") }
+
     func requestAuthorization() async {
-        guard HKHealthStore.isHealthDataAvailable() else {
-            print("❌ HealthKit 不可用")
-            return
-        }
-        
-        let typesToRead: Set<HKObjectType> = [
-            HKObjectType.workoutType(),
-            HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!,
-            HKObjectType.quantityType(forIdentifier: .heartRate)!,
-            HKObjectType.quantityType(forIdentifier: .bodyMass)!
-        ]
-        
-        let typesToWrite: Set<HKSampleType> = [
-            HKObjectType.workoutType(),
-            HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!,
-            HKObjectType.quantityType(forIdentifier: .heartRate)!
-        ]
-        
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let energy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!
+        let bodyMass = HKObjectType.quantityType(forIdentifier: .bodyMass)!
+        let heartRate = HKObjectType.quantityType(forIdentifier: .heartRate)!
         do {
-            try await healthStore.requestAuthorization(toShare: typesToWrite, read: typesToRead)
-            await MainActor.run {
-                checkAuthorizationStatus()
-            }
-            print("✅ HealthKit 权限请求完成")
+            try await healthStore.requestAuthorization(toShare: [.workoutType(), energy], read: [.workoutType(), energy, bodyMass, heartRate])
         } catch {
-            print("❌ HealthKit 权限请求失败: \(error)")
+            await MainActor.run { syncMessage = String(localized: "健康权限请求失败，请稍后重试") }
         }
+        await MainActor.run { checkAuthorizationStatus() }
     }
-    
-    // MARK: - 获取用户体重
+
+    @MainActor
     func getUserBodyWeight() async -> Double {
-        // 首先尝试从 HealthKit 获取最新体重数据
-        let currentStatus = healthStore.authorizationStatus(for: HKObjectType.quantityType(forIdentifier: .bodyMass)!)
-        if currentStatus.rawValue == 2 { // 2 表示已授权
-            guard let bodyMassType = HKQuantityType.quantityType(forIdentifier: .bodyMass) else {
-                print("❌ 无法创建体重类型")
-                return DataManager.shared.settings.userBodyWeight
-            }
-            
-            return await withCheckedContinuation { continuation in
-                let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
-                let query = HKSampleQuery(
-                    sampleType: bodyMassType,
-                    predicate: nil,
-                    limit: 1,
-                    sortDescriptors: [sortDescriptor]
-                ) { _, samples, error in
-                    if let error = error {
-                        print("❌ 读取体重数据失败: \(error)")
-                        continuation.resume(returning: DataManager.shared.settings.userBodyWeight)
-                        return
-                    }
-                    
-                    if let sample = samples?.first as? HKQuantitySample {
-                        let weight = sample.quantity.doubleValue(for: HKUnit.gramUnit(with: .kilo))
-                        print("✅ 从 HealthKit 获取到用户体重: \(weight) kg")
-                        continuation.resume(returning: weight)
-                    } else {
-                        print("⚠️ HealthKit 中未找到体重数据，使用设置中的体重")
-                        continuation.resume(returning: DataManager.shared.settings.userBodyWeight)
-                    }
-                }
-                
-                healthStore.execute(query)
-            }
-        } else {
-            print("⚠️ HealthKit 未授权读取体重数据，使用设置中的体重")
-            return DataManager.shared.settings.userBodyWeight
-        }
-    }
-    
-    // MARK: - 保存锻炼数据到 HealthKit
-    func saveWorkoutToHealthKit(_ workoutHistory: WorkoutHistory) async {
-        // 实时检查授权状态
-        let currentStatus = healthStore.authorizationStatus(for: HKObjectType.workoutType())
-        guard currentStatus.rawValue == 2 else { // 2 表示已授权
-            print("❌ HealthKit 未授权，无法保存锻炼数据。当前状态: \(currentStatus.rawValue)")
-            return
-        }
-        
-        // 将应用内的锻炼类型映射到 HealthKit 的锻炼类型
-        let hkWorkoutType = mapToHKWorkoutType(workoutHistory.exerciseType)
-        
-        // 计算锻炼结束时间
-        let endDate = workoutHistory.date.addingTimeInterval(workoutHistory.duration)
-        
-        // 获取用户体重
-        let userBodyWeight = await getUserBodyWeight()
-        
-        // 先计算卡路里消耗
-        let estimatedCalories = calculateEstimatedCalories(
-            reps: workoutHistory.totalReps,
-            weight: workoutHistory.maxWeight,
-            bodyWeight: userBodyWeight,
-            duration: workoutHistory.duration
-        )
-        
-        print("🔥 卡路里计算详情:")
-        print("   次数: \(workoutHistory.totalReps)")
-        print("   重量: \(workoutHistory.maxWeight) kg")
-        print("   用户体重: \(userBodyWeight) kg")
-        print("   时长: \(workoutHistory.duration) 秒")
-        print("   估算卡路里: \(String(format: "%.2f", estimatedCalories)) kcal")
-        
-        // 创建能量消耗数据
-        let energyQuantity = HKQuantity(unit: HKUnit.kilocalorie(), doubleValue: estimatedCalories)
-        
-        // 创建锻炼会话，包含能量消耗数据
-        let workout = HKWorkout(
-            activityType: hkWorkoutType,
-            start: workoutHistory.date,
-            end: endDate,
-            duration: workoutHistory.duration,
-            totalEnergyBurned: energyQuantity,
-            totalDistance: nil,
-            metadata: [
-                "app_name": "GymCount",
-                "exercise_type": workoutHistory.exerciseType.rawValue,
-                "total_reps": workoutHistory.totalReps,
-                "max_weight": workoutHistory.maxWeight
-            ]
-        )
-        
-        do {
-            try await healthStore.save(workout)
-            print("✅ 锻炼数据已保存到 HealthKit: \(workoutHistory.exerciseType.displayName)")
-            print("✅ 锻炼总能量消耗: \(estimatedCalories) 卡路里")
-            
-            // 保存额外的健康数据（活跃能量样本）
-            await saveAdditionalHealthData(for: workout, workoutHistory: workoutHistory)
-            
-        } catch {
-            print("❌ 保存锻炼数据到 HealthKit 失败: \(error)")
-        }
-    }
-    
-    // MARK: - 保存额外的健康数据
-    private func saveAdditionalHealthData(for workout: HKWorkout, workoutHistory: WorkoutHistory) async {
-        let endDate = workout.endDate
-        
-        // 使用与锻炼记录相同的卡路里值
-        let estimatedCalories = workout.totalEnergyBurned?.doubleValue(for: HKUnit.kilocalorie()) ?? 0
-        
-        // 保存活跃能量消耗样本，并关联到锻炼记录
-        if let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) {
-            let energyQuantity = HKQuantity(unit: HKUnit.kilocalorie(), doubleValue: estimatedCalories)
-            let energySample = HKQuantitySample(
-                type: energyType,
-                quantity: energyQuantity,
-                start: workout.startDate,
-                end: endDate,
-                device: nil,
-                metadata: [
-                    "HKWorkoutActivityID": workout.uuid.uuidString,
-                    "HKWorkoutActivityType": workout.workoutActivityType.rawValue
-                ]
-            )
-            
-            do {
-                try await healthStore.save(energySample)
-                print("✅ 活跃能量样本已保存: \(estimatedCalories) 卡路里")
-                print("✅ 能量样本已关联到锻炼记录: \(workout.uuid)")
-            } catch {
-                print("❌ 保存活跃能量样本失败: \(error)")
-            }
-        }
-    }
-    
-    // MARK: - 锻炼类型映射
-    private func mapToHKWorkoutType(_ exerciseType: ExerciseType) -> HKWorkoutActivityType {
-        switch exerciseType {
-        case .benchPress:
-            return .traditionalStrengthTraining
-        case .squat:
-            return .traditionalStrengthTraining
-        case .deadlift:
-            return .traditionalStrengthTraining
-        }
-    }
-    
-    // MARK: - 卡路里计算
-    /// 基于体重、负重、次数、时长估算卡路里消耗（更科学版本）
-    /// - Parameters:
-    ///   - reps: 动作次数
-    ///   - weight: 杠铃重量（kg）
-    ///   - bodyWeight: 用户体重（kg）
-    ///   - duration: 当前组持续时间（秒）
-    /// - Returns: 估算消耗的卡路里
-    private func calculateEstimatedCalories(reps: Int, weight: Double, bodyWeight: Double, duration: TimeInterval) -> Double {
-        // 基础 MET（中等强度力量训练约 5-6）
-        var met = 5.0
-        
-        // 根据负重比例（相对于体重）提升 MET
-        let intensityFactor = (weight / bodyWeight) * 1.5
-        met += intensityFactor
-        
-        // 根据次数增加微调
-        met += Double(reps) / 20.0
-        
-        // 防止异常
-        met = min(max(met, 5.0), 9.0) // 限制在合理区间 [5,9]
-        
-        // 计算时间（小时）
-        let durationHours = duration / 3600.0
-        
-        // 卡路里 = MET × 体重 × 小时
-        let calories = met * bodyWeight * durationHours
-        
-        return max(calories, 0.5) // 至少消耗0.5 kcal
-    }
-    
-    // MARK: - 读取锻炼历史
-    func readWorkoutHistory(from startDate: Date, to endDate: Date) async -> [HKWorkout] {
-        let currentStatus = healthStore.authorizationStatus(for: HKObjectType.workoutType())
-        guard currentStatus.rawValue == 2 else { // 2 表示已授权
-            print("❌ HealthKit 未授权，无法读取锻炼历史。当前状态: \(currentStatus.rawValue)")
-            return []
-        }
-        
-        let workoutType = HKObjectType.workoutType()
-        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
-        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
-        
+        let fallback = DataManager.shared.settings.userBodyWeight
+        let type = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
+        // Read permission is private; sharing authorization cannot tell us whether reads are allowed.
         return await withCheckedContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: workoutType,
-                predicate: predicate,
-                limit: HKObjectQueryNoLimit,
-                sortDescriptors: [sortDescriptor]
-            ) { _, samples, error in
-                if let error = error {
-                    print("❌ 读取锻炼历史失败: \(error)")
-                    continuation.resume(returning: [])
-                    return
-                }
-                
-                let workouts = samples as? [HKWorkout] ?? []
-                print("✅ 从 HealthKit 读取到 \(workouts.count) 条锻炼记录")
-                continuation.resume(returning: workouts)
+            let query = HKSampleQuery(sampleType: type, predicate: nil, limit: 1,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, _ in
+                let weight = (samples?.first as? HKQuantitySample)?.quantity.doubleValue(for: .gramUnit(with: .kilo))
+                continuation.resume(returning: weight.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? fallback)
             }
-            
             healthStore.execute(query)
         }
     }
-    
-    // MARK: - 同步数据
-    func syncWorkoutHistory(_ workoutHistory: [WorkoutHistory]) async {
-        let currentStatus = healthStore.authorizationStatus(for: HKObjectType.workoutType())
-        guard currentStatus.rawValue == 2 else { // 2 表示已授权
-            print("❌ HealthKit 未授权，无法同步数据。当前状态: \(currentStatus.rawValue)")
-            return
+
+    @MainActor @discardableResult
+    func saveWorkoutToHealthKit(_ history: WorkoutHistory) async -> Bool {
+        // Whole-training energy is collected by HKLiveWorkoutBuilder. Never re-export it
+        // through the legacy calorie estimator, even if HealthKit read access is denied.
+        if let report = history.workoutReport { return report.healthWorkoutID != nil }
+        if let task = pending[history.id] { return (try? await task.value) != nil }
+        checkAuthorizationStatus()
+        guard isAuthorized else {
+            syncMessage = String(localized: "请先允许写入体能训练")
+            return false
         }
-        
-        print("🔄 开始同步 \(workoutHistory.count) 条锻炼记录到 HealthKit")
-        
-        for workout in workoutHistory {
-            await saveWorkoutToHealthKit(workout)
-            // 添加小延迟避免过于频繁的请求
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
+        let task = Task { try await writeWorkout(history) }
+        pending[history.id] = task
+        isSyncing = true
+        defer {
+            pending[history.id] = nil
+            isSyncing = syncingBatch || !pending.isEmpty
         }
-        
-        print("✅ 锻炼记录同步完成")
+        do {
+            try await task.value
+            if !syncingBatch { syncMessage = String(localized: "已同步到健康") }
+            return true
+        } catch {
+            syncMessage = String(localized: "健康同步失败，请重试")
+            return false
+        }
     }
-    
-    // MARK: - 检查特定锻炼是否已存在
-    func checkWorkoutExists(_ workoutHistory: WorkoutHistory) async -> Bool {
-        let currentStatus = healthStore.authorizationStatus(for: HKObjectType.workoutType())
-        guard currentStatus.rawValue == 2 else { // 2 表示已授权
-            print("❌ HealthKit 未授权，无法检查锻炼记录。当前状态: \(currentStatus.rawValue)")
-            return false 
+
+    @MainActor
+    func syncWorkoutHistory(_ history: [WorkoutHistory]) async {
+        guard !syncingBatch else { return }
+        syncingBatch = true; isSyncing = true
+        syncMessage = String(localized: "正在同步到健康…")
+        var failed = 0
+        for workout in history {
+            if !(await saveWorkoutToHealthKit(workout)) { failed += 1 }
         }
-        
-        let startDate = workoutHistory.date
-        let endDate = startDate.addingTimeInterval(workoutHistory.duration)
-        
-        let workouts = await readWorkoutHistory(from: startDate, to: endDate)
-        
-        // 检查是否有相同时间段的锻炼记录
-        return workouts.contains { workout in
-            let timeDiff = abs(workout.startDate.timeIntervalSince(startDate))
-            return timeDiff < 60 // 1分钟内的差异认为是同一次锻炼
+        syncingBatch = false; isSyncing = !pending.isEmpty
+        if failed > 0 { syncMessage = String(localized: "\(failed) 条记录未同步，请重试") }
+        else { syncMessage = String(localized: "已同步 \(history.count) 条记录") }
+    }
+
+    private static func syncIdentifier(_ id: UUID, energy: Bool = false) -> String {
+        "com.flyingrtx.GymCount.\(energy ? "energy" : "workout").\(id.uuidString)"
+    }
+
+    private func samples(_ type: HKSampleType, predicate: NSPredicate) async throws -> [HKSample] {
+        try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+                if let error { continuation.resume(throwing: error) }
+                else { continuation.resume(returning: samples ?? []) }
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    private func existingWorkout(_ history: WorkoutHistory) async throws -> HKWorkout? {
+        let identifier = Self.syncIdentifier(history.id)
+        let stable = HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier, allowedValues: [identifier])
+        let owned = HKQuery.predicateForObjects(from: HKSource.default())
+        let interval = HKQuery.predicateForSamples(withStart: history.date.addingTimeInterval(-1), end: history.date.addingTimeInterval(1), options: .strictStartDate)
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [owned, NSCompoundPredicate(orPredicateWithSubpredicates: [stable, interval])])
+        let workouts = try await samples(.workoutType(), predicate: predicate).compactMap { $0 as? HKWorkout }
+        if let existing = workouts.first(where: { $0.metadata?[HKMetadataKeySyncIdentifier] as? String == identifier }) { return existing }
+        // Preserve exact app-owned exports from releases that predate stable identifiers.
+        return workouts.first {
+            $0.metadata?[HKMetadataKeySyncIdentifier] == nil &&
+            abs($0.startDate.timeIntervalSince(history.date)) < 0.001 && abs($0.duration - history.duration) < 0.001 &&
+            $0.metadata?["exercise_type"] as? String == history.exerciseType.rawValue &&
+            ($0.metadata?["total_reps"] as? NSNumber)?.intValue == history.totalReps &&
+            ($0.metadata?["max_weight"] as? NSNumber)?.doubleValue == history.maxWeight
+        }
+    }
+
+    @MainActor
+    private func writeWorkout(_ history: WorkoutHistory) async throws {
+        let existing = try await existingWorkout(history)
+        // The live builder already persisted the workout and its real energy samples.
+        if (existing?.metadata?["whole_workout"] as? NSNumber)?.boolValue == true { return }
+        let workout: HKWorkout
+        if let existing { workout = existing }
+        else {
+            let bodyWeight = await getUserBodyWeight()
+            let calories = calculateEstimatedCalories(reps: history.totalReps, weight: history.maxWeight, bodyWeight: bodyWeight, duration: history.duration)
+            workout = HKWorkout(activityType: mapToHKWorkoutType(history.exerciseType), start: history.date,
+                end: history.date.addingTimeInterval(history.duration), duration: history.duration,
+                totalEnergyBurned: HKQuantity(unit: .kilocalorie(), doubleValue: calories), totalDistance: nil,
+                metadata: [HKMetadataKeySyncIdentifier: Self.syncIdentifier(history.id), HKMetadataKeySyncVersion: 1,
+                    "app_name": "GymCount", "exercise_type": history.exerciseType.rawValue,
+                    "total_reps": history.totalReps, "max_weight": history.maxWeight])
+            try await healthStore.save(workout)
+        }
+        let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!
+        let identifier = Self.syncIdentifier(history.id, energy: true)
+        let energyPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForObjects(from: HKSource.default()),
+            NSCompoundPredicate(orPredicateWithSubpredicates: [
+                HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier, allowedValues: [identifier]),
+                HKQuery.predicateForObjects(withMetadataKey: "HKWorkoutActivityID", allowedValues: [workout.uuid.uuidString])])])
+        let existingEnergy = try await samples(energyType, predicate: energyPredicate)
+        if let sample = existingEnergy.first {
+            try await healthStore.addSamples([sample], to: workout)
+        } else {
+            let energy = HKQuantitySample(type: energyType,
+                quantity: workout.totalEnergyBurned ?? HKQuantity(unit: .kilocalorie(), doubleValue: 0),
+                start: workout.startDate, end: workout.endDate, metadata: [
+                    HKMetadataKeySyncIdentifier: identifier, HKMetadataKeySyncVersion: 1,
+                    "HKWorkoutActivityID": workout.uuid.uuidString])
+            try await healthStore.addSamples([energy], to: workout)
+        }
+    }
+
+    private func calculateEstimatedCalories(reps: Int, weight: Double, bodyWeight: Double, duration: TimeInterval) -> Double {
+        var met = 5.0
+        met += (weight / bodyWeight) * 1.5
+        met += Double(reps) / 20.0
+        met = min(max(met, 5.0), 9.0)
+        let durationHours = duration / 3600.0
+        return max(met * bodyWeight * durationHours, 0.5)
+    }
+
+    private func mapToHKWorkoutType(_ exercise: ExerciseType) -> HKWorkoutActivityType {
+        switch exercise {
+        case .benchPress, .squat, .deadlift: return .traditionalStrengthTraining
         }
     }
 }

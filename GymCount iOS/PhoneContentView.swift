@@ -1,49 +1,5 @@
 import SwiftUI
 
-struct RecordFilter: Equatable, Codable {
-    enum Period: String, CaseIterable, Codable { case week, month, quarter, all, custom
-        var title: String { switch self {
-            case .week: String(localized: "近7天")
-            case .month: String(localized: "近30天")
-            case .quarter: String(localized: "近90天")
-            case .all: String(localized: "全部时间")
-            case .custom: String(localized: "自定义日期")
-        } }
-    }
-    var exercise: ExerciseType?
-    var period = Period.all
-    var start = Calendar.current.startOfDay(for: Date())
-    var end = Date()
-    mutating func select(_ interval: DateInterval) {
-        start = interval.start; end = min(interval.end.addingTimeInterval(-1), Date()); period = .custom
-    }
-    func includes(_ item: PhoneTrainingSession) -> Bool {
-        (exercise == nil || item.exercises.contains(exercise!)) && includes(item.startTime)
-    }
-    func includes(_ date: Date) -> Bool {
-        let calendar = Calendar.current
-        switch period {
-        case .all: return true
-        case .custom:
-            return date >= calendar.startOfDay(for: start) && date < calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: end))!
-        default:
-            let days = period == .week ? 6 : period == .month ? 29 : 89
-            return date >= calendar.date(byAdding: .day, value: -days, to: calendar.startOfDay(for: Date()))! && date <= Date()
-        }
-    }
-    var rangeTitle: String {
-        period == .custom ? start.formatted(date: .abbreviated, time: .omitted) + " – " + end.formatted(date: .abbreviated, time: .omitted) : period.title
-    }
-    func reps(_ item: PhoneTrainingSession) -> Int {
-        guard let exercise, !item.isSummary else { return item.totalReps }
-        return item.sets.filter { $0.exercise == exercise }.reduce(0) { $0 + $1.reps }
-    }
-    func weight(_ item: PhoneTrainingSession) -> Double {
-        guard let exercise, !item.isSummary else { return item.maxWeight }
-        return item.sets.filter { $0.exercise == exercise }.map(\.weight).max() ?? 0
-    }
-}
-
 struct RecordDateRequest: Identifiable {
     let id = UUID()
     let singleDay: Bool
@@ -86,6 +42,7 @@ struct PhoneContentView: View {
     #endif
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.horizontalSizeClass) private var widthClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("records.appearance") private var appearance = RecordAppearance.system.rawValue
     @AppStorage("records.history") private var savedHistory = Data()
@@ -94,7 +51,8 @@ struct PhoneContentView: View {
     @State private var restoredHistory = false
     @State private var rangeOrigin: RecordFilter?
     @State private var rangeDestination: RecordFilter?
-    @State private var path: [UUID] = []
+    @State private var selectedRecordID: UUID?
+    @State private var preferredHistoryColumn = NavigationSplitViewColumn.sidebar
     @State private var editor: RecordEditorDraft?
     @State private var selected: Set<UUID> = []
     @State private var editMode = EditMode.inactive
@@ -103,6 +61,7 @@ struct PhoneContentView: View {
     @State private var dateRequest: RecordDateRequest?
     #if GYMCOUNT_SYNC
     @State private var showingSync = false
+    @AppStorage("records.watch-setup-dismissed") private var watchSetupDismissed = false
     #endif
 
     private var filtered: [PhoneTrainingSession] { store.history.filter(filter.includes) }
@@ -111,17 +70,18 @@ struct PhoneContentView: View {
     }
     var body: some View {
         TabView(selection: $tab) {
-            history.recordPage(active: tab == 1, reduced: reduceMotion).tag(1)
+            history
+                .tabItem { Label(String(localized: "记录"), systemImage: "list.bullet.rectangle") }.tag(1)
             RecordTrendsView { exercise, interval in
                 openRange(interval, exercise: exercise)
-                path = []; tab = 1
-            }.recordPage(active: tab == 3, reduced: reduceMotion).tag(3)
+                selectedRecordID = nil; preferredHistoryColumn = .sidebar; tab = 1
+            }
+            .tabItem { Label(String(localized: "趋势"), systemImage: "chart.xyaxis.line") }.tag(3)
             RecordSettingsView(records: filtered, filter: filter)
-                .recordPage(active: tab == 2, reduced: reduceMotion).tag(2)
+                .tabItem { Label(String(localized: "设置"), systemImage: "gearshape") }.tag(2)
         }
-        .toolbar(.hidden, for: .tabBar)
+        .toolbarBackground(Studio.background, for: .tabBar)
         .background(Studio.background)
-        .safeAreaInset(edge: .bottom, spacing: 0) { tabs }
         .tint(Studio.accent).foregroundStyle(Studio.ink)
         .preferredColorScheme(RecordAppearance(rawValue: appearance)?.scheme)
         .onAppear {
@@ -143,9 +103,21 @@ struct PhoneContentView: View {
             if restoredHistory { savedHistory = RecordViewPreferences(filter: filter, previousFilter: rangeOrigin).data }
         }
         .onChange(of: store.history.map(\.id)) { _, ids in
-            selected.formIntersection(ids); path.removeAll { !ids.contains($0) }
+            selected.formIntersection(ids)
+            if let id = selectedRecordID, !ids.contains(id) { selectedRecordID = nil; preferredHistoryColumn = .sidebar }
         }
         .sheet(item: $editor) { draft in RecordEditorView(initial: draft) { if draft.recordID == nil { filter = RecordFilter() } } }
+        #if GYMCOUNT_SYNC
+        .sheet(isPresented: $showingSync) {
+            NavigationStack {
+                RecordSyncView().toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(String(localized: "完成")) { showingSync = false }.accessibilityIdentifier("sync-close")
+                    }
+                }
+            }
+        }
+        #endif
         .sheet(item: $dateRequest) { request in
             RecordDateSheet(singleDay: request.singleDay, apply: { start, end in
                 filter.start = start; filter.end = end; filter.period = .custom
@@ -164,27 +136,27 @@ struct PhoneContentView: View {
         if rows.count == 1 { return first.exercises.map(\.recordName).joined(separator: " · ") + " · " + first.startTime.formatted(date: .abbreviated, time: .shortened) }
         return String(localized: "\(rows.count) 条记录") + "\n" + first.startTime.formatted(date: .abbreviated, time: .omitted) + " – " + last.startTime.formatted(date: .abbreviated, time: .omitted)
     }
-    private var tabs: some View {
-        HStack(spacing: 0) {
-            tabButton(1, String(localized: "记录"), "list.bullet.rectangle")
-            tabButton(3, String(localized: "趋势"), "chart.xyaxis.line")
-            tabButton(2, String(localized: "设置"), "gearshape")
-        }.padding(.horizontal, 10).padding(.top, 5).background(Studio.background)
-            .overlay(alignment: .top) { Rectangle().fill(Studio.line).frame(height: 0.5) }
-    }
-    private func tabButton(_ id: Int, _ title: String, _ icon: String) -> some View {
-        Button { tab = id } label: {
-            VStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 21))
-                if !typeSize.isAccessibilitySize { Text(title).font(.caption2) }
-            }.foregroundStyle(tab == id ? Studio.accent : Studio.muted)
-                .frame(maxWidth: .infinity, minHeight: 54).contentShape(Rectangle())
-        }.buttonStyle(RecordPressStyle()).accessibilityLabel(title)
-            .accessibilityIdentifier("tab-\(id)")
-            .accessibilityAddTraits(tab == id ? [.isSelected] : [])
-    }
     private var history: some View {
-        NavigationStack(path: $path) {
+        NavigationSplitView(preferredCompactColumn: $preferredHistoryColumn) {
+            historyContent
+                .navigationSplitViewColumnWidth(ideal: 352)
+        } detail: {
+            NavigationStack {
+                if let id = selectedRecordID {
+                    RecordDetailView(id: id, edit: { openEditor($0) }, delete: { askDelete([$0.id]) })
+                        .id(id)
+                        .recordCanvasSpacing(wide: widthClass == .regular)
+                } else {
+                    ContentUnavailableView(String(localized: "选择训练记录"), systemImage: "list.bullet.rectangle")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity).background(Studio.background)
+                        .accessibilityIdentifier("record-detail-empty")
+                }
+            }
+            .toolbar(.visible, for: .navigationBar)
+        }
+        .navigationSplitViewStyle(.balanced)
+    }
+    private var historyContent: some View {
             VStack(spacing: 0) {
                 historyHeader
                 if !typeSize.isAccessibilitySize { filters }
@@ -196,31 +168,47 @@ struct PhoneContentView: View {
                                 .listRowSeparator(.hidden).listRowBackground(Color.clear)
                                 .id("record-filters")
                         }
-                        (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 4))) {
-                            Text(String(localized: "\(filtered.count) 条记录"))
-                            if !typeSize.isAccessibilitySize { Text("·") }
-                            Text(String(localized: "\(filtered.reduce(0) { $0 + filter.reps($1) }) 次"))
-                        }.font(.subheadline).foregroundStyle(Studio.muted)
-                            .listRowSeparator(.hidden).listRowBackground(Color.clear)
-                            .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 6, trailing: 20))
-                            .id("record-overview").accessibilityIdentifier("record-summary")
-                        if !filtered.isEmpty && !editMode.isEditing {
-                            RecordTimeChart(records: filtered, filter: filter) { interval in
-                                withAnimation(RecordMotion.animation(reduced: reduceMotion)) {
-                                    if Calendar.current.dateComponents([.day], from: interval.start, to: interval.end).day == 1 {
-                                        proxy.scrollTo(Calendar.current.startOfDay(for: interval.start), anchor: .top)
-                                    } else {
-                                        openRange(interval)
-                                        proxy.scrollTo("record-overview", anchor: .top)
-                                    }
+                        TimelineView(.periodic(from: .now, by: 60)) { context in
+                            ViewThatFits(in: .horizontal) {
+                                HStack {
+                                    Text(String(localized: "\(filtered.count) 条记录"))
+                                        .accessibilityIdentifier("record-summary")
+                                    Spacer(minLength: 12)
+                                    trainingStreak(at: context.date)
+                                }
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(String(localized: "\(filtered.count) 条记录"))
+                                        .accessibilityIdentifier("record-summary")
+                                    trainingStreak(at: context.date)
                                 }
                             }
-                            .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 16, trailing: 20))
+                        }.font(Studio.Fonts.caption).foregroundStyle(Studio.muted)
                             .listRowSeparator(.hidden).listRowBackground(Color.clear)
-                        }
+                            .listRowInsets(EdgeInsets(top: 6, leading: Studio.inset, bottom: 2, trailing: Studio.inset))
+                            .id("record-overview")
                         if let error = store.storageError {
-                            Text(error).font(.footnote).foregroundStyle(.red).listRowBackground(Color.clear)
+                            Text(error).font(Studio.Fonts.caption).foregroundStyle(.red).listRowBackground(Color.clear)
+                            if store.requiresRecovery {
+                                Button(String(localized: "恢复备份")) { tab = 2 }
+                                    .listRowBackground(Color.clear).accessibilityIdentifier("records-recover-storage")
+                            }
                         }
+                        #if GYMCOUNT_SYNC
+                        if !store.history.isEmpty, !watchSetupDismissed,
+                           capture.watchSetupState == .unpaired || capture.watchSetupState == .notInstalled {
+                            HStack(alignment: .top, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(String(localized: "自动计数需要 Apple Watch")).font(Studio.Fonts.section)
+                                    Button(String(localized: "设置手表")) { showingSync = true }
+                                        .frame(minHeight: Studio.controlHeight).accessibilityIdentifier("watch-setup-open")
+                                }
+                                Spacer(minLength: 0)
+                                Button { watchSetupDismissed = true } label: {
+                                    Image(systemName: "xmark").frame(width: Studio.controlHeight, height: Studio.controlHeight)
+                                }.accessibilityLabel(String(localized: "关闭")).accessibilityIdentifier("watch-setup-dismiss")
+                            }.listRowBackground(Color.clear).listRowSeparator(.hidden)
+                        }
+                        #endif
                         if !store.editorDrafts.isEmpty {
                             Section(String(localized: "草稿")) {
                                 ForEach(store.editorDrafts) { draft in
@@ -230,30 +218,57 @@ struct PhoneContentView: View {
                                             Text(draft.recordID == nil ? String(localized: "补记训练") : String(localized: "编辑记录"))
                                             Spacer()
                                             Text(draft.date, format: .dateTime.month().day()).foregroundStyle(Studio.muted)
-                                        }.frame(minHeight: 44).contentShape(Rectangle())
+                                        }.frame(minHeight: Studio.controlHeight).contentShape(Rectangle())
                                     }.accessibilityIdentifier("resume-record-draft")
                                 }
                             }.listRowBackground(Color.clear)
                         }
-                        if filtered.isEmpty {
-                            ContentUnavailableView {
-                                Label(String(localized: "暂无记录"), systemImage: "list.bullet.rectangle")
-                            } actions: {
-                                if !store.history.isEmpty { Button(String(localized: "清除筛选")) { filter = RecordFilter() } }
-                                Button(String(localized: "补记训练")) { openEditor() }.buttonStyle(.bordered)
-                            }.listRowBackground(Color.clear).listRowSeparator(.hidden)
+                        if filtered.isEmpty && !store.requiresRecovery {
+                            VStack(spacing: 8) {
+                                if store.history.isEmpty {
+                                #if GYMCOUNT_SYNC
+                                    if capture.watchSetupState == .ready {
+                                        Text(String(localized: "暂无记录，在 Apple Watch 上开始训练"))
+                                    } else {
+                                        Button(String(localized: "暂无记录，设置 Apple Watch 后开始记录")) { showingSync = true }
+                                            .buttonStyle(.plain).frame(minHeight: Studio.controlHeight)
+                                            .accessibilityIdentifier("watch-setup-open")
+                                    }
+                                #else
+                                    Text(String(localized: "暂无记录"))
+                                #endif
+                                } else {
+                                    Text(String(localized: "暂无记录"))
+                                    Button(String(localized: "清除筛选")) { filter = RecordFilter() }
+                                }
+                            }.font(Studio.Fonts.body).foregroundStyle(Studio.muted)
+                                .multilineTextAlignment(.center).frame(maxWidth: .infinity, minHeight: 120)
+                                .listRowBackground(Color.clear).listRowSeparator(.hidden)
                         }
                         ForEach(groups, id: \.0) { day, rows in
-                            Text(recordDate(day)).font(.subheadline.weight(.semibold)).foregroundStyle(Studio.ink)
-                                .padding(.top, 10).padding(.bottom, 6).frame(minHeight: 36)
-                                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+                            Text(recordDate(day)).font(Studio.Fonts.section).foregroundStyle(Studio.muted)
+                                .padding(.top, 14).padding(.bottom, 6).frame(minHeight: 36)
+                                .listRowInsets(EdgeInsets(top: 0, leading: Studio.inset, bottom: 0, trailing: Studio.inset))
                                 .listRowSeparator(.hidden).listRowBackground(Color.clear)
                                 .id(day)
                             ForEach(rows) { item in
-                                NavigationLink(value: item.id) { RecordRow(item: item, filter: filter) }
-                                    .buttonStyle(.automatic).accessibilityIdentifier("history-record").tag(item.id)
-                                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-                                    .listRowBackground(Color.clear)
+                                Group {
+                                    if editMode.isEditing {
+                                        RecordRow(item: item, filter: filter)
+                                    } else {
+                                        Button {
+                                            selectedRecordID = item.id; preferredHistoryColumn = .detail
+                                        } label: {
+                                            HStack(spacing: 8) {
+                                                RecordRow(item: item, filter: filter).frame(maxWidth: .infinity)
+                                                Image(systemName: "chevron.right").font(Studio.Fonts.axis).foregroundStyle(Studio.muted)
+                                            }.contentShape(Rectangle())
+                                        }.buttonStyle(.plain)
+                                    }
+                                }
+                                    .accessibilityIdentifier("history-record").tag(item.id)
+                                    .listRowInsets(EdgeInsets(top: 0, leading: Studio.inset, bottom: 0, trailing: Studio.inset))
+                                    .listRowBackground(widthClass == .regular && selectedRecordID == item.id && !editMode.isEditing ? Studio.accent.opacity(0.10) : Color.clear)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                         Button(String(localized: "删除"), role: .destructive) { askDelete([item.id]) }
                                         Button(String(localized: "编辑")) { openEditor(item) }.tint(Studio.accent)
@@ -275,32 +290,31 @@ struct PhoneContentView: View {
                         .refreshable { capture.requestWorkoutHistory(force: true) }
                         #endif
                 }
-            }.background(Studio.background)
-                .toolbar(.hidden, for: .navigationBar, .tabBar)
-                #if GYMCOUNT_SYNC
-                .navigationDestination(isPresented: $showingSync) {
-                    RecordSyncView().toolbar(.visible, for: .navigationBar)
-                }
-                #endif
-                .navigationDestination(for: UUID.self) { id in
-                    RecordDetailView(id: id, edit: { openEditor($0) }, delete: { askDelete([$0.id]) })
-                        .toolbar(.visible, for: .navigationBar)
-                }
-        }
+            }.recordCanvasSpacing(sidebar: true, wide: widthClass == .regular).background(Studio.background)
+            .navigationTitle(String(localized: "记录"))
+            .toolbar(.hidden, for: .navigationBar)
+    }
+    private func trainingStreak(at date: Date) -> some View {
+        let streak = TrainingStreak(dates: store.trainingDates, now: date)
+        return Label(String(localized: "连续 \(streak.current) 天"), systemImage: "flame")
+            .foregroundStyle(streak.current > 0 ? Studio.accent : Studio.muted)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "连续 \(streak.current) 天"))
+            .accessibilityIdentifier("records-streak")
     }
     private var historyHeader: some View {
-        HStack(spacing: 8) {
-            Text(String(localized: "训练记录")).font(.title2.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            if !typeSize.isAccessibilitySize { historyActions }
-            if !editMode.isEditing {
-                Button { openEditor() } label: {
-                    Image(systemName: "plus").font(.system(size: 20, weight: .medium))
-                        .frame(width: 44, height: 44)
-                }.accessibilityLabel(String(localized: "补记训练")).accessibilityIdentifier("add-record")
+        RecordPageHeader(title: String(localized: "训练记录"), identifier: "records-heading") {
+            HStack(spacing: 8) {
+                historyActions
+                if !editMode.isEditing {
+                    Button { openEditor() } label: {
+                        Image(systemName: "plus").font(.system(size: 20, weight: .medium))
+                            .frame(width: Studio.controlHeight, height: Studio.controlHeight)
+                    }.accessibilityLabel(String(localized: "补记训练")).accessibilityIdentifier("add-record")
+                        .disabled(store.requiresRecovery)
+                }
             }
-        }.font(.subheadline).buttonStyle(RecordPressStyle()).padding(.horizontal, 20)
-            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+        }
     }
     @ViewBuilder private var historyActions: some View {
         if !filtered.isEmpty {
@@ -308,22 +322,19 @@ struct PhoneContentView: View {
                 withAnimation(RecordMotion.animation(reduced: reduceMotion)) {
                     editMode = editMode.isEditing ? .inactive : .active; selected = []
                 }
-            }.frame(minHeight: 44).accessibilityIdentifier("record-select")
+            }.frame(minHeight: Studio.controlHeight).foregroundStyle(editMode.isEditing ? Studio.accent : Studio.muted)
+                .accessibilityIdentifier("record-select")
         }
         #if GYMCOUNT_SYNC
         if !editMode.isEditing {
             Button { showingSync = true } label: {
-                Image(systemName: capture.workoutSyncState.symbol).font(.system(size: 20)).frame(width: 44, height: 44)
+                Image(systemName: capture.workoutSyncState.symbol).font(.system(size: 20)).frame(width: Studio.controlHeight, height: Studio.controlHeight)
             }.accessibilityLabel(capture.workoutSyncState.title).accessibilityIdentifier("history-sync-workouts")
         }
         #endif
     }
     private var filters: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if typeSize.isAccessibilitySize {
-                HStack(spacing: 8) { historyActions; Spacer(minLength: 0) }
-                    .font(.subheadline).padding(.horizontal, 20)
-            }
             if filter.period == .custom && !editMode.isEditing {
                 if rangeOrigin != nil {
                     let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0)) : AnyLayout(HStackLayout(spacing: 12))
@@ -333,52 +344,50 @@ struct PhoneContentView: View {
                             rangeOrigin = nil; rangeDestination = nil; filter = original
                         } label: {
                             Label(String(localized: "返回原范围"), systemImage: "arrow.uturn.backward")
-                                .fixedSize(horizontal: false, vertical: true).frame(minHeight: 44)
+                                .fixedSize(horizontal: false, vertical: true).frame(minHeight: Studio.controlHeight)
                         }.accessibilityIdentifier("record-return-range")
                         Text(filter.rangeTitle).foregroundStyle(Studio.muted).fixedSize(horizontal: false, vertical: true)
-                    }.font(.caption).padding(.horizontal, 20)
+                    }.font(Studio.Fonts.caption).padding(.horizontal, Studio.inset)
                 } else {
-                    Text(filter.rangeTitle).font(.caption).foregroundStyle(Studio.muted).padding(.horizontal, 20).padding(.top, 6)
+                    Text(filter.rangeTitle).font(Studio.Fonts.caption).foregroundStyle(Studio.muted).padding(.horizontal, Studio.inset).padding(.top, 6)
                 }
             }
             if editMode.isEditing {
                 HStack {
-                    Button(String(localized: "全选")) { selected = Set(filtered.map(\.id)) }.frame(minHeight: 44)
+                    Button(String(localized: "全选")) { selected = Set(filtered.map(\.id)) }.frame(minHeight: Studio.controlHeight)
                     Spacer()
-                    Text(String(localized: "\(selected.count) 条记录")).font(.subheadline).foregroundStyle(Studio.muted)
+                    Text(String(localized: "\(selected.count) 条记录")).font(Studio.Fonts.body).foregroundStyle(Studio.muted)
                     Button(role: .destructive) { askDelete(selected) } label: {
-                        Image(systemName: "trash").foregroundStyle(.red).frame(width: 44, height: 44)
+                        Image(systemName: "trash").foregroundStyle(.red).frame(width: Studio.controlHeight, height: Studio.controlHeight)
                     }.disabled(selected.isEmpty).accessibilityLabel(String(localized: "删除所选记录"))
-                }.padding(.horizontal, 20)
+                }.padding(.horizontal, Studio.inset)
             } else {
-                let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
+                let layout = typeSize >= .xxLarge ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
                 layout {
                     Menu {
                         Picker(String(localized: "动作"), selection: $filter.exercise) {
                             Text(String(localized: "全部动作")).tag(Optional<ExerciseType>.none)
                             ForEach(ExerciseType.allCases, id: \.self) { Label($0.recordName, image: $0.icon).tag(Optional($0)) }
                         }
-                    } label: { RecordFilterLabel(title: filter.exercise?.recordName ?? String(localized: "全部动作"), exercise: filter.exercise).frame(maxWidth: .infinity) }
+                    } label: { RecordFilterLabel(title: filter.exercise?.recordName ?? String(localized: "全部动作"), exercise: filter.exercise).frame(maxWidth: .infinity, alignment: .leading) }
                         .accessibilityIdentifier("record-exercise-filter")
-                    if !typeSize.isAccessibilitySize { Divider().frame(height: 20) }
                     Menu {
                         ForEach([RecordFilter.Period.week, .month, .all], id: \.self) { period in Button(period.title) { filter.period = period } }
                         Button(String(localized: "自定义日期")) { dateRequest = RecordDateRequest(singleDay: false, start: filter.start, end: filter.end) }
-                    } label: { RecordFilterLabel(title: filter.period.title).frame(maxWidth: .infinity) }
+                    } label: { RecordFilterLabel(title: filter.period.title).frame(maxWidth: .infinity, alignment: .leading) }
                         .accessibilityIdentifier("record-period-filter")
-                    if !typeSize.isAccessibilitySize { Divider().frame(height: 20) }
                     Button { dateRequest = RecordDateRequest(singleDay: true, start: filter.start, end: filter.end) } label: {
-                        Image(systemName: "calendar").font(.system(size: 18)).frame(width: 44, height: 44)
+                        Image(systemName: "calendar").font(.system(size: 18)).frame(width: Studio.controlHeight, height: Studio.controlHeight)
                     }.accessibilityLabel(String(localized: "选择日期"))
-                }.padding(.horizontal, 12)
+                }.padding(.horizontal, Studio.inset)
             }
-        }.buttonStyle(RecordPressStyle()).padding(.vertical, 5).background(Studio.background)
-            .overlay(alignment: .bottom) { Rectangle().fill(Studio.line).frame(height: 0.5) }
+        }.buttonStyle(RecordPressStyle()).padding(.vertical, 2).background(Studio.background)
+            .overlay(alignment: .bottom) { Rectangle().fill(Studio.line).frame(height: Studio.hairline) }
     }
     private func askDelete(_ ids: Set<UUID>) { deletionIDs = ids; confirmingDelete = !ids.isEmpty }
-    private func openRange(_ interval: DateInterval, exercise: ExerciseType? = nil) {
+    private func openRange(_ interval: DateInterval, exercise: ExerciseType?) {
         var destination = filter
-        if let exercise { destination.exercise = exercise }
+        destination.exercise = exercise
         destination.select(interval)
         guard destination != filter else { return }
         if rangeOrigin == nil { rangeOrigin = filter }
@@ -391,7 +400,7 @@ struct PhoneContentView: View {
         var draft = RecordEditorDraft(recordID: record?.id, date: record?.startTime ?? Date(), sets: record?.sets.map(RecordSetDraft.init) ?? [RecordSetDraft(exercise: exercise, weight: store.suggestedWeight(for: exercise).map { $0.formatted(.number.grouping(.never)) } ?? "")])
         draft.duration = record?.recordedDuration.map { ($0 / 60).formatted(.number.grouping(.never)) } ?? ""
         draft.summaryReps = record.map { String($0.totalReps) } ?? ""
-        draft.summaryWeight = record.map { $0.maxWeight.formatted(.number.grouping(.never)) } ?? ""
+        draft.summaryWeight = record.flatMap { $0.hasKnownWeight ? $0.maxWeight.formatted(.number.grouping(.never)) : nil } ?? ""
         draft.note = record?.note ?? ""; editor = draft
     }
 }
@@ -401,26 +410,31 @@ struct RecordRow: View {
     let item: PhoneTrainingSession
     var filter = RecordFilter()
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline))) {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(item.exercises.filter { filter.exercise == nil || $0 == filter.exercise }, id: \.self) { exercise in
-                        RecordExerciseLabel(exercise: exercise, size: 26)
+                        RecordExerciseLabel(exercise: exercise, size: 30, color: Studio.ink)
                     }
-                }.font(.body.weight(.medium)).frame(width: typeSize.isAccessibilitySize ? nil : 132, alignment: .leading)
-                Text(String(localized: "\(filter.reps(item)) 次")).font(.body.weight(.medium)).monospacedDigit()
+                }.font(Studio.Fonts.body.weight(.medium))
                 if !typeSize.isAccessibilitySize { Spacer(minLength: 0) }
+                RecordNumberText(value: String(localized: "\(filter.reps(item)) 次"), numberFont: Studio.Fonts.rowMetric, unitFont: Studio.Fonts.caption)
             }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) { metadata }
                 VStack(alignment: .leading, spacing: 4) { metadata }
-            }.font(.caption).foregroundStyle(Studio.muted)
-        }.frame(minHeight: 68).foregroundStyle(Studio.ink)
+            }.font(Studio.Fonts.caption).foregroundStyle(Studio.muted)
+                .padding(.leading, typeSize.isAccessibilitySize ? 0 : 38)
+        }.frame(minHeight: Studio.rowHeight).foregroundStyle(Studio.ink)
     }
     @ViewBuilder private var metadata: some View {
         Text(item.startTime.formatted(date: .omitted, time: .shortened))
-        Text(String(localized: "\(filter.weight(item).formatted()) 公斤"))
-        if let duration = item.displayDuration { Text(Duration.seconds(duration).formatted(.time(pattern: .minuteSecond))).monospacedDigit() }
+        if item.hasKnownWeight { Text(String(localized: "\(filter.weight(item).formatted()) 公斤")) }
+        if let duration = item.measuredActiveDuration(for: filter.exercise) {
+            Text(Duration.seconds(duration).formatted(.time(pattern: .minuteSecond))).monospacedDigit()
+                .accessibilityLabel(String(localized: "动作时长（估计）"))
+                .accessibilityValue(RecordTrendMetric.clock(duration)).accessibilityIdentifier("record-action-duration")
+        }
         if !(item.note ?? "").isEmpty { Image(systemName: "text.alignleft").accessibilityLabel(String(localized: "有备注")) }
     }
 }
@@ -428,6 +442,13 @@ struct RecordRow: View {
 struct RecordDetailView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @EnvironmentObject private var store: PhoneWorkoutStore
+    #if GYMCOUNT_SYNC
+    @EnvironmentObject private var capture: PhoneCaptureStore
+    #endif
+    @State private var timeline: WorkoutTimeline?
+    @State private var timelineFailed = false
+    @State private var timelineLoading = true
+    @State private var timelineLoadID = UUID()
     let id: UUID
     var edit: (PhoneTrainingSession) -> Void
     var delete: (PhoneTrainingSession) -> Void
@@ -437,23 +458,69 @@ struct RecordDetailView: View {
                 List {
                     if let error = store.storageError { Text(error).foregroundStyle(.red) }
                     Section {
-                        ForEach(item.exercises, id: \.self) { exercise in
-                            RecordExerciseLabel(exercise: exercise, size: 32).font(.title2.weight(.semibold))
+                        VStack(alignment: .leading, spacing: Studio.spacing) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(item.exercises, id: \.self) { exercise in
+                                    RecordExerciseLabel(exercise: exercise, size: 28).font(Studio.Fonts.title)
+                                }
+                                Text(item.startTime.formatted(date: .abbreviated, time: .shortened))
+                                    .font(Studio.Fonts.caption).foregroundStyle(Studio.muted)
+                            }
+                            if let report = item.workoutReport {
+                                RecordWholeWorkoutReport(report: report, totalReps: item.totalReps,
+                                                         maximumWeight: item.hasKnownWeight ? item.maxWeight : nil,
+                                                         sourceMatches: item.reportMatchesCorrection, history: store.history,
+                                                         groupingEdited: item.reportGrouping != nil,
+                                                         saveGrouping: { store.updateReportGrouping(id: item.id, groups: $0) })
+                            } else {
+                                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16)) : AnyLayout(HStackLayout(spacing: 24))) {
+                                    RecordMetric(title: String(localized: "总次数"), value: String(localized: "\(item.totalReps) 次"))
+                                        .accessibilityElement(children: .ignore).accessibilityLabel(String(localized: "总次数"))
+                                        .accessibilityValue(String(localized: "\(item.totalReps) 次")).accessibilityIdentifier("record-total-reps")
+                                    if item.hasKnownWeight {
+                                        RecordMetric(title: String(localized: "最大重量"), value: String(localized: "\(item.maxWeight.formatted()) 公斤"))
+                                    }
+                                }
+                            }
                         }
-                        Text(item.startTime.formatted(date: .complete, time: .shortened)).font(.subheadline).foregroundStyle(Studio.muted)
-                        (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16)) : AnyLayout(HStackLayout(spacing: 24))) {
-                            RecordMetric(title: String(localized: "总次数"), value: String(localized: "\(item.totalReps) 次"))
-                                .accessibilityElement(children: .ignore).accessibilityLabel(String(localized: "总次数"))
-                                .accessibilityValue(String(localized: "\(item.totalReps) 次")).accessibilityIdentifier("record-total-reps")
-                            RecordMetric(title: String(localized: "最大重量"), value: String(localized: "\(item.maxWeight.formatted()) 公斤"))
-                        }.padding(.vertical, 8)
-                    }.listRowBackground(Color.clear).listRowSeparator(.hidden)
-                    if item.displayDuration != nil || item.activeDuration != nil || item.volume != nil {
+                    }.listRowInsets(EdgeInsets(top: 12, leading: Studio.inset, bottom: 12, trailing: Studio.inset))
+                        .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                    if let report = item.workoutReport {
+                        Section {
+                            RecordReportSensors(id: item.id, startedAt: item.startTime, sets: report.sets)
+                        }.listRowInsets(EdgeInsets(top: 4, leading: Studio.inset, bottom: 12, trailing: Studio.inset))
+                            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                    } else if let timeline {
+                        Section {
+                            RecordWorkoutTimeline(timeline: timeline)
+                        }.listRowInsets(EdgeInsets(top: 4, leading: Studio.inset, bottom: 12, trailing: Studio.inset))
+                            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                    } else if timelineLoading && item.isSummary && item.workoutReport == nil {
+                        Section { ProgressView(String(localized: "时间轴")).accessibilityIdentifier("timeline-loading") }
+                            .listRowBackground(Color.clear)
+                    } else if timelineFailed {
+                        Section {
+                            HStack {
+                                Text(String(localized: "时间轴无法读取")).foregroundStyle(Studio.muted)
+                                Spacer()
+                                Button(String(localized: "重试")) { timelineLoadID = UUID() }
+                                    .frame(minHeight: Studio.controlHeight).accessibilityIdentifier("timeline-retry")
+                            }
+                        }.listRowBackground(Color.clear)
+                    } else if item.workoutReport == nil && (item.watchSummary != nil || item.legacySummary != nil) {
+                        Section {
+                            missingTimeline
+                        }.listRowInsets(EdgeInsets(top: 8, leading: Studio.inset, bottom: 8, trailing: Studio.inset))
+                            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                    }
+                    if item.workoutReport == nil && (item.displayDuration != nil || item.activeDuration != nil || item.volume != nil) {
                         Section {
                             if let duration = item.displayDuration { LabeledContent(String(localized: "训练总用时"), value: Duration.seconds(duration).formatted(.time(pattern: .minuteSecond))) }
                             if let duration = item.activeDuration { LabeledContent(String(localized: "动作时长（估计）"), value: Duration.seconds(duration).formatted(.time(pattern: .minuteSecond))) }
                             if let volume = item.volume { LabeledContent(String(localized: "总训练量"), value: String(localized: "\(volume.formatted()) 公斤")) }
-                        }.listRowBackground(Studio.surface)
+                        }.font(Studio.Fonts.body)
+                            .listRowInsets(EdgeInsets(top: 12, leading: Studio.inset, bottom: 12, trailing: Studio.inset))
+                            .listRowBackground(Color.clear)
                     }
                     if !item.isSummary {
                         ForEach(item.exercises, id: \.self) { exercise in
@@ -470,13 +537,83 @@ struct RecordDetailView: View {
                                         .accessibilityIdentifier("record-set-\(index + 1)")
                                 }
                             } header: { RecordExerciseLabel(exercise: exercise, size: 20) }
-                                .listRowBackground(Studio.surface)
+                                .listRowInsets(EdgeInsets(top: 12, leading: Studio.inset, bottom: 12, trailing: Studio.inset))
+                                .listRowBackground(Color.clear)
                         }
                     }
-                    if let note = item.note, !note.isEmpty { Section(String(localized: "备注")) { Text(note).textSelection(.enabled) }.listRowBackground(Studio.surface) }
-                    Section { Button(String(localized: "删除记录"), role: .destructive) { delete(item) } }.listRowBackground(Studio.surface)
-                }.toolbar { ToolbarItem(placement: .topBarTrailing) { Button(String(localized: "编辑")) { edit(item) }.accessibilityIdentifier("edit-record") } }
+                    if let note = item.note, !note.isEmpty {
+                        Section(String(localized: "备注")) { Text(note).textSelection(.enabled) }
+                            .listRowInsets(EdgeInsets(top: 12, leading: Studio.inset, bottom: 12, trailing: Studio.inset))
+                            .listRowBackground(Color.clear)
+                    }
+                }.listStyle(.plain)
+                    .contentMargins(.top, 0, for: .scrollContent)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(String(localized: "编辑")) { edit(item) }.accessibilityIdentifier("edit-record")
+                        }
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Menu {
+                                Button(String(localized: "删除记录"), role: .destructive) { delete(item) }
+                                    .accessibilityIdentifier("delete-record")
+                            } label: { Image(systemName: "ellipsis").frame(width: Studio.controlHeight, height: Studio.controlHeight) }
+                                .accessibilityLabel(String(localized: "更多操作")).accessibilityIdentifier("record-more-actions")
+                        }
+                    }
             } else { ContentUnavailableView(String(localized: "记录不存在"), systemImage: "clock") }
         }.recordListStyle().navigationTitle(String(localized: "训练详情")).navigationBarTitleDisplayMode(.inline)
+            .task(id: "\(id)/\(store.timelineRevision)/\(timelineLoadID)") {
+                guard store.history.first(where: { $0.id == id })?.workoutReport == nil else { return }
+                await loadTimeline()
+                #if GYMCOUNT_SYNC
+                if timeline == nil, let item = store.history.first(where: { $0.id == id }), item.workoutReport == nil,
+                   item.watchSummary != nil || item.legacySummary != nil {
+                    capture.requestWorkoutHistory(force: true, timelineID: id)
+                }
+                #endif
+            }
+    }
+    private var missingTimeline: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(String(localized: "时间轴")).font(Studio.Fonts.section)
+            HStack(spacing: 12) {
+                #if GYMCOUNT_SYNC
+                Text(missingTimelineStatus).font(Studio.Fonts.body).foregroundStyle(Studio.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("timeline-missing-status")
+                Spacer(minLength: 0)
+                Button { capture.requestWorkoutHistory(force: true, timelineID: id) } label: {
+                    Text(String(localized: "同步")).font(Studio.Fonts.body.weight(.medium))
+                        .frame(minWidth: Studio.controlHeight, minHeight: Studio.controlHeight).contentShape(Rectangle())
+                }.buttonStyle(RecordPressStyle())
+                    .accessibilityIdentifier("timeline-sync")
+                #else
+                Text(String(localized: "无传感器采样")).font(Studio.Fonts.body).foregroundStyle(Studio.muted)
+                #endif
+            }
+        }.accessibilityElement(children: .contain).accessibilityIdentifier("timeline-missing")
+    }
+    #if GYMCOUNT_SYNC
+    private var missingTimelineStatus: String {
+        if capture.unavailableTimelineIDs.contains(id) { return String(localized: "无传感器采样") }
+        switch capture.workoutSyncState {
+        case .idle, .succeeded: return String(localized: "未接收采样")
+        case .failed: return capture.workoutSyncMessage
+        default: return capture.workoutSyncState.title
+        }
+    }
+    #endif
+    @MainActor
+    private func loadTimeline() async {
+        timelineLoading = true
+        do {
+            let result = try await store.loadTimeline(id)
+            guard !Task.isCancelled else { return }
+            timeline = result
+            timelineFailed = false; timelineLoading = false
+        } catch {
+            guard !Task.isCancelled else { return }
+            timeline = nil; timelineFailed = true; timelineLoading = false
+        }
     }
 }

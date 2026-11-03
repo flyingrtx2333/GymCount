@@ -49,20 +49,20 @@ struct ExerciseTypeQuery: EntityQuery {
     }
     
     func defaultResult() async -> ExerciseTypeEntity? {
-        return ExerciseTypeEntity(from: .squat)
+        nil
     }
 }
 
 // MARK: - 开始锻炼 Intent
 struct StartWorkoutIntent: AppIntent {
-    static var title: LocalizedStringResource = "开始记录锻炼"
+    static var title: LocalizedStringResource = "开始健身计数"
     static var description = IntentDescription("开始记录指定的锻炼动作")
     static var openAppWhenRun: Bool = true
     
-    @Parameter(title: "运动类型")
+    @Parameter(title: "运动类型", requestValueDialog: "要计数哪个动作？")
     var exerciseType: ExerciseTypeEntity
     
-    @Parameter(title: "重量(kg)", default: 0.0)
+    @Parameter(title: "重量(kg)")
     var weight: Double?
     
     static var parameterSummary: some ParameterSummary {
@@ -72,66 +72,66 @@ struct StartWorkoutIntent: AppIntent {
     }
     
     @MainActor
-    func perform() async throws -> some IntentResult & OpensIntent {
-        print("🎤 快捷指令: 处理开始锻炼请求")
-        
+    func perform() async throws -> some IntentResult & ProvidesDialog {
         let dataManager = DataManager.shared
-        
-        // 检查是否已有活跃的锻炼
-        guard dataManager.canStartWorkout() else {
-            print("⚠️ 快捷指令: 已有活跃的锻炼，无法开始新的锻炼")
-            throw StartWorkoutError.alreadyActive
+        guard !dataManager.isSavingWorkout else { throw StartWorkoutError.saving }
+        guard !dataManager.requiresDraftRecovery, !dataManager.requiresWorkoutRecovery else {
+            throw StartWorkoutError.recoveryRequired
         }
-        
-        // 获取运动类型
+        guard dataManager.currentSession == nil else { throw StartWorkoutError.alreadyActive }
+        #if DEBUG
+        guard !CollectionStore.shared.recording, CollectionStore.shared.draft == nil else {
+            throw StartWorkoutError.captureActive
+        }
+        #endif
         guard let exercise = exerciseType.toExerciseType() else {
-            print("❌ 快捷指令: 无效的运动类型")
             throw StartWorkoutError.invalidExercise
         }
-        
-        // 开始锻炼
         let weightValue = weight ?? dataManager.settings.defaultWeight
-        dataManager.startWorkout(exerciseType: exercise, weight: weightValue)
-        
-        print("✅ 快捷指令: 成功开始 \(exercise.displayName) 锻炼")
-        
-        return .result()
+        guard weightValue.isFinite, (0...500).contains(weightValue) else { throw StartWorkoutError.invalidWeight }
+        let started = await dataManager.startWholeWorkout(exerciseType: exercise, weight: weightValue)
+        guard started, let session = dataManager.currentSession, session.exerciseType == exercise, session.isActive else {
+            throw NSError(domain: "PowerReps.Siri", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: dataManager.saveError ?? dataManager.wholeWorkoutError ?? String(localized: "计数未能开始，请在手表重试")])
+        }
+        #if DEBUG
+        WatchCaptureLink.shared.showingCapture = false
+        #endif
+        return .result(dialog: "已开始\(exercise.displayName)计数")
     }
 }
 
 // MARK: - 停止锻炼 Intent
 struct StopWorkoutIntent: AppIntent {
-    static var title: LocalizedStringResource = "停止锻炼"
-    static var description = IntentDescription("停止当前正在进行的锻炼")
+    static var title: LocalizedStringResource = "结束训练"
+    static var description = IntentDescription("结束当前训练并保存报告")
     static var openAppWhenRun: Bool = true
-    
+
     static var parameterSummary: some ParameterSummary {
-        Summary("停止当前锻炼")
+        Summary("结束当前训练")
     }
-    
+
     @MainActor
-    func perform() async throws -> some IntentResult & OpensIntent {
-        print("🎤 快捷指令: 处理停止锻炼请求")
-        
+    func perform() async throws -> some IntentResult & ProvidesDialog {
         let dataManager = DataManager.shared
-        
-        // 检查是否有活跃的锻炼
         guard let session = dataManager.currentSession else {
-            print("⚠️ 快捷指令: 没有活跃的锻炼")
             throw StopWorkoutError.noActiveWorkout
         }
-        
-        let exerciseName = session.exerciseType.displayName
-        let totalReps = session.totalReps
-        
-        // 结束锻炼
-        guard dataManager.endWorkout() else {
-            throw NSError(domain: "PowerReps", code: 1, userInfo: [NSLocalizedDescriptionKey: dataManager.saveError ?? String(localized: "保存失败，请重试")])
+        let isWholeWorkout = dataManager.isWholeWorkout
+        let count = isWholeWorkout ? dataManager.wholeTotalReps : session.totalReps
+        let saved = isWholeWorkout
+            ? await dataManager.finishWholeWorkout()
+            : await dataManager.endWorkout()
+        guard saved else {
+            throw NSError(domain: "PowerReps.Siri", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: dataManager.saveError ?? dataManager.wholeWorkoutError ?? String(localized: "保存失败，请重试")
+            ])
         }
-        
-        print("✅ 快捷指令: 成功停止锻炼 \(exerciseName)，共完成 \(totalReps) 次")
-        
-        return .result()
+        // Final motion analysis can revise a provisional count while saving.
+        let total = isWholeWorkout
+            ? (dataManager.completedWholeWorkout?.totalReps ?? count)
+            : (dataManager.completedWorkout?.totalReps ?? count)
+        return .result(dialog: "训练已保存，共\(total)次")
     }
 }
 
@@ -191,7 +191,10 @@ struct GetWorkoutStatusIntent: AppIntent {
         }
         
         let exerciseName = session.exerciseType.displayName
-        let totalReps = session.totalReps
+        let totalReps = dataManager.isWholeWorkout ? dataManager.wholeTotalReps : session.totalReps
+        if dataManager.isWholeWorkout {
+            return .result(value: String(localized: "训练进行中，共\(totalReps)次"))
+        }
         let duration = Int(Date().timeIntervalSince(session.startTime) / 60)
         
         let message = String(localized: "正在记录\(exerciseName)，已完成\(totalReps)次，已进行\(duration)分钟")
@@ -205,6 +208,10 @@ struct GetWorkoutStatusIntent: AppIntent {
 enum StartWorkoutError: Error, CustomLocalizedStringResourceConvertible {
     case alreadyActive
     case invalidExercise
+    case invalidWeight
+    case recoveryRequired
+    case captureActive
+    case saving
     
     var localizedStringResource: LocalizedStringResource {
         switch self {
@@ -212,6 +219,14 @@ enum StartWorkoutError: Error, CustomLocalizedStringResourceConvertible {
             return "已有正在进行的锻炼，请先停止当前锻炼"
         case .invalidExercise:
             return "无效的运动类型"
+        case .invalidWeight:
+            return "重量须在 0–500 公斤之间"
+        case .recoveryRequired:
+            return "请先在手表处理未完成训练"
+        case .captureActive:
+            return "请先完成当前采集"
+        case .saving:
+            return "训练正在保存，请稍后再试"
         }
     }
 }
@@ -244,13 +259,24 @@ struct GymCountShortcutsProvider: AppShortcutsProvider {
         AppShortcut(
             intent: StartWorkoutIntent(),
             phrases: [
+                "Start \(.applicationName)",
+                "Start counting with \(.applicationName)",
+                "Start \(\.$exerciseType) with \(.applicationName)",
                 "Start recording workout with \(.applicationName)",
-                "Begin workout using \(.applicationName)",
-                "开始记录\(.applicationName)锻炼",
-                "用\(.applicationName)开始锻炼"
+                "Begin workout using \(.applicationName)"
             ],
             shortTitle: LocalizedStringResource("shortcut_title_start_workout"),
             systemImageName: "figure.strengthtraining.traditional"
+        )
+        AppShortcut(
+            intent: StopWorkoutIntent(),
+            phrases: [
+                "Finish \(.applicationName)",
+                "End workout with \(.applicationName)",
+                "Stop counting with \(.applicationName)"
+            ],
+            shortTitle: LocalizedStringResource("shortcut_title_end_workout"),
+            systemImageName: "stop.circle"
         )
     }
 }

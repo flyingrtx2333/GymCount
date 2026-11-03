@@ -2,6 +2,16 @@
 
 @/Users/xiangjunsheng/.codex/RTK.md
 
+## 模拟器复用与内置盘空间
+
+- 内置盘空间有限。日常开发与界面验证固定复用现有模拟器，不为每轮修改、截图、语言、主题或字号检查新建设备；隔离测试通过独立 App 标识和存储目录实现。
+- 默认复用大屏 iPhone `GymCount Records Large`（`CD183797-B641-447D-A898-1CB5DEDD99DA`）、小屏 iPhone `GymCount Records Compact`（`B77E5BAE-AD6A-4EC0-82F3-FCAD00DD5C3D`）及 Watch `PowerReps Saved Motion 41`（`F5D4F639-C91D-409A-BD9D-F0AC291A6D31`）；使用前先核对设备仍存在。测试关闭并行执行，避免无谓的模拟器克隆。
+- Watch 日常只保留并复用上述 41mm 一台；中英文、配色、字号及不同页面验证均使用同一设备，不额外创建、克隆或启动其他 Watch 模拟器。只有用户明确要求额外 Watch 设备时才例外；无法覆盖的尺寸验收如实注明，不自行增建设备。
+- iPhone 仅在现有设备无法覆盖必要的系统版本、尺寸或配对条件时新增，新增前说明原因并检查空间；临时设备验证后及时清理，不积累按版本或设计方案命名的副本。
+- 清理前核对设备状态、使用情况及数据。保留正在使用的设备、其他项目设备、真实训练资料和验证证据；有需要保留的测试数据先备份到外置卷并核验，再删除冗余设备。不得为腾空间重置或删除用户真机 App 数据。
+- 2026-10-27 已清理 7 台关机且无进程使用的旧 PowerReps 验收模拟器；应用数据及设备信息先备份并逐文件校验，备份和清理凭证位于 `/Volumes/江波龙/PowerReps-Simulator-Backups/20261027/`。上述三台复用设备及其他项目设备保留。
+- 同日按用户“Watch 只用一个”的要求，再删除 5 台关机且无打开文件的 Watch 设备，仅保留上述 41mm；删除目录实际分配约 1.28 GB。完整设备目录先备份并校验文件内容、目录及符号链接，备份及凭证位于 `/Volumes/江波龙/PowerReps-Simulator-Backups/20261027/watch-single-device/`；保留 Watch 的训练历史校验一致，其余模拟器清单和配对关系未变。
+
 ## Xcode 签名构建的执行会话
 
 2026-10-18 已实测确认：同一份产物、同一张开发证书、相同 codesign 参数，在 Codex 原来的 Background 会话中返回 `errSecInternalComponent`，在 Aqua 桌面登录会话中签名成功。完整 iPhone、Watch 和 UI 测试目标的签名 `build-for-testing` 已通过，产物签名验证通过。
@@ -16,13 +26,169 @@
 
 ## 工程与验证边界
 
+- 开发者录像／原始采集只允许 `DEBUG`：iOS 开发者工具、采集记录和标注页面，Watch 高级采集页面及远程采集指令均不得进入 Release／TestFlight／App Store 的用户流程。Release 不声明相机权限。`GYMCOUNT_CAPTURE` 目前还承载配套 Watch 的普通训练同步，不能直接移除该标记而停掉记录、报告和传感器传输；采集 UI 与远程指令独立受 `DEBUG` 约束。保留历史采集文件，不因隐藏入口删除资料；正常训练的传感器时间轴与计数反馈继续提供。
+
+- iOS 视觉以 [统一规范](docs/ios-design-system.md) 和 `GymCount iOS/RecordStyle.swift` 为准：同级字体、16 点正文边线、44 点触控高度、指标数字／单位、分区、按钮、局部空状态及按压反馈均复用共享入口。新增或修改页面不得另设相同角色的独立规格；系统导航、文件面板及具有任务依据的实时大计数保留明确的原生／功能例外。
+
 - `GymCountSync.xcodeproj` 是已有的手机与手表配套工程；`GymCount Capture` 用于配套版本，`GymCount Phone UI Tests` 用于手机界面测试。`GymCount.xcodeproj` 是独立 iPhone 工程。它们共用部分源码，修改后检查受影响工程。
 - 无签名编译、签名构建、UI 测试实际执行、真机功能验收、TestFlight 发布分别报告。`build-for-testing` 成功只表示测试包已构建，不表示测试执行通过。
 - 真机测试使用独立安装副本和隔离存储，保留设备当前应用及训练记录。未经相应发布指令，不把构建成功描述为已经发布。
+- 记录页使用自定义底栏时，底栏应实际占据布局空间；不要叠加隐藏的系统 TabView 容器。趋势明细的展开按钮与子行分开命中，验收必须滚到最后一行并实际打开对应记录，不能只检查截图可见。2026-10-27 修复及真实原生证据见 [详情与趋势修复](docs/detail-trends-repair-20261027.md)。
 
 详细证据见 [iPhone 多组训练完善记录](docs/phone-training-flow.md)。
 
-## 最新 TestFlight 发布：2026-10-26（43）
+## iPhone Duo 布局：2026-11-03（未发布）
+
+- 三入口采用原生 TabView；不要恢复叠加隐藏的系统 TabView 或固定底栏，Duo 的侧边导航和保留区域由系统布局。
+- 记录使用 NavigationSplitView，窄屏进入详情，宽屏并排；详情按记录 UUID 管理身份，折叠不清空当前选择。趋势按可用宽度与字体大小调整列数，表单保持阅读宽度，焦点输入随窗口尺寸变化重新定位。
+- Xcode 27.1 与用户已有 Duo 模拟器用于实际折叠／展开检查；不再用 iPad 预览充当 Duo 验收。复用现有小屏 iPhone，验证副本用独立 Bundle ID 与真实历史隔离存储。实现、截图、构建和边界见 [Duo 适配](docs/ios-duo-20261103.md)。
+
+## 卧推实时计数与反馈：2026-10-31（未发布）
+
+- 随后统一三种动作的 `DetectedRepetition` 事件、实时性／去重检查及 `RepCompletionFeedback` 组件，完成触觉调用 5 处收为 1 处；检测器仅输出完成事件，补算传非实时标记，不直接播放反馈。普通／整场训练和采集共用该入口；后续动作不要另加检测器内的振动或独立的计数反馈回调。六条真实卧推回放及配套 iPhone/Watch Release 构建通过，尚未发布或新增佩戴验收；见 [反馈组件整理](docs/rep-feedback-refactor-20261031.md)。
+
+- 实时加 1 和系统完成反馈改为消费同一个新鲜顶部完成周期；V8 前缀仅作诊断，结束／暂停／切换时静默核准。准备动作、旧会话和迟到事件不因数字增加而补振动。
+- 普通与整场训练、采集保持一致；完成周期保留起点／转折／完成时间，单次动作遇到 V8 无法确认时不误清成 0。内存次数和触觉请求先于草稿写入，避免存储延迟挪动反馈时机；音效遵循 watchOS 静音设置，不加语音报数。
+- 六条真实录制直接回放生产检测器，五组 25 个顶部事件及全部 V8 最终结果保持；结束与重置不追加完成事件，有效首周期保留检查通过。未改顶部门限、最终 V8、深蹲／硬拉或云端算法。配套手机／Watch 与独立手机 Release 构建通过，尚未新增真实佩戴触感／声音验收。
+- 尚未提交 Git、发布或纳入已上传的 1.1.7 (53)。详见 [完成反馈同步修复](docs/bench-completion-sync-20261031.md)。
+
+## 分组入口与时间轴：2026-10-29（已纳入 TestFlight 51）
+
+- Watch“下一组”收进更多菜单并改名“手动分组”；组号标识仅放组号文本，避免父容器覆盖操作按钮。watchOS 原生菜单会隐藏零次时禁用的分组动作。
+- iPhone 整场与传感器时间轴共用淡金区间、首末完成点虚线及组名，使用手机修正后的有效分组。单次组不造时长，缺可靠采样起点不伪造对齐；背景几何不回写状态。
+- 双 iPhone 工程与 Watch 构建、4 项实际原生检查通过，82 条隔离 Watch 历史保持；没有修改计数算法、自动分组或同步格式；已纳入 TestFlight 1.1.6 (51)。详情见 [分组显示](docs/set-regions-20261029.md)。
+
+## 整场训练与报告：2026-10-28（已纳入 TestFlight 50）
+
+- 手表首页与 Siri 开始整场训练；同一会话支持多个动作／组、改重量、暂停／继续、下一组、结束报告。长时间无动作提醒，不擅自自动结束；不因跨 24 小时丢弃草稿或拒绝真实会话保存。
+- 逐次完成点与已知周期起点组成报告；实际动作时长、组间间隔、显式暂停分别计算。硬拉／手动次数没有可靠起点时不推测时长或自动分组。手机可拆分／合并同动作组，保留不可变原始来源。
+- 新整场健康数据来自真实 HKLiveWorkoutBuilder；未知心率／活动能量不补零、不用固定公式。健康失败不能冒充训练已保存，本地持久化成功后才给保存结果；旧历史导出不得重复生成整场健康记录。
+- 快照 v4、训练备份 v4（兼容 v1–v3）；原 v3 快照先保留副本。报告采用有接收端能力与身份校验的文件传输，手机落盘后回执；旧手机不接收降级多动作汇总，报告留在手表。分段原始采样独立保存并随训练删除／放弃清理。
+- 三个工程 Release 无签名构建、6 项实际 Intent、手表原生操作与恢复保存、大小屏手机中英文原生分组操作通过。82 条真实历史保持一致，16 份真实采集回放中 12 份／62 个既有检测动作保留；不把回放或模拟器当成真实多组计数、Siri 口语、HealthKit 或双端传输验收。
+- 已随 TestFlight 1.1.6 (50) 发布，未提交 Git 或推送；实现和实际截图见 [整场训练与报告](docs/whole-workout-20261028.md)，发布凭证见 [50 版发布记录](docs/testflight-1.1.6-50.md)。
+
+- 报告布局随后精修：摘要同列、时间轴与组列表合并、重复名称精简，恢复分组收进菜单；两工程构建及大小屏 6 项原生页面检查通过。详见 [报告布局精修](docs/report-layout-20261028.md)。
+- 整场报告传感器随后补齐：按段传输原始采样，手机落盘后回执，接收端隔离收件箱支持父报告迟到重试；备份 v4 包含分段采样，修正／分组合并不改原始来源。详情直接显示传感器曲线与逐次打点，未知采样起点使用段内时间；详细验证与真机边界见 [报告传感器](docs/report-sensors-20261028.md)。图表布局不得通过 PreferenceKey 回写父状态；异步采样加载 task 要绑定稳定容器，避免条件 Group 切换导致重复加载。
+
+## Watch Siri：2026-10-28（已纳入 TestFlight 50）
+
+- 仅做手表本机 Siri。复用 `StartWorkoutIntent` 与现有动作实体，支持“开始健身计数”并询问动作，以及“用健身计数开始卧推”。手机保持记录端，不添加远程启动。
+- 可选重量不再默认 0，未指定动作不再默认深蹲。重复启动、未恢复训练、保存中、采集未完成和草稿保存失败均保留当前状态并报错；实际建立会话后才回应成功。
+- 快捷指令短语必须保留应用名占位符；中英文分别放入 `AppShortcuts.strings`。使用 Info.plist 的 `INAlternativeAppNames` 和本地化的 `InfoPlist.strings` 登记“健身计数”别名，不使用无应用名的裸命令或伪造 Siri 识别结果。
+- Watch 及配套构建、提取元数据／本地化和 4 项实际 Intent 原生检查通过；没有伪造动作、次数或训练历史。未签名原生检查中的 HealthKit 提示不代表真机授权验收。真人对手表说话的识别及唤起仍待新版真表实测。
+- 验证边界及路径见 [手表 Siri](docs/watch-siri-20261028.md)。已纳入 TestFlight 50；Siri 功能本身不改计数算法或同步协议。
+
+## 连续训练与晚间提醒：2026-10-27（已纳入 TestFlight 50）
+
+- 手机记录页与 Watch 首页显示连续训练天数；按本地自然日、已保存正次数计算，同日去重，允许从昨天延续到今天，未来／零次不计。趋势连续值复用同一计算。
+- 手机默认 20:00 未训练提醒，设置可关闭，首次请求通知权限。持久化成功后的训练日期回调负责取消当天提醒与续排，后台同步也走同一入口；不能只放在 SwiftUI 页面观察中。Watch 独立开关默认关闭、时间默认 20:00，保留用户明确配置。
+- 使用 60 个自然日的系统单次通知窗口；开启、训练变化、后台接收、应用激活、跨日及时区变化续排。不使用无法跳过今天的每日重复请求，不把尚未同步或保存的训练算作已完成。长期完全不运行超出窗口需要打开应用刷新。
+- 82 条真实历史、3 个时区与 459 个日期场景及持久化回调回归通过；原生手机开启后系统队列 59 条 20:00 请求，关闭后 0 条。最终中英文手机和 Watch 页面检查通过；未将队列验证当成真机晚间送达验证。
+- 详情与验证边界见 [连续训练与提醒](docs/training-streak-20261027.md)。已纳入 TestFlight 50；连续训练功能本身未改变算法、备份与同步格式。
+
+## 历史 TestFlight：2026-10-29（51）
+
+- 版本：1.1.6 (51)，iPhone 与 Watch 一致；478 个发布源文件摘要核验，243 个应用源码／资源／权限文件与已验收副本一致。
+- Delivery UUID / ASC Build ID：`8702bb6b-ebd2-4e03-a7ec-4d3bc2afb025`。Apple `BUILD-STATUS: VALID` / `INTERNAL_ONLY` / `IN_BETA_TESTING`；内部组 `flyingrtx` 包含本构建，中英文测试说明已写入并回读。
+- Watch 手动分组收进更多菜单；iPhone 整场与传感器时间轴增加淡金分组区域、首末完成点虚线及组名，使用手机调整后的有效分组。未改计数算法、自动分组或同步格式。
+- Aqua 双端签名归档、导出、版本／严格签名／HealthKit／配套关系和 Watch Siri 权限／Intent 元数据通过。沿用相同应用源码的三个工程构建及 4 项原生页面检查，82 条真实隔离历史保持；无新增编译警告。
+- IPA SHA-256：`d50c3c5abb05a20ae6c52b68956893186ed64a27ec6f6c90312643fe63f29213`。正式商店 1.1.5 及构建关联未改，未提交 Git 或推送，未覆盖用户安装和资料。没有新增真机佩戴、震动、健康数据或双端传输验收。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.6-51/`；详见 [发布记录](docs/testflight-1.1.6-51.md)。
+
+## 历史 TestFlight：2026-10-28（50）
+
+- 版本：1.1.6 (50)，iPhone 与 Watch 一致。原计划 1.1.5 (50) 被 Apple 以 90062 拒收：1.1.5 已获批，需要更高版本号；因此递增到 1.1.6，应用源码不变，拒收凭证保留。
+- Delivery UUID / ASC Build ID：`a8ae6848-98fc-4208-8d90-134d6f9a75e9`。Apple `BUILD-STATUS: VALID` / `INTERNAL_ONLY` / `IN_BETA_TESTING`；内部组 `flyingrtx` 包含本构建，中英文测试说明写入并回读。
+- 包含整场训练与报告、逐次时间轴和分段传感器同步／备份、报告布局、手表 Siri、连续训练日数与晚间提醒。247 个应用源码／资源文件与最近验证副本一致，476 个发布源文件摘要核验；未提交 Git、未推送。
+- Aqua 签名归档与导出、双端版本／严格签名／HealthKit／配套关系通过，Watch Siri 实际签名及 profile 权限与 Intent 元数据核验通过。沿用相同应用源码通过的双工程构建、5 项原生 UI 和真实采样存储／报告回归；不把构建与回放描述为真表 Siri、健康采集、佩戴计数或双端真实传输验收。
+- IPA SHA-256：`95de34aef448459988ee30257ea55d7a3b36e3a6fb79279419720c605b9f6aa0`。仅发内部 TestFlight；正式商店 1.1.5 及构建关联保持原状，用户现有安装与记录保留。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.6-50/`；详见 [发布记录](docs/testflight-1.1.6-50.md)。
+
+## 历史 TestFlight：2026-10-27（49）
+
+- 版本：1.1.5 (49)，iPhone 与 Watch 一致。当前授权工作区快照归档，451 个文件 SHA-256 核验；232 个应用源码／资源与本轮性能修复最终原生验收副本一致，未声称工作区已提交。
+- Delivery UUID / ASC Build ID：`0d169403-7242-4fe1-ad36-5a72b0cabcb5`。苹果 `BUILD-STATUS: VALID` / `INTERNAL_ONLY` / `IN_BETA_TESTING`；内部组 `flyingrtx` 已确认包含本构建，中英文说明写入并回读。
+- 优化趋势筛选和图表切换、时间轴选点；双端重文件操作后台顺序处理、备份逐条写出、同步收件保留及确认顺序；减少 Watch 重复统计、扫描与检查点写入，移除旧调试通道与页面。卧推／深蹲／硬拉算法和分析文件与性能修改前字节一致。
+- 配套签名归档、导出、双端版本／签名／HealthKit／配套关系和独立 iPhone Release 构建通过。源码一致后沿用 82 条真实历史、16 份时间轴回归及 5 项 iOS、1 项 Watch 独立原生流程通过结果；首轮测试操作失败及修正后通过的结果均保留，不将全部历史结果包标成通过。详见 [性能修复](docs/performance-repair-20261027.md)。
+- 未新增真机同步、长期训练耗电／峰值内存、佩戴触感和人工 VoiceOver 验收。保留用户安装与资料，三个临时 Aqua 任务及约 0.51 GiB 本轮空闲缓存已清理；既有编译提示保留。仅发 TestFlight，正式商店关联仍为构建 45。
+- IPA SHA-256：`e5ab22e8ac420e626a9e2ae087d45f8d1ac9e5d15efd103163abc5acf67a3fa0`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.5-49/`；隔离发布源码：`/private/tmp/GymCount-TestFlight-1.1.5-49-20261027/source`。详见 [发布记录](docs/testflight-1.1.5-49.md)。
+
+## 历史 TestFlight：2026-10-27（48）
+
+- 版本：1.1.5 (48)，iPhone 与配套 Watch 一致。授权工作区快照归档，447 个文件 SHA-256 核验；233 个应用源码／资源与本轮原生验收副本一致。
+- Delivery UUID / ASC Build ID：`260dcfd8-138e-48f1-b8c8-72cfe24b64af`。苹果 `BUILD-STATUS: VALID` / `INTERNAL_ONLY` / `IN_BETA_TESTING`；内部组 `flyingrtx` 已确认包含本构建，中英文测试说明已写入并回读。
+- iOS 落地统一白金视觉规范：三页标题、同级字号、16 点正文边线、指标数字／单位、按钮层级与按压反馈、分区及局部空状态共享。设置改为紧凑列表；详情、补记、时间轴、采集和上传统一样式。规范见 [iOS 视觉规范](docs/ios-design-system.md)。Watch 内容与 47 版一致，仅配套构建号更新。
+- 配套双端 Aqua 签名归档、导出、版本／签名／HealthKit／配套关系核验通过；独立 iPhone Release 构建通过。源码比对后沿用本轮大屏 3 项、小屏 2 项原生通过结果，另有静态截图补截用例通过，0 失败、0 运行时告警；覆盖中英文、大小屏、最大辅助字号、导航、补记键盘、文件面板取消、真实时间轴及趋势末尾记录点击。未重复制造训练数据。
+- 未新增真机同步、实际上传、佩戴触感及人工 VoiceOver 验收；未覆盖用户安装与记录，没有新建设备。既有 HealthKit 弃用、采集闭包引用和 AppIntents 编译提示保留。三个临时 Aqua 任务及约 0.51 GiB 本轮空闲构建缓存已清理，归档与证据保留。
+- IPA SHA-256：`927ab40f01c7a2d3dddf8624c39f9f91498aab9adf988c70b25477cd46005d62`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.5-48/`；隔离发布源码：`/private/tmp/GymCount-TestFlight-1.1.5-48-20261027/source`。详见 [发布记录](docs/testflight-1.1.5-48.md)。仅发布 TestFlight；正式商店仍关联构建 45，未替换或重新提交。
+
+## 历史 TestFlight：2026-10-27（47）
+
+- 版本：1.1.5 (47)，iPhone 与 Watch 一致。当前授权工作区快照归档，441 个文件 SHA-256 核验；233 个应用源码／资源与原生验收副本一致。
+- Delivery UUID / ASC Build ID：`96808889-a99e-44ca-b0ab-8660ec6fd9ea`。苹果 `BUILD-STATUS: VALID` / `INTERNAL_ONLY` / `IN_BETA_TESTING`，内部组 `flyingrtx` 已确认包含本构建。
+- 记录、趋势及概览使用已知动作时长；整段计时只在详情或主动选择总用时时显示。Watch 深蹲累加已识别动作区间，准备与区间外空闲不计入；旧采样只有在次数及完成节点匹配时补算。缺少依据留空，手机次数修正不沿用不匹配的动作时长。未改计数阈值和完成震动条件。
+- 包含详情采样状态／定向补传、趋势原生横滑、底栏高度及汇总最后一行点击修复。原生检查另发现切换动作时 Charts 环图 NaN 崩溃，已关闭扇区插值并重建变化的数据集合，零总量显示底环。
+- 配套双端签名归档、导出及独立 iPhone Release 构建通过；真实 82 条历史统计、16 份传感器时间轴及真实卧推存储回归通过。大屏 4 项、小屏 1 项原生检查通过，0 失败、无运行时告警。旧时间轴与当前完成节点不一致时没有强行补入时长，不将重放当成独立视频精度验证。
+- 没有新建模拟器或覆盖用户安装／资料；真机当前不可连接，未新增佩戴、触感与 WatchConnectivity 实测。三个临时 Aqua 任务已移除，本轮空闲构建缓存约 1.03 GB 已清理。既有编译警告保留。
+- IPA SHA-256：`8ddede7eb3d88a3540994980d3a299424179cd49bab7126d37fe24b093a50849`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.5-47/`；隔离发布源码：`/private/tmp/GymCount-TestFlight-1.1.5-47-20261027/source`。详见 [发布记录](docs/testflight-1.1.5-47.md) 与 [动作时长修复](docs/action-duration-20261027.md)。仅发布 TestFlight，正式审核构建未替换。
+
+## 历史 TestFlight：2026-10-27（46）
+
+- 版本：1.1.5 (46)，iPhone 与 Watch 一致。发布当前已授权工作区快照，438 个文件 SHA-256 已核验；未把未提交工作区标成干净 Git 提交。
+- Delivery UUID / ASC Build ID：`6e7e6ef9-5d0f-48a0-9c12-c3f4fa522181`。苹果 `BUILD-STATUS: VALID` / `INTERNAL_ONLY` / `IN_BETA_TESTING`，内部测试组 `flyingrtx` 已确认包含本构建，中英文测试说明已写入。
+- Watch 训练、历史、设置、采集及反馈统一白金配色；器械重量和体重共用可直接输入小数的原生页面，优化加减、顶部保存和返回，非法输入拒绝保存，取消保留原值。iOS 沿用 45 版记录、趋势、时间轴及备份功能；未改计数算法和同步协议。
+- 双端 Aqua 签名归档、导出、版本／签名／HealthKit／配套关系核验通过。233 个应用源码与已有原生验收输入逐文件一致：iOS 沿用 45 版真实 82 条历史与原生检查，Watch 沿用中文 1 项、英文及设置 2 项、恢复回归 1 项通过的结果；本次未重复执行原生用例，未新增真机键盘、佩戴、同步及触感验收。既有编译警告保留。
+- 仅发布 TestFlight；正式审核仍使用 45 版。用户安装和记录保留；本次没有新建模拟器，Watch 仍只保留 41mm 一台。临时 Aqua 发布任务及本次独立编译缓存已移除，归档、IPA、源码与证据保留。
+- IPA SHA-256：`8b5a45f2e98d8e3e45702d6f39854b5e44bc136be68de08a57706d5c1ac1c2a0`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.5-46/`；隔离发布源码：`/private/tmp/GymCount-TestFlight-1.1.5-46-20261027/source`。详见 [发布记录](docs/testflight-1.1.5-46.md)。
+
+## 最新 App Store 提交：2026-10-31（53）
+
+- 版本：1.1.7 (53)，iPhone 与 Watch 一致。本次为用户选定的白金精简海报更新；从已上线 52 的精确发布副本归档，480 文件核验仅两个工程的营销版本／构建号变化，应用代码、资源、权限、算法及数据格式一致。
+- Delivery UUID / ASC Build ID：`ac85b5a8-1144-4600-8b31-afa3c3bb3b5d`。Apple `BUILD-STATUS: VALID`，ASC `VALID / APP_STORE_ELIGIBLE`；TestFlight `IN_BETA_TESTING`，`flyingrtx` 组及中英文说明已回读确认。
+- App Store Version ID：`4ca2c31b-c641-4233-b5ec-b824d96de594`；Review Submission ID：`8457f91d-3b57-432e-bdd5-b6ec7fc65d80`。提交后版本及审核均 `WAITING_FOR_REVIEW`，`AFTER_APPROVAL`；当前公开 1.1.6，不把已提交海报描述为已公开展示。
+- 中英文各 5 张精简 iPhone 海报全部 COMPLETE，顺序和源校验和回读通过；仅留主标题及原生界面，移除装饰英文、小字、编号与页脚。Watch 各 3 张截图沿用 52 并核对一致；审核说明披露营销示例、示意波形及生成摄影。
+- Aqua 双端正式签名归档、导出、版本、配套关系、严格签名、HealthKit、Watch Siri/profile 与 Intent 资源检查通过。IPA SHA-256：`81d4776030b429a40b8bd8ca1a90c3a0e6fe2c478e96fff76f446fec02cba4e4`。两个工作区工程文件经摘要保护同步至上传版本；未提交 Git 或推送，未覆盖用户安装／资料。
+- 产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/AppStore-1.1.7-53/`；详见 [商店海报更新](docs/appstore-1.1.7-53.md)。
+
+## 历史 App Store / TestFlight 提交：2026-10-29（52）
+
+- 版本：1.1.6 (52)，iPhone 与 Watch 一致；应用源码与 TestFlight 51 相同，两个有效工程 18 处构建号递增，正式导出允许 App Store 分发。
+- Delivery UUID / ASC Build ID：`066492c3-4229-4793-b468-23e997d23220`。Apple `BUILD-STATUS: VALID` / `APP_STORE_ELIGIBLE`，内部 TestFlight 为 `IN_BETA_TESTING`，`flyingrtx` 组和中英文说明已回读确认。
+- App Store Version ID：`35cb7342-bd78-4d54-a0e4-f9b48c988c59`；Review Submission ID：`5c26b8b6-2b6c-41b9-abc0-90dad8675eb1`。提交时版本 `WAITING_FOR_REVIEW`、审核 `WAITING_FOR_REVIEW`，`AFTER_APPROVAL`。本轮开始时实查 1.1.5 (45) 已公开；新版仍需等待审核，不把已上传素材描述为已公开展示。
+- 手机与手表商店素材统一白金风格；简体中文、英语各 5 张手机图和 3 张 Watch 图，全部 COMPLETE，顺序与校验和回读通过。手机重点展示整场报告、分组传感器时间轴、记录、趋势和补记；Watch 展示首页、报告与重量输入。
+- 中英文介绍、关键词、推广文案、更新说明、副标题和审核说明更新；保留名称、审核联系人和原有分级。真实原生界面使用隔离营销示例，含明确的示例传感器波形；没有使用私人历史，不作为算法精度或健康指标验收。
+- 双端签名归档、正式导出、严格签名、配套关系、HealthKit 与 Watch Siri 权限通过；479 个发布源文件核验。原生营销流程手机 2 项、Watch 2 项通过，242 个手机及 129 个 Watch 源码／资源与生产一致；未新建模拟器、未覆盖真机安装。
+- IPA SHA-256：`1a913031c1ad5a5676bc45f2f1565960a0375e82ecb0d1818cb06c4305520cf9`。没有新增真机佩戴、Siri 口语、健康数据或双端同步验收；未提交 Git 或推送。
+- 产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/AppStore-1.1.6-52/`；详见 [商店更新记录](docs/appstore-1.1.6-52.md)。
+
+## 历史 App Store 提交：2026-10-27（45）
+
+- 版本：1.1.5 (45)，iPhone 与 Watch 一致。发布当前已授权工作区快照，434 个文件 SHA-256 已核验；未把未提交工作区标成干净 Git 提交。
+- Delivery UUID / ASC Build ID：`01509c3d-5c7c-4734-89ae-a003611a6273`；苹果 `BUILD-STATUS: VALID` / `APP_STORE_ELIGIBLE`。内部 TestFlight 为 `IN_BETA_TESTING`，组 `flyingrtx` 包含本构建，中英文更新说明已核验。
+- App Store Version ID：`54507e01-9396-4f32-a45a-57adc52a43dd`；Review Submission ID：`08c4ca4f-425e-42ed-b20b-b3ee88494b2e`。版本及审核状态均为 `WAITING_FOR_REVIEW`，发布方式 `AFTER_APPROVAL`；尚未宣称已公开上架，当前正式版仍为 1.1.4。
+- 包含训练详情传感器时间轴与逐次动作打点、累计趋势概览、训练日历、动作环图与重量统计，以及此前记录／补记／同步恢复和 Watch 保存反馈改进。本轮未改计数算法。
+- 更新简体中文与英语商店介绍、关键词、推广文案、更新说明及审核操作说明；英语商店名称 PowerReps。每种语言 5 张白金 iPhone 截图与 3 张当前 Watch 原生截图，全部 `COMPLETE`，顺序、来源及校验和已核验。公开截图只使用独立标注的营销示例，不含真实训练资料；示例不作为算法准确率证据。
+- 首次提交发现苹果新要求的 `socialMedia` 分级字段为空；按本应用不含社交功能补为 false，保留其他分级答案，再提交成功。保留既有审核联系人。
+- 双端 Aqua 签名归档、正式导出、版本／签名／HealthKit／配套关系核验通过。发布源码重新执行 82 条真实历史的手机持久化、趋势统计与 Watch 兼容检查，通过；实际营销原生流程手机 2 项、Watch 2 项通过，无运行时告警。109 个 iOS 与 124 个 Watch 源码／资源文件与原生展示副本一致。
+- 尚未新增真机 WatchConnectivity、HealthKit、触感及人工 VoiceOver 验收。此前时间轴与中英文小屏／大字体原生证据按源码一致性沿用；营销截图不冒充真机验收。用户安装与资料保留，7 个临时 GUI 任务已移除，复用的 46mm 模拟器恢复关机。
+- IPA SHA-256：`ce67e42133b6369773d584b9b0b02b9a9354d52ea3d742bc321489420425482b`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/AppStore-1.1.5-45/`；隔离归档源码：`/private/tmp/GymCount-AppStore-1.1.5-45-20261027/source`。详见 [发布记录](docs/appstore-1.1.5-45.md)。
+
+## 历史 TestFlight 发布：2026-10-27（44）
+
+- 版本：1.1.5 (44)，iPhone 与 Watch 一致。发布当前已授权工作区快照，424 个文件 SHA-256 已核验；54 项原生验证输入与发布源码一致，构建号单独更新。
+- Delivery UUID / ASC Build ID：`00963cfa-6478-47e2-a116-b0df7867374d`。苹果 `BUILD-STATUS: VALID` / `IN_BETA_TESTING` / `INTERNAL_ONLY`；已确认内部组 `flyingrtx` 包含本构建，中英文更新说明已写入。
+- iPhone 精简记录与趋势布局、图表摘要及单位，完善补记、编辑、备份恢复、旧汇总同步修正保留与采集接收反馈。Watch 完善中断恢复、保存失败重试、历史及健康数据重复写入处理、提醒设置和反馈。计数算法未改。
+- Aqua 签名归档与导出通过，双端版本、签名、HealthKit 及配套关系核验通过；既有三个工程构建及原生页面证据随包保存。发布源码重新执行 82 条真实历史的手机持久化和 Watch 兼容检查，通过迁移、重复导入、修正保留、删除不复现、重启、备份恢复及损坏数据保留检查。
+- 尚未新增真机 WatchConnectivity、HealthKit 权限及部分重试、震动触感和人工 VoiceOver 验收；保留用户安装与记录。沿用 HealthKit 弃用、采集闭包引用及 AppIntents 编译警告。
+- IPA SHA-256：`853eeaabc9635a8cf8207f9ceadf66d6a929c2599a6ccbe7ff9db5566e60b562`。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.5-44/`；隔离归档源码：`/private/tmp/GymCount-TestFlight-1.1.5-44-20261027/source`。
+
+## 历史 TestFlight 发布：2026-10-26（43）
 
 - 版本：1.1.5 (43)，iPhone 与 Watch 一致；发布源码提交 `54d364737e1117d12a565048df543064f7d3c1b1`，418 个源码文件 SHA-256 已核验。工作区与 Git 有 8 个仅 CRLF/LF 的字节差异，均已单独核对并保留清单。
 - Delivery UUID / ASC Build ID：`df88b503-c690-46b2-8383-624f2dc0227a`。苹果 `BUILD-STATUS: VALID` / `IN_BETA_TESTING` / `INTERNAL_ONLY`；内部测试组 `flyingrtx` 已确认包含本构建，中英文更新说明已写入并回读。
@@ -81,7 +247,7 @@
 - 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.4-37/`。隔离发布源码位于 `/tmp/GymCount-TestFlight-1.1.4-37-20261023/source`，原工作区及无关设计改动保留。
 - 最初 1.1.3 (37) 上传被苹果拒绝（90062/90186）：1.1.3 已获批准并关闭追加构建。只升营销版本到 1.1.4 后重新归档上传成功，失败证据保留在 `TestFlight-1.1.3-37/`。本次没有提交正式版审核或修改已上架版本。
 
-## 最新 App Store 提交：2026-10-24（40）
+## 历史已上架 App Store 正式版：2026-10-24（40）
 
 - 版本：1.1.4 (40)，iPhone 与 Watch 一致；归档源码提交 `b15e0e2f63cf9c0c593a6b1621a360b859370344`，422 个源码文件 SHA-256 已核验。
 - Delivery UUID / ASC Build ID：`d293db2c-6be2-47d9-b164-4976bf49011c`；苹果 `BUILD-STATUS: VALID` / `APP_STORE_ELIGIBLE`。

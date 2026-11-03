@@ -5,6 +5,7 @@ final class WorkoutFeedbackArchive {
     struct Entry: Codable, Identifiable {
         let workout: WorkoutHistory
         var recording: Data?
+        var recordingBytes: Int? = nil
         var actualCount: Int?
         var serverID: Int?
         var id: UUID { workout.id }
@@ -19,26 +20,46 @@ final class WorkoutFeedbackArchive {
         try JSONDecoder().decode(Entry.self, from: Data(contentsOf: url(id)))
     }
 
-    func entries() throws -> [Entry] {
-        guard FileManager.default.fileExists(atPath: folder.path) else { return [] }
-        return try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "json" }
-            .map { try JSONDecoder().decode(Entry.self, from: Data(contentsOf: $0)) }
-            .sorted { $0.workout.date > $1.workout.date }
+    private struct Header: Decodable {
+        let workout: WorkoutHistory
+        let recordingBytes: Int?
+        let actualCount: Int?
+        let serverID: Int?
     }
 
-    func retain(_ workout: WorkoutHistory, recording: Data?) throws {
+    private func prune() throws {
+        let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "json" }
+        // Header decoding skips the base64 sample body; retain only small metadata.
+        let headers = try files.map { url -> (URL, Header, Int) in
+            try autoreleasepool {
+            let header = try JSONDecoder().decode(Header.self, from: Data(contentsOf: url))
+            let bytes: Int
+            if let known = header.recordingBytes, (0...(16 * 1024 * 1024)).contains(known) { bytes = known }
+            else {
+                let legacy = try load(header.workout.id)
+                bytes = legacy.recording?.count ?? 0
+                try write(legacy)
+            }
+            return (url, header, bytes)
+            }
+        }.sorted { $0.1.workout.date > $1.1.workout.date }
+        var bytes = 0
+        for (index, item) in headers.enumerated() {
+            bytes += item.2
+            let pending = item.1.actualCount != nil && item.1.serverID == nil
+            if !pending && (index >= 10 || bytes > 48 * 1024 * 1024) {
+                try FileManager.default.removeItem(at: item.0)
+            }
+        }
+    }
+
+    func retain(_ workout: WorkoutHistory, recording: Data?, prune: Bool = true) throws {
         // Retrying a local workout save must not overwrite an existing submission.
         if FileManager.default.fileExists(atPath: url(workout.id).path) { return }
         try write(Entry(workout: workout, recording: recording))
-        // Keep diagnostics bounded; never evict an explicitly submitted pending report.
-        var retainedBytes = 0
-        for (index, item) in try entries().enumerated() {
-            retainedBytes += item.recording?.count ?? 0
-            if !item.pending && (index >= 10 || retainedBytes > 48 * 1024 * 1024) {
-                try FileManager.default.removeItem(at: url(item.id))
-            }
-        }
+        guard prune else { return }
+        try self.prune()
     }
 
     func prepare(_ id: UUID, actual: Int) throws -> Entry {
@@ -76,6 +97,8 @@ final class WorkoutFeedbackArchive {
     private func url(_ id: UUID) -> URL { folder.appendingPathComponent(id.uuidString + ".json") }
     private func write(_ entry: Entry) throws {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var entry = entry
+        entry.recordingBytes = entry.recording?.count ?? 0
         try JSONEncoder().encode(entry).write(to: url(entry.id), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 }

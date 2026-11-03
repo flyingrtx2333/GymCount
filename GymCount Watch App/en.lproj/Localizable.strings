@@ -10,7 +10,7 @@
 "stop" = "Stop";
 "reset" = "Reset";
 "reps" = "Reps";
-"equipment weight" = "Equipment Weight";
+"equipment weight" = "Weight";
 "kg" = "kg";
 "minus" = "Minus";
 "plus" = "Plus";
@@ -172,7 +172,7 @@
 /* App Shortcuts */
 "shortcut_phrase_start_workout_1" = "Start recording workout with $(.applicationName)";
 "shortcut_phrase_start_workout_2" = "Begin workout using $(.applicationName)";
-"shortcut_title_start_workout" = "Start Workout";
+"shortcut_title_start_workout" = "Start Counting";
 /* Training, history, capture, and accessibility */
 " 公斤" = " kg";
 "%lld 次" = "%lld reps";
@@ -214,7 +214,7 @@
 "周六" = "Sat";
 "周四" = "Thu";
 "周日" = "Sun";
-"器械重量" = "Equipment Weight";
+"器械重量" = "Weight";
 "在手表本机打开：\n" = "Open on your Apple Watch:\n";
 "在手表本机操作" = "On Your Apple Watch";
 "增加实际次数" = "Increase Actual Reps";
@@ -294,7 +294,7 @@
 "运动类型" = "Exercise Type";
 "返回" = "Back";
 "选填" = "Optional";
-"选择动作" = "Choose Exercise";
+"选择动作" = "Exercise";
 "采样中断，数据已保留" = "Sampling interrupted. Your data is saved.";
 "采样中断，请手动核对" = "Sampling interrupted. Check manually.";
 "采样中断，请手动核对次数" = "Sampling interrupted. Check the rep count manually.";
@@ -362,3 +362,143 @@
 "下一周" = "Next Week";
 
 "已保存" = "Saved";
+
+// Commercial readiness fixes
+"%lld 条记录未同步，请重试" = "%lld records failed to sync. Retry.";
+"上周 %@%@" = "Last week %@%@";
+"保存后，可从结果提示进入「计数反馈」。" = "After saving, open Count Feedback from the result.";
+"保存训练" = "Save workout";
+"健康同步" = "Health sync";
+"健康同步失败，请重试" = "Health sync failed. Retry.";
+"健康权限请求失败，请稍后重试" = "Health authorization failed. Try again later.";
+"在 iPhone 的 Watch App → 通知中，允许健身计数器通知。更改后回到这里。" = "On iPhone, open Watch → Notifications and allow PowerReps notifications. Return here after changing it.";
+"在 iPhone 的「记录」页查看、补记和编辑训练。" = "View, add, and edit workouts in Records on iPhone.";
+"在手表首页打开历史，查看已保存的训练。" = "Open History from the Watch home screen to view saved workouts.";
+"在设置中开启「同步到运动圆环」，允许写入体能训练。" = "Enable Sync to Activity Rings in Settings and allow workout writes.";
+"已同步 %lld 条记录" = "Synced %lld records";
+"已同步到健康" = "Synced to Health";
+"已恢复的次数将被删除" = "The recovered repetitions will be deleted.";
+"开启后，回到设置点「立即同步所有记录」。" = "Then return to Settings and tap Sync All Records.";
+"开始训练" = "Start a workout";
+"按实际器械重量设置，佩戴手表完成动作。" = "Set the equipment weight and wear Apple Watch during your workout.";
+"提醒时间" = "Reminder time";
+"提醒未能保存，请重试" = "Reminder could not be saved. Retry.";
+"放弃训练" = "Discard workout";
+"放弃这次训练？" = "Discard this workout?";
+"有空时，动一动。" = "Make a little time to move.";
+"未完成训练" = "Unfinished workout";
+"未完成训练读取失败" = "Could not read the unfinished workout";
+"重新读取" = "Read again";
+"保留并重置" = "Keep file and reset";
+"重置未完成训练？" = "Reset the unfinished workout?";
+"原文件将保留，已保存的训练不受影响" = "The original file will be kept. Saved workouts stay unchanged.";
+"原文件保留失败，请重试" = "Could not keep the original file. Retry.";
+"未能放弃训练，请重试" = "Could not discard the workout. Retry.";
+"查看记录" = "View records";
+"正在同步到健康…" = "Syncing to Health…";
+"每日提醒" = "Daily reminder";
+"用＋／－核对次数，点「结束」保存。" = "Check the count with +/−, then tap End to save.";
+"继续训练" = "Continue workout";
+"自动计数在结束时核准，请按实际完成次数核对。" = "The count is finalized when you end. Check it against your completed repetitions.";
+"计数核对" = "Check the count";
+"训练备份失败，请保持 App 打开并重试保存" = "Workout backup failed. Keep the app open and retry saving.";
+"训练已恢复，自动计数已暂停" = "Workout recovered. Automatic counting is paused.";
+"训练提醒" = "Workout reminder";
+"记录未出现时，在手机设置中点「手表同步」。" = "If a record is missing, tap Watch Sync in iPhone settings.";
+"请先允许写入体能训练" = "Allow workout writes first.";
+"请先允许通知，才能接收提醒" = "Allow notifications to receive reminders.";
+"选择卧推、深蹲或硬拉，点「开始」。" = "Choose bench press, squat, or deadlift, then tap Start.";
+"通知权限" = "Notification permission";
+"通知权限怎么开" = "Enable notifications";
+"需要补传时，点「立即同步所有记录」。" = "Tap Sync All Records to sync saved workouts.";
+"高级" = "Advanced";
+
+"累计次数" = "Total reps";
+"训练量" = "Volume";
+"趋势" = "Trend";
+"展开趋势" = "Show trend";
+"收起趋势" = "Hide trend";
+
+"时间轴保存失败，请重试" = "Could not save the timeline. Retry.";
+"记录已删除，时间轴清理失败" = "Record deleted. Could not remove the timeline.";
+"时间轴同步失败，将自动重试" = "Timeline sync failed. Retrying automatically.";
+"部分时间轴读取失败，请重试同步" = "Some timelines could not be read. Retry sync.";
+"时间轴尚未同步，请重试" = "Timeline is not synced yet. Retry sync.";
+
+/* Direct weight entry */
+"请输入有效重量" = "Enter a valid weight";
+"重量范围：%@–%@ 公斤" = "Weight range: %@–%@ kg";
+
+// Training streak and conditional daily reminder
+"连续 %lld 天" = "%lld-day streak";
+"已连续训练 %lld 天，今天动一动，延续连动。" = "Keep your %lld-day streak going. Train today.";
+"今天还没训练，动一动吧。" = "No workout yet today. Time to move.";
+"未训练提醒" = "Workout reminder";
+"允许通知" = "Allow notifications";
+"%lld 天" = "%lld days";
+
+"开始健身计数" = "Start Counting";
+"要计数哪个动作？" = "Which exercise would you like to count?";
+"已开始%@计数" = "Started counting %@.";
+"重量须在 0–500 公斤之间" = "Weight must be between 0 and 500 kg.";
+"请先在手表处理未完成训练" = "Finish or recover the unfinished workout on your watch first.";
+"请先完成当前采集" = "Finish the current capture first.";
+"训练正在保存，请稍后再试" = "Your workout is saving. Try again shortly.";
+"计数未能开始，请在手表重试" = "Could not start counting. Try again on your watch.";
+"对手表说「开始健身计数」，再选择动作。" = "Ask Siri on your watch to “Start PowerReps”, then choose an exercise.";
+"也可以说「用健身计数开始卧推」。" = "Or say “Start Bench Press with PowerReps”.";
+
+/* Whole workout */
+"切换动作" = "Exercise";
+"第 %lld 组" = "Set %lld";
+"合计 %lld 次" = "%lld Total";
+"手动分组" = "Split Set";
+"更多操作" = "More Actions";
+"继续" = "Resume";
+"暂停" = "Pause";
+"已暂停" = "Paused";
+"间隔" = "Interval";
+"还在训练吗？" = "Still Training?";
+"结束训练" = "End Workout";
+"%lld 组" = "%lld Sets";
+"组间间隔" = "Between Sets";
+"活动热量（估计）" = "Active Energy (est.)";
+"结束当前训练并保存报告" = "End the current workout and save its report";
+"结束当前训练" = "End the current workout";
+"训练已保存，共%lld次" = "Workout saved, %lld reps";
+"训练进行中，共%lld次" = "Workout in progress, %lld reps";
+"shortcut_title_end_workout" = "End Workout";
+"各组自动记录；换动作或重量时点顶部。" = "Sets are logged automatically. Tap the top row to change exercise or weight.";
+"用＋／－核对本组次数，全部完成后点「结束」。" = "Use +/− to correct this set. Tap End when your workout is complete.";
+"完成后说「结束健身计数」。" = "When finished, say “Finish Power Reps.”";
+
+"训练已恢复，健康数据从现在继续" = "Workout restored. Health data resumes from now.";
+"训练数据校验失败，请重试" = "Could not validate the workout. Try again.";
+"健康设置" = "Health Settings";
+"训练报告" = "Workout Report";
+
+"训练正在进行中" = "A workout is already running.";
+"健康数据暂不可用" = "Health data is unavailable.";
+"没有进行中的健康训练" = "No Health workout is running.";
+"训练时间无效" = "The workout time is invalid.";
+"健康训练保存失败，请重试" = "Could not save to Health. Try again.";
+"健康训练结束超时，请重试" = "Health did not finish saving. Try again.";
+"健康训练已中断" = "The Health workout was interrupted.";
+"保存失败，计数已暂停，请重试" = "Save failed. Counting is paused. Try again.";
+
+"动作时长" = "Active Time";
+"总用时" = "Elapsed";
+"次" = "reps";
+
+"训练已保存，健康记录未写入" = "Workout saved. Health record was not written.";
+"采样保存失败，请重试" = "Could not save sensor data. Try again.";
+"训练报告同步失败，请重试" = "Could not sync the workout report. Try again.";
+"已记录热量（估计）" = "Recorded Energy (est.)";
+
+"未保存的训练将被删除" = "The unsaved workout will be deleted.";
+
+"整场训练" = "Workout";
+
+"请更新 iPhone App 以同步训练报告" = "Update the iPhone app to sync workout reports.";
+
+"训练已放弃，采样清理失败" = "Workout discarded; sensor data could not be removed.";
