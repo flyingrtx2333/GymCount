@@ -37,20 +37,29 @@
 
 详细证据见 [iPhone 多组训练完善记录](docs/phone-training-flow.md)。
 
-## iPhone Duo 布局：2026-11-03（未发布）
+## 最新 TestFlight：2026-11-03（54）
+
+- iPhone 与 Watch：1.1.8 (54)。代码提交 `82f02b30bcf84e4b739338399b395d0fedaef047`，已推送 `codex/gymcount-cleanup-20261011`；集中提交此前积累的 136 个源码、测试与文档文件。
+- Delivery UUID / ASC Build ID：`7eeaccd6-e3dc-47a3-9095-34b7e9a15e26`。Apple `BUILD-STATUS: VALID`、`INTERNAL_ONLY`、`IN_BETA_TESTING`；内部组 `flyingrtx` 已确认包含本构建，中英文测试说明已写入并回读。
+- 包含 Duo 原生分栏／折叠布局、记录／趋势／补记与备份恢复完善、Watch 页面统一和实时完成反馈修复；Release 移除开发者采集页面、远程采集入口与相机权限，正常记录、报告及传感器同步保留。
+- 从提交生成 497 个文件的发布快照并核验；242 个应用源码／资源与本次最终原生验收副本一致。双端签名归档、导出、严格签名、版本／配套关系、HealthKit 与 Watch Siri 权限通过；沿用同源码的独立 iPhone Release 构建及真实历史和原生检查结果。
+- IPA SHA-256：`54bac783d72c747342caeaaac0f42bf07dd0cdac2cc595bd1c95ccfe202a4c3a`。82 条原始历史保持；未新增真机佩戴、触感／声音、HealthKit、Siri 口语或双端物理传输验收。正式商店 1.1.7 未改，三个临时发布任务已移除。
+- 完整产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.8-54/`；详见 [54 版发布记录](docs/testflight-1.1.8-54.md)。
+
+## iPhone Duo 布局：2026-11-03（TestFlight 54）
 
 - 三入口采用原生 TabView；不要恢复叠加隐藏的系统 TabView 或固定底栏，Duo 的侧边导航和保留区域由系统布局。
 - 记录使用 NavigationSplitView，窄屏进入详情，宽屏并排；详情按记录 UUID 管理身份，折叠不清空当前选择。趋势按可用宽度与字体大小调整列数，表单保持阅读宽度，焦点输入随窗口尺寸变化重新定位。
 - Xcode 27.1 与用户已有 Duo 模拟器用于实际折叠／展开检查；不再用 iPad 预览充当 Duo 验收。复用现有小屏 iPhone，验证副本用独立 Bundle ID 与真实历史隔离存储。实现、截图、构建和边界见 [Duo 适配](docs/ios-duo-20261103.md)。
 
-## 卧推实时计数与反馈：2026-10-31（未发布）
+## 卧推实时计数与反馈：2026-10-31（TestFlight 54）
 
-- 随后统一三种动作的 `DetectedRepetition` 事件、实时性／去重检查及 `RepCompletionFeedback` 组件，完成触觉调用 5 处收为 1 处；检测器仅输出完成事件，补算传非实时标记，不直接播放反馈。普通／整场训练和采集共用该入口；后续动作不要另加检测器内的振动或独立的计数反馈回调。六条真实卧推回放及配套 iPhone/Watch Release 构建通过，尚未发布或新增佩戴验收；见 [反馈组件整理](docs/rep-feedback-refactor-20261031.md)。
+- 随后统一三种动作的 `DetectedRepetition` 事件、实时性／去重检查及 `RepCompletionFeedback` 组件，完成触觉调用 5 处收为 1 处；检测器仅输出完成事件，补算传非实时标记，不直接播放反馈。普通／整场训练和采集共用该入口；后续动作不要另加检测器内的振动或独立的计数反馈回调。六条真实卧推回放及配套 iPhone/Watch Release 构建通过，已纳入 TestFlight 54，未新增佩戴验收；见 [反馈组件整理](docs/rep-feedback-refactor-20261031.md)。
 
 - 实时加 1 和系统完成反馈改为消费同一个新鲜顶部完成周期；V8 前缀仅作诊断，结束／暂停／切换时静默核准。准备动作、旧会话和迟到事件不因数字增加而补振动。
 - 普通与整场训练、采集保持一致；完成周期保留起点／转折／完成时间，单次动作遇到 V8 无法确认时不误清成 0。内存次数和触觉请求先于草稿写入，避免存储延迟挪动反馈时机；音效遵循 watchOS 静音设置，不加语音报数。
 - 六条真实录制直接回放生产检测器，五组 25 个顶部事件及全部 V8 最终结果保持；结束与重置不追加完成事件，有效首周期保留检查通过。未改顶部门限、最终 V8、深蹲／硬拉或云端算法。配套手机／Watch 与独立手机 Release 构建通过，尚未新增真实佩戴触感／声音验收。
-- 尚未提交 Git、发布或纳入已上传的 1.1.7 (53)。详见 [完成反馈同步修复](docs/bench-completion-sync-20261031.md)。
+- 已提交 Git 并纳入 1.1.8 (54)，此前上传的 1.1.7 (53) 不包含此修复。详见 [完成反馈同步修复](docs/bench-completion-sync-20261031.md)。
 
 ## 分组入口与时间轴：2026-10-29（已纳入 TestFlight 51）
 
