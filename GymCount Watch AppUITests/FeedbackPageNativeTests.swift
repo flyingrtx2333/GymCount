@@ -8,10 +8,12 @@ final class FeedbackPageNativeTests: XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         app.launch(); defer { app.terminate() }
         XCTAssertTrue(app.buttons["历史"].waitForExistence(timeout: 10)); app.buttons["历史"].tap()
-        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "feedback.history.", "计数反馈"))
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "feedback.history."))
         for _ in 0..<12 {
             if rows.count > 0 { break }
-            app.buttons["上一周"].tap()
+            app.buttons["history.week-filter"].tap()
+            app.buttons["history.week.previous"].tap()
+            app.buttons["history.week-back"].firstMatch.tap()
         }
         let row = rows.firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))

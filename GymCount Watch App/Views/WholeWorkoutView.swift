@@ -15,13 +15,18 @@ struct WholeWorkoutView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: GymStyle.spacing) {
+            VStack(spacing: 4) {
                 HStack(spacing: 2) {
                     Button { showingExercise = true } label: {
-                        HStack(spacing: 3) {
-                            Text(session?.exerciseType.displayName ?? "")
-                                .font(GymStyle.body).lineLimit(1).minimumScaleFactor(0.75)
-                            Image(systemName: "chevron.down").font(GymStyle.detail)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 3) {
+                                Text(session?.exerciseType.displayName ?? "")
+                                    .font(GymStyle.body).lineLimit(1).minimumScaleFactor(0.75)
+                                Image(systemName: "chevron.down").font(GymStyle.detail)
+                            }
+                            Text(String(localized: "第 \(dataManager.currentGroupNumber) 组"))
+                                .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
+                                .accessibilityIdentifier("whole.group")
                         }
                         .frame(minHeight: 44).contentShape(Rectangle())
                     }
@@ -32,9 +37,11 @@ struct WholeWorkoutView: View {
                     .disabled(session?.isActive != true)
                     Spacer(minLength: 0)
                     Button { showingWeight = true } label: {
-                        Text(weightText).font(GymStyle.caption)
-                            .foregroundStyle(GymStyle.accent)
-                            .frame(minHeight: 44).contentShape(Rectangle())
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(weightText).font(GymStyle.caption).foregroundStyle(GymStyle.accent)
+                            Text(String(localized: "合计 \(dataManager.wholeTotalReps) 次"))
+                                .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
+                        }.frame(minHeight: 44).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(String(localized: "修改器械重量"))
@@ -42,40 +49,6 @@ struct WholeWorkoutView: View {
                     .accessibilityIdentifier("whole.weight")
                     .disabled(session?.isActive != true)
                 }
-                HStack {
-                    Text(String(localized: "第 \(dataManager.currentGroupNumber) 组"))
-                        .accessibilityIdentifier("whole.group")
-                    Spacer(minLength: 0)
-                    Text(String(localized: "合计 \(dataManager.wholeTotalReps) 次"))
-                    Button { showingActions = true } label: {
-                        Image(systemName: "ellipsis")
-                            .font(GymStyle.button)
-                            .foregroundStyle(GymStyle.accent)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "更多操作"))
-                    .accessibilityIdentifier("whole.actions")
-                    .confirmationDialog(String(localized: "更多操作"), isPresented: $showingActions, titleVisibility: .hidden) {
-                        Button(String(localized: "手动分组")) {
-                            perform { await dataManager.nextWholeWorkoutSet() }
-                        }
-                        .disabled(locked || !canEditRepetitions || dataManager.currentGroupReps == 0)
-                        .accessibilityIdentifier("whole.next-set")
-                        Button(String(localized: "放弃训练"), role: .destructive) { showingDiscard = true }
-                            .accessibilityIdentifier("whole.discard")
-                        Button(String(localized: "取消"), role: .cancel) {}
-                    }
-                    .alert(String(localized: "放弃这次训练？"), isPresented: $showingDiscard) {
-                        Button(String(localized: "取消"), role: .cancel) {}
-                        Button(String(localized: "放弃训练"), role: .destructive) { dataManager.resetCurrentWorkout() }
-                            .accessibilityIdentifier("whole.discard.confirm")
-                    } message: {
-                        Text(String(localized: "未保存的训练将被删除"))
-                    }
-                }
-                .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
 
                 HStack(spacing: 2) {
                     CircleButton(icon: "minus", disabled: locked || !canEditRepetitions || dataManager.currentGroupReps == 0) {
@@ -93,8 +66,9 @@ struct WholeWorkoutView: View {
                     }.accessibilityLabel(String(localized: "增加次数"))
                 }
 
-                liveStatus
-                    .frame(maxWidth: .infinity, minHeight: 20)
+                if dataManager.isWholeWorkoutPaused || dataManager.countingFailed || dataManager.restStartedAt != nil {
+                    liveStatus.frame(maxWidth: .infinity)
+                }
                 if let error = liveError {
                     Label(error, systemImage: "exclamationmark.circle")
                         .font(GymStyle.detail).foregroundStyle(.orange)
@@ -105,30 +79,18 @@ struct WholeWorkoutView: View {
                         .accessibilityIdentifier("whole.error")
                 }
 
-                HStack(spacing: GymStyle.spacing) {
-                    Button(dataManager.isWholeWorkoutPaused ? String(localized: "继续") : String(localized: "暂停")) {
-                        changingSet = true
-                        Task { @MainActor in
-                            if dataManager.isWholeWorkoutPaused { await dataManager.resumeWholeWorkout() }
-                            else { await dataManager.pauseWholeWorkout() }
-                            changingSet = false
-                        }
-                    }
-                    .buttonStyle(GymActionStyle())
-                    .accessibilityIdentifier("whole.pause")
-                    .disabled(session?.isActive != true)
-                    Button(session?.endTime == nil ? String(localized: "结束") : String(localized: "重试保存")) {
-                        perform { await dataManager.finishWholeWorkout() }
-                    }
-                    .buttonStyle(GymActionStyle(primary: true))
-                    .accessibilityIdentifier("workout.end")
-                }
+
             }
             .gymPageContent()
             .disabled(locked)
         }
         .gymPage().navigationBarBackButtonHidden(true)
         .gymNavigationTitle(String(localized: "训练"))
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            workoutActions.disabled(locked)
+                .padding(.horizontal, GymStyle.inset).padding(.bottom, 4).background(Color.black)
+        }
+        .ignoresSafeArea(.container, edges: .bottom)
         .overlay { if locked { ProgressView() } }
         .sheet(isPresented: $showingWeight) {
             WeightInputView(value: session?.weight ?? dataManager.settings.defaultWeight, maximum: 500) { value in
@@ -145,6 +107,61 @@ struct WholeWorkoutView: View {
         .alert(String(localized: "还在训练吗？"), isPresented: $dataManager.wholeWorkoutIdlePrompt) {
             Button(String(localized: "继续训练"), role: .cancel) { dataManager.continueWholeWorkoutAfterIdle() }
             Button(String(localized: "结束训练")) { perform { await dataManager.finishWholeWorkout() } }
+        }
+    }
+
+    private var workoutActions: some View {
+    HStack(spacing: GymStyle.spacing) {
+        Button(dataManager.isWholeWorkoutPaused ? String(localized: "继续") : String(localized: "暂停")) {
+            changingSet = true
+            Task { @MainActor in
+                if dataManager.isWholeWorkoutPaused { await dataManager.resumeWholeWorkout() }
+                else { await dataManager.pauseWholeWorkout() }
+                changingSet = false
+            }
+        }
+        .lineLimit(1).minimumScaleFactor(0.75)
+        .buttonStyle(GymActionStyle())
+        .accessibilityIdentifier("whole.pause")
+        .disabled(session?.isActive != true)
+        Button(session?.endTime == nil ? String(localized: "结束") : String(localized: "重试保存")) {
+            perform { await dataManager.finishWholeWorkout() }
+        }
+        .lineLimit(1).minimumScaleFactor(0.75)
+        .buttonStyle(GymActionStyle(primary: true))
+        .accessibilityIdentifier("workout.end")
+        moreActions
+    }
+    }
+
+    private var moreActions: some View {
+        Button { showingActions = true } label: {
+            Image(systemName: "ellipsis")
+                .font(GymStyle.button)
+                .foregroundStyle(GymStyle.accent)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(GymStyle.surface, in: Capsule())
+        .accessibilityLabel(String(localized: "更多操作"))
+        .accessibilityIdentifier("whole.actions")
+        .confirmationDialog(String(localized: "更多操作"), isPresented: $showingActions, titleVisibility: .hidden) {
+            Button(String(localized: "手动分组")) {
+                perform { await dataManager.nextWholeWorkoutSet() }
+            }
+            .disabled(locked || !canEditRepetitions || dataManager.currentGroupReps == 0)
+            .accessibilityIdentifier("whole.next-set")
+            Button(String(localized: "放弃训练"), role: .destructive) { showingDiscard = true }
+                .accessibilityIdentifier("whole.discard")
+            Button(String(localized: "取消"), role: .cancel) {}
+        }
+        .alert(String(localized: "放弃这次训练？"), isPresented: $showingDiscard) {
+            Button(String(localized: "取消"), role: .cancel) {}
+            Button(String(localized: "放弃训练"), role: .destructive) { dataManager.resetCurrentWorkout() }
+                .accessibilityIdentifier("whole.discard.confirm")
+        } message: {
+            Text(String(localized: "未保存的训练将被删除"))
         }
     }
 
@@ -224,6 +241,7 @@ struct WholeWorkoutSummaryView: View {
     let report: WorkoutReport
     let close: () -> Void
     var warning: String? = nil
+    var isNewlySaved = true
     @State private var showingSettings = false
 
     var body: some View {
@@ -265,13 +283,16 @@ struct WholeWorkoutSummaryView: View {
                     Button(String(localized: "设置")) { showingSettings = true }
                         .buttonStyle(GymActionStyle())
                 }
-                Button(String(localized: "完成"), action: close)
-                    .buttonStyle(GymActionStyle(primary: true))
-                    .accessibilityIdentifier("whole.summary.done")
+                if isNewlySaved {
+                    Button(String(localized: "完成"), action: close)
+                        .buttonStyle(GymActionStyle(primary: true))
+                        .accessibilityIdentifier("whole.summary.done")
+                }
             }.gymPageContent()
         }
         .gymPage().navigationBarBackButtonHidden(true)
-        .gymNavigationTitle(String(localized: "训练已保存"))
+        .gymNavigationTitle(isNewlySaved ? String(localized: "训练已保存") : String(localized: "训练报告"),
+                            back: isNewlySaved ? nil : close)
         .accessibilityIdentifier("whole.summary")
         .sheet(isPresented: $showingSettings) { SettingsView() }
     }

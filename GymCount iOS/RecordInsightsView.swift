@@ -109,11 +109,11 @@ struct RecordExerciseDistribution: View {
     private func color(for exercise: ExerciseType) -> Color {
         switch exercise {
         case .benchPress: Studio.accent
-        case .squat: Studio.adaptive(0xBEAC83, 0x92825C)
-        case .deadlift: Studio.adaptive(0x73766B, 0xB6B9AB)
-        case .overheadPress: Studio.adaptive(0xA69169, 0xA4936C)
-        case .barbellRow: Studio.adaptive(0x8E8778, 0xC0BAAB)
-        case .bicepCurl: Studio.adaptive(0xB1A68D, 0x7F806D)
+        case .squat: Studio.adaptive(0x1D7A72, 0x66C9BA)
+        case .deadlift: Studio.adaptive(0x426BAE, 0x7AA8E5)
+        case .overheadPress: Studio.adaptive(0xB35A36, 0xECA47F)
+        case .barbellRow: Studio.adaptive(0x8058A5, 0xBB9ADA)
+        case .bicepCurl: Studio.adaptive(0xB04972, 0xE994BA)
         }
     }
     private func frequency(_ row: RecordTrainingInsights.ExerciseBreakdown) -> some View {

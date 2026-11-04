@@ -12,7 +12,7 @@ struct HelpView: View {
 
     private let sections: [(icon: String, title: String, key: String, items: [String])] = [
         (icon: "figure.strengthtraining.traditional", title: String(localized: "开始训练"), key: "training", items: [
-            String(localized: "选择卧推、深蹲或硬拉，点「开始」。"),
+            String(localized: "选择动作，点「开始」。"),
             String(localized: "按实际器械重量设置，佩戴手表完成动作。"),
             String(localized: "各组自动记录；换动作或重量时点顶部。"),
             String(localized: "用＋／－核对本组次数，全部完成后点「结束」。")
@@ -38,61 +38,46 @@ struct HelpView: View {
     ]
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: GymStyle.spacing) {
-                    ForEach(sections, id: \.key) { section in
-                        HelpCard(
-                            icon: section.icon,
-                            title: section.title,
-                            items: section.items
-                        )
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(sections, id: \.key) { section in
+                    NavigationLink {
+                        HelpTopicView(title: section.title, items: section.items)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: section.icon).foregroundStyle(GymStyle.accent).frame(width: 18)
+                            Text(section.title).font(GymStyle.body)
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right").font(GymStyle.detail).foregroundStyle(GymStyle.muted)
+                        }.frame(minHeight: 44).contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain).accessibilityIdentifier("help.topic." + section.key)
+                    Rectangle().fill(GymStyle.line).frame(height: 0.5).accessibilityHidden(true)
                 }
-                .gymPageContent()
-            }
-            .navigationBarBackButtonHidden(true)
-            .gymPage()
-            .gymNavigationTitle(NSLocalizedString("help_title", comment: "使用帮助"), back: { presentationMode.wrappedValue.dismiss() })
+            }.gymPageContent()
         }
+        .gymPage()
+        .gymNavigationTitle(NSLocalizedString("help_title", comment: "使用帮助"), back: { presentationMode.wrappedValue.dismiss() })
     }
 }
 
-// MARK: - 帮助卡片
-
-struct HelpCard: View {
-    let icon: String
+private struct HelpTopicView: View {
     let title: String
     let items: [String]
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // 标题行
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(GymStyle.detail)
-                    .foregroundStyle(GymStyle.accent)
-                Text(title)
-                    .font(GymStyle.button)
-                    .foregroundColor(GymStyle.ink)
-            }
-
-            // 内容
-            VStack(alignment: .leading, spacing: 3) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
                 ForEach(items, id: \.self) { item in
                     Text(item)
-                        .font(GymStyle.detail)
-                        .foregroundStyle(GymStyle.muted)
+                        .font(GymStyle.caption)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            }
+            }.gymPageContent()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(GymStyle.surface)
-        )
+        .gymPage().gymNavigationTitle(title, back: { dismiss() })
     }
 }
 

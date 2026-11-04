@@ -19,7 +19,7 @@ enum GymStyle {
     static let body = Font.system(size: 14)
     static let button = Font.system(size: 14, weight: .semibold)
     static let detail = Font.system(size: 11)
-    static let trainingCounter = Font.system(size: 48, weight: .semibold, design: .rounded)
+    static let trainingCounter = Font.system(size: 40, weight: .semibold, design: .rounded)
     static let counter = Font.system(size: 38, design: .rounded).weight(.semibold)
     static let accent = Color("AccentColor")
     static let ink = Color(red: 244 / 255, green: 241 / 255, blue: 232 / 255)
@@ -33,14 +33,13 @@ enum GymStyle {
 extension View {
     func gymPageContent() -> some View {
         padding(.horizontal, GymStyle.inset)
-            .padding(.top, 2)
-            .padding(.bottom, 12)
+            .padding(.bottom, 6)
     }
 
     func gymNavigationTitle(_ title: String, back: (() -> Void)? = nil,
                             backIdentifier: String = "watch.back") -> some View {
         frame(maxWidth: .infinity)
-            .padding(.top, GymStyle.buttonHeight)
+            .padding(.top, back == nil ? 32 : GymStyle.buttonHeight)
             .overlay(alignment: .topLeading) {
                 Group {
                     if let back {
@@ -63,6 +62,7 @@ extension View {
                                    height: GymStyle.buttonHeight, alignment: .leading)
                             .accessibilityAddTraits(.isHeader)
                             .accessibilityIdentifier("watch.title")
+                            .allowsHitTesting(false)
                     }
                 }
                 .foregroundStyle(GymStyle.ink)
@@ -89,7 +89,7 @@ struct GymActionStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(GymStyle.button)
-            .foregroundStyle(primary ? GymStyle.onAccent : GymStyle.ink)
+            .foregroundStyle(configuration.role == .destructive ? Color.red : primary ? GymStyle.onAccent : GymStyle.ink)
             .frame(maxWidth: .infinity, minHeight: GymStyle.buttonHeight)
             .background(primary ? GymStyle.accent : GymStyle.surface, in: Capsule())
             .overlay(Capsule().strokeBorder(primary ? Color.clear : GymStyle.accent.opacity(0.25), lineWidth: 0.5))
@@ -211,11 +211,19 @@ struct WorkoutRecoveryView: View {
         ScrollView {
             VStack(spacing: GymStyle.spacing) {
                 if let session = dataManager.currentSession {
-                    Text(dataManager.isWholeWorkout ? String(localized: "整场训练") : session.exerciseType.displayName)
-                        .font(GymStyle.section)
-                    Text(String(localized: "\(dataManager.isWholeWorkout ? dataManager.wholeTotalReps : session.totalReps) 次"))
-                        .font(GymStyle.counter).monospacedDigit()
-                    Text(String(localized: "训练已恢复，自动计数已暂停"))
+                    HStack(spacing: 6) {
+                        Image(session.exerciseType.icon).resizable().renderingMode(.template).scaledToFit()
+                            .frame(width: 22, height: 22).foregroundStyle(GymStyle.accent).accessibilityHidden(true)
+                        Text(session.exerciseType.displayName).font(GymStyle.body)
+                            .lineLimit(1).minimumScaleFactor(0.75)
+                        Spacer(minLength: 0)
+                        HStack(alignment: .firstTextBaseline, spacing: 2) {
+                            Text((dataManager.isWholeWorkout ? dataManager.wholeTotalReps : session.totalReps).formatted())
+                                .font(GymStyle.counter).monospacedDigit()
+                            Text(String(localized: "次")).font(GymStyle.caption).foregroundStyle(GymStyle.muted)
+                        }
+                    }
+                    Text(String(localized: "自动计数已暂停"))
                         .font(GymStyle.caption).foregroundStyle(GymStyle.muted)
                         .fixedSize(horizontal: false, vertical: true)
                     if dataManager.canResumeRecoveredWorkout {
@@ -223,12 +231,16 @@ struct WorkoutRecoveryView: View {
                             .buttonStyle(GymActionStyle(primary: true))
                             .accessibilityIdentifier("workout.recovery.resume")
                     }
-                    Button(String(localized: "保存训练")) { Task { await dataManager.endWorkout() } }
-                        .buttonStyle(GymActionStyle())
-                        .accessibilityIdentifier("workout.recovery.save")
-                    Button(String(localized: "放弃训练"), role: .destructive) { confirmingDiscard = true }
-                        .buttonStyle(GymActionStyle())
-                        .accessibilityIdentifier("workout.recovery.discard")
+                    HStack(spacing: GymStyle.spacing) {
+                        Button(String(localized: "保存")) { Task { await dataManager.endWorkout() } }
+                            .buttonStyle(GymActionStyle())
+                            .accessibilityLabel(String(localized: "保存训练"))
+                            .accessibilityIdentifier("workout.recovery.save")
+                        Button(String(localized: "放弃"), role: .destructive) { confirmingDiscard = true }
+                            .buttonStyle(GymActionStyle())
+                            .accessibilityLabel(String(localized: "放弃训练"))
+                            .accessibilityIdentifier("workout.recovery.discard")
+                    }
                 }
             }.gymPageContent()
         }
@@ -298,9 +310,7 @@ struct MainMenuView: View {
                     .accessibilityIdentifier("workout.start." + exercise.rawValue)
                 }
             }
-            .padding(.horizontal, GymStyle.inset)
-            .padding(.top, 2)
-            .padding(.bottom, 12)
+            .gymPageContent()
         }
         .navigationBarBackButtonHidden(true)
         .gymPage()

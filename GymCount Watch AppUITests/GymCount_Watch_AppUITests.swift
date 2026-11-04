@@ -52,6 +52,7 @@ final class CommercialRepairWatchTests: XCTestCase {
         let close = app.buttons["workout.saved.close"]
         XCTAssertTrue(close.waitForExistence(timeout: 5)); close.tap()
         app.buttons["历史"].tap(); app.buttons["history.exercise-filter"].tap(); app.buttons["history.exercise.squat"].tap()
+        app.buttons["history.week-filter"].tap()
         XCTAssertTrue(app.staticTexts["330"].waitForExistence(timeout: 5), "3 × 50 + 3 × 60 must be 330 kg")
         shot(app, "watch-known-weight-volume")
     }
@@ -61,17 +62,19 @@ final class CommercialRepairWatchTests: XCTestCase {
         let picker = app.buttons["history.exercise-filter"]
         XCTAssertTrue(picker.waitForExistence(timeout: 5))
         XCTAssertGreaterThanOrEqual(picker.frame.height, 44)
-        let previous = app.buttons["上一周"]
+        app.buttons["history.week-filter"].tap()
+        let previous = app.buttons["history.week.previous"]
         XCTAssertGreaterThanOrEqual(previous.frame.width, 44)
         XCTAssertGreaterThanOrEqual(previous.frame.height, 44)
         previous.tap()
+        app.buttons["history.week-back"].firstMatch.tap()
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "feedback.history.")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5), "Requires the real Oct 19 historical records")
         XCTAssertLessThanOrEqual(row.frame.maxY, app.frame.maxY)
         shot(app, "refined-watch-history-first-record")
-        app.buttons["history.trend-toggle"].tap()
+        app.buttons["history.week-filter"].tap()
         shot(app, "refined-watch-history-expanded")
-        app.buttons["history.trend-toggle"].tap()
+        app.buttons["history.week-back"].firstMatch.tap()
         picker.tap(); app.buttons["history.exercise.squat"].tap()
         XCTAssertTrue(picker.waitForExistence(timeout: 5))
         shot(app, "refined-watch-history-squat")
@@ -278,12 +281,15 @@ final class GymCount_Watch_AppUITests: XCTestCase {
         app.launchArguments += ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         app.launch()
         app.buttons["历史"].tap()
+        app.buttons["history.exercise-filter"].tap()
         app.buttons["history.exercise.squat"].tap()
         let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "feedback.history."))
         // The read-only real capture used by this review is in October 2026.
         for _ in 0..<8 {
             if rows.count > 0 { break }
-            app.buttons["上一周"].tap()
+            app.buttons["history.week-filter"].tap()
+            app.buttons["history.week.previous"].tap()
+            app.buttons["history.week-back"].firstMatch.tap()
         }
         guard rows.count > 0 else { throw XCTSkip("Seed an isolated real capture and matching history before running") }
         if !rows.firstMatch.isHittable { app.swipeUp() }

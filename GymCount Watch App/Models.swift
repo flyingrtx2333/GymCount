@@ -259,7 +259,7 @@ enum WatchWorkoutWeek {
 }
 
 // MARK: - 应用设置
-struct AppSettings: Codable {
+struct AppSettings: Codable, Equatable {
     var autoDetectionEnabled: Bool = true
     var defaultWeight: Double = 50.0  // 杠铃重量(kg)
     var userBodyWeight: Double = 70.0 // 用户体重（kg）

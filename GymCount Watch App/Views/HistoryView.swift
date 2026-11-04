@@ -15,66 +15,20 @@ struct HistoryView: View {
     @State private var selectedExercise: ExerciseType = .benchPress
     @State private var currentWeekDate: Date = Date()
     @State private var feedbackWorkout: WorkoutHistory?
-    @State private var showingTrend = false
     @State private var weeklyWorkouts: [WorkoutHistory] = []
     @State private var weekCounts = Array(repeating: 0, count: 7)
     @State private var weekWeight: Double?
     @State private var previousReps = 0
     @State private var previousWeight: Double?
     @State private var showingExercisePicker = false
+    @State private var showingWeekPicker = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                historyHeader
-
-                WeekNavigatorRow(
-                    title: getWeekTitle(),
-                    accessibilityTitle: dataManager.getWeekInfo(for: currentWeekDate).title,
-                    onPrev: switchToPreviousWeek,
-                    onNext: { if !isCurrentWeek { switchToNextWeek() } },
-                    isCurrentWeek: isCurrentWeek
-                )
-
-                Button {
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-                        showingTrend.toggle()
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        StatsRow(
-                            reps: getCurrentWeekTotal(),
-                            weight: getCurrentWeekTotalWeight(),
-                            repChange: showingTrend ? getRepChangeFromLastWeek() : nil,
-                            weightChange: showingTrend ? getWeightChangeFromLastWeek() : nil
-                        )
-                        VStack(spacing: 3) {
-                            Image(systemName: "chart.bar.xaxis")
-                                .font(.system(size: 12, weight: .medium))
-                            Image(systemName: showingTrend ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 8, weight: .semibold))
-                        }
-                        .foregroundStyle(GymStyle.accent)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint(String(localized: showingTrend ? "收起趋势" : "展开趋势"))
-                .accessibilityIdentifier("history.trend-toggle")
-
-                if showingTrend {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(String(localized: "趋势")).font(GymStyle.caption)
-                        SimpleBarChart(
-                            counts: weekCounts
-                        )
-                        .frame(height: 72)
-                    }
-                    .padding(.vertical, 6)
-                    .transition(.opacity)
-                }
+                historyFilters
+                Rectangle().fill(GymStyle.line).frame(height: 0.5).accessibilityHidden(true)
 
                 if weeklyWorkouts.isEmpty {
                     Text(NSLocalizedString("noData", comment: "暂无数据"))
@@ -84,19 +38,16 @@ struct HistoryView: View {
                 } else {
                     ForEach(weeklyWorkouts) { workout in
                         Button { feedbackWorkout = workout } label: {
-                            HStack(spacing: 6) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(workout.date, format: .dateTime.month().day().hour().minute())
-                                        .font(GymStyle.detail)
-                                        .foregroundStyle(GymStyle.muted)
-                                    Text(workout.workoutReport == nil ? String(localized: "计数反馈") : String(localized: "训练报告"))
-                                        .font(GymStyle.detail)
-                                        .foregroundStyle(GymStyle.accent)
-                                }
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(workout.date, format: .dateTime.month().day().hour().minute())
+                                    .font(GymStyle.caption).monospacedDigit()
+                                    .foregroundStyle(GymStyle.ink)
+                                    .lineLimit(1).minimumScaleFactor(0.8)
                                 Spacer(minLength: 0)
-                                Text(String(localized: "\(repetitions(in: workout)) 次"))
-                                    .font(GymStyle.section)
-                                    .monospacedDigit()
+                                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                                    Text(repetitions(in: workout).formatted()).font(GymStyle.body.weight(.semibold))
+                                    Text(NSLocalizedString("times", comment: "次")).font(GymStyle.detail).foregroundStyle(GymStyle.muted)
+                                }.monospacedDigit()
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 8, weight: .semibold))
                                     .foregroundStyle(GymStyle.muted)
@@ -105,8 +56,13 @@ struct HistoryView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel(workout.date.formatted(date: .abbreviated, time: .shortened))
+                        .accessibilityValue(String(localized: "\(repetitions(in: workout)) 次"))
+                        .accessibilityHint(workout.workoutReport == nil ? String(localized: "计数反馈") : String(localized: "训练报告"))
                         .accessibilityIdentifier("feedback.history." + workout.id.uuidString)
-                        Divider().overlay(GymStyle.ink.opacity(0.08))
+                        Rectangle().fill(GymStyle.line).frame(height: 0.5).accessibilityHidden(true)
                     }
                 }
             }
@@ -121,7 +77,7 @@ struct HistoryView: View {
         .onReceive(dataManager.$workoutHistory) { refreshWeek($0) }
         .sheet(item: $feedbackWorkout) { workout in
             if let report = workout.workoutReport {
-                NavigationStack { WholeWorkoutSummaryView(report: report, close: { feedbackWorkout = nil }) }
+                NavigationStack { WholeWorkoutSummaryView(report: report, close: { feedbackWorkout = nil }, isNewlySaved: false) }
             } else {
                 NavigationStack { WorkoutFeedbackView(workout: workout) }
             }
@@ -157,30 +113,73 @@ struct HistoryView: View {
                 .gymNavigationTitle(String(localized: "选择动作"), back: { showingExercisePicker = false })
             }
         }
+        .sheet(isPresented: $showingWeekPicker) {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: GymStyle.spacing) {
+                        WeekNavigatorRow(
+                            title: getWeekTitle(),
+                            accessibilityTitle: dataManager.getWeekInfo(for: currentWeekDate).title,
+                            onPrev: switchToPreviousWeek,
+                            onNext: switchToNextWeek,
+                            isCurrentWeek: isCurrentWeek
+                        )
+                        Button(String(localized: "本周")) { currentWeekDate = Date(); showingWeekPicker = false }
+                            .buttonStyle(GymActionStyle())
+                            .accessibilityIdentifier("history.week.current")
+                        if !weeklyWorkouts.isEmpty {
+                            StatsRow(reps: getCurrentWeekTotal(), weight: getCurrentWeekTotalWeight(),
+                                     repChange: getRepChangeFromLastWeek(), weightChange: getWeightChangeFromLastWeek())
+                                .padding(.vertical, 4)
+                                .accessibilityIdentifier("history.week.summary")
+                            SimpleBarChart(counts: weekCounts).frame(height: 72)
+                                .accessibilityIdentifier("history.week.chart")
+                        } else {
+                            Text(NSLocalizedString("noData", comment: "暂无数据"))
+                                .font(GymStyle.caption).foregroundStyle(GymStyle.muted)
+                        }
+                    }.gymPageContent()
+                }
+                .gymPage()
+                .gymNavigationTitle(String(localized: "周统计"), back: { showingWeekPicker = false }, backIdentifier: "history.week-back")
+            }
+        }
     }
 
-    private var historyHeader: some View {
-        HStack(spacing: 0) {
+    private var historyFilters: some View {
+        HStack(spacing: 6) {
             Button { showingExercisePicker = true } label: {
-                HStack(spacing: 3) {
-                    Image(selectedExercise.icon)
-                        .renderingMode(.template)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 20, height: 20)
-                        .accessibilityHidden(true)
-                    Text(selectedExercise.displayName).font(GymStyle.body)
-                        .lineLimit(1).minimumScaleFactor(0.6)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 7, weight: .semibold))
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 3) {
+                        Image(selectedExercise.icon).renderingMode(.template).resizable().scaledToFit()
+                            .frame(width: 16, height: 16).foregroundStyle(GymStyle.accent).accessibilityHidden(true)
+                        Text(selectedExercise.displayName).font(GymStyle.caption)
+                        Image(systemName: "chevron.down").font(.system(size: 7, weight: .semibold))
+                    }.fixedSize(horizontal: true, vertical: false)
+                    HStack(spacing: 3) {
+                        Text(selectedExercise.displayName).font(GymStyle.caption).lineLimit(1).minimumScaleFactor(0.65)
+                        Image(systemName: "chevron.down").font(.system(size: 7, weight: .semibold))
+                    }
                 }
                 .foregroundStyle(GymStyle.ink)
-                .frame(minHeight: 44)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .accessibilityLabel(selectedExercise.displayName)
             .accessibilityIdentifier("history.exercise-filter")
-            Spacer(minLength: 0)
+            Button { showingWeekPicker = true } label: {
+                HStack(spacing: 3) {
+                    Text(getWeekTitle()).font(GymStyle.detail.monospacedDigit())
+                        .lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.trailing)
+                    Image(systemName: "chevron.down").font(.system(size: 7, weight: .semibold))
+                }
+                .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+                .contentShape(Rectangle())
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            .accessibilityLabel(String(localized: "周统计"))
+            .accessibilityValue(dataManager.getWeekInfo(for: currentWeekDate).title)
+            .accessibilityIdentifier("history.week-filter")
         }
         .buttonStyle(.plain)
     }
@@ -234,6 +233,9 @@ struct HistoryView: View {
         if calendar.isDate(week.start, equalTo: Date(), toGranularity: .year),
            calendar.isDate(lastDay, equalTo: Date(), toGranularity: .year) {
             formatter.setLocalizedDateFormatFromTemplate("Md")
+            if calendar.isDate(week.start, equalTo: lastDay, toGranularity: .month) {
+                return formatter.string(from: week.start) + "–" + calendar.component(.day, from: lastDay).formatted()
+            }
             return formatter.string(from: week.start) + "–" + formatter.string(from: lastDay)
         }
         formatter.setLocalizedDateFormatFromTemplate("yyMd")
@@ -281,6 +283,7 @@ struct WeekNavigatorRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "上一周"))
+            .accessibilityIdentifier("history.week.previous")
 
             Text(title)
                 .font(GymStyle.detail)
@@ -301,6 +304,7 @@ struct WeekNavigatorRow: View {
             .buttonStyle(.plain)
             .disabled(isCurrentWeek)
             .accessibilityLabel(String(localized: "下一周"))
+            .accessibilityIdentifier("history.week.next")
         }
         .padding(.horizontal, 2)
     }
@@ -322,12 +326,11 @@ struct StatsRow: View {
                 unit: NSLocalizedString("times", comment: "次"),
                 change: repChange.map(Double.init)
             )
-            StatCard(
-                title: String(localized: "训练量"),
-                value: weight.map { $0.formatted(.number.precision(.fractionLength(0...1))) } ?? "—",
-                unit: NSLocalizedString("kg", comment: "kg"),
-                change: weightChange
-            )
+            if let weight {
+                StatCard(title: String(localized: "训练量"),
+                         value: weight.formatted(.number.precision(.fractionLength(0...1))),
+                         unit: NSLocalizedString("kg", comment: "kg"), change: weightChange)
+            }
         }
     }
 }

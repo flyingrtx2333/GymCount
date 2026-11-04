@@ -11,12 +11,20 @@ struct WorkoutFeedbackView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 10) {
-                Text(workout.exerciseType.displayName).font(GymStyle.section)
-                Text(workout.date, format: .dateTime.month().day().hour().minute())
-                    .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
-                Text(String(localized: "手表记录：\(workout.totalReps) 次"))
-                    .font(GymStyle.body)
+            VStack(alignment: .leading, spacing: GymStyle.spacing) {
+                HStack(spacing: 6) {
+                    Image(workout.exerciseType.icon).resizable().renderingMode(.template).scaledToFit()
+                        .frame(width: 22, height: 22).foregroundStyle(GymStyle.accent).accessibilityHidden(true)
+                    Text(workout.exerciseType.displayName).font(GymStyle.body)
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(workout.date, format: .dateTime.month().day().hour().minute())
+                        .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
+                    Spacer(minLength: 0)
+                    Text(String(localized: "\(workout.totalReps) 次"))
+                        .font(GymStyle.caption).monospacedDigit().fixedSize()
+                }
+                Rectangle().fill(GymStyle.line).frame(height: 0.5).padding(.vertical, 6).accessibilityHidden(true)
                 if !loaded {
                     ProgressView()
                 } else if let entry, entry.serverID != nil {

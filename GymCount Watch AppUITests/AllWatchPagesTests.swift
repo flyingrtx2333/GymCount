@@ -5,6 +5,71 @@ final class AllWatchPagesTests: XCTestCase {
     @MainActor func testSecondaryPagesChinese() { visit(english: false) }
     @MainActor func testSecondaryPagesEnglish() { visit(english: true) }
 
+    @MainActor func testCompactHomeAndHistoryFilters() {
+        continueAfterFailure = false
+        for english in [false, true] {
+            let app = XCUIApplication()
+            app.launchArguments = ["-AppleLanguages", english ? "(en)" : "(zh-Hans)", "-AppleLocale", english ? "en_US" : "zh_CN"]
+            app.launch()
+            XCTAssertTrue(app.buttons["workout.start.bench_press"].waitForExistence(timeout: 10))
+            XCTAssertLessThanOrEqual(app.buttons["workout.start.bench_press"].frame.minY, 86)
+            shot(app, english ? "compact-home-en" : "compact-home-zh")
+            app.buttons[english ? "History" : "历史"].tap()
+            let exercise = app.buttons["history.exercise-filter"]
+            let week = app.buttons["history.week-filter"]
+            XCTAssertTrue(week.waitForExistence(timeout: 5))
+            XCTAssertEqual(exercise.frame.midY, week.frame.midY, accuracy: 1)
+            XCTAssertLessThanOrEqual(exercise.frame.maxX, week.frame.minX)
+            XCTAssertGreaterThanOrEqual(exercise.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(week.frame.height, 44)
+            let originalWeek = week.value as? String
+            shot(app, english ? "compact-history-en" : "compact-history-zh")
+            week.tap()
+            let previous = app.buttons["history.week.previous"]
+            let next = app.buttons["history.week.next"]
+            XCTAssertTrue(previous.waitForExistence(timeout: 5))
+            XCTAssertFalse(next.isEnabled)
+            previous.tap()
+            XCTAssertTrue(next.isEnabled)
+            shot(app, english ? "compact-week-selector-en" : "compact-week-selector-zh")
+            app.buttons["history.week-back"].tap()
+            XCTAssertTrue(week.waitForExistence(timeout: 5))
+            XCTAssertNotEqual(week.value as? String, originalWeek)
+            week.tap(); app.buttons["history.week.current"].tap()
+            XCTAssertTrue(week.waitForExistence(timeout: 5))
+            XCTAssertEqual(week.value as? String, originalWeek)
+            let records = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "feedback.history."))
+            for _ in 0..<12 {
+                if records.count > 0 { break }
+                week.tap(); previous.tap(); app.buttons["history.week-back"].firstMatch.tap()
+                XCTAssertTrue(week.waitForExistence(timeout: 5))
+            }
+            shot(app, english ? "plain-history-inspected-en" : "plain-history-inspected-zh")
+            XCTAssertGreaterThan(records.count, 0, "Uses the original history copied into isolated preview storage")
+            XCTAssertGreaterThanOrEqual(records.firstMatch.frame.minY, exercise.frame.maxY)
+            XCTAssertLessThanOrEqual(records.firstMatch.frame.minY - exercise.frame.maxY, 2)
+            XCTAssertLessThanOrEqual(records.firstMatch.frame.maxY, app.frame.maxY - 6)
+            if records.count > 1 {
+                XCTAssertLessThanOrEqual(records.element(boundBy: 1).frame.maxY, app.frame.maxY - 6)
+            }
+            shot(app, english ? "plain-real-history-en" : "plain-real-history-zh")
+            week.tap()
+            let chart = app.descendants(matching: .any).matching(identifier: "history.week.chart").firstMatch
+            reveal(chart, app)
+            XCTAssertTrue(chart.exists)
+            shot(app, english ? "plain-week-summary-en" : "plain-week-summary-zh")
+            app.buttons["history.week-back"].firstMatch.tap()
+            exercise.tap()
+            let curl = app.buttons["history.exercise.bicep_curl"]
+            reveal(curl, app); curl.tap()
+            XCTAssertTrue(week.waitForExistence(timeout: 5))
+            XCTAssertEqual(exercise.frame.midY, week.frame.midY, accuracy: 1)
+            XCTAssertLessThanOrEqual(exercise.frame.maxX, week.frame.minX)
+            shot(app, english ? "compact-history-long-exercise-en" : "compact-history-long-exercise-zh")
+            app.terminate()
+        }
+    }
+
     @MainActor func testCompactEnglishHeadings() {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -73,6 +138,7 @@ final class AllWatchPagesTests: XCTestCase {
         close(app, title: english ? "History" : "历史")
         XCTAssertTrue(settings.waitForExistence(timeout: 5)); settings.tap()
         header(app, title: english ? "Settings" : "设置")
+        XCTAssertFalse(app.buttons["settings.save"].exists, "Unchanged settings do not reserve a save bar")
         shot(app, "all-settings-" + language)
         let guide = app.buttons["settings.healthGuide"]
         reveal(guide, app); guide.tap()
@@ -84,9 +150,20 @@ final class AllWatchPagesTests: XCTestCase {
         reveal(help, app); help.tap()
         XCTAssertTrue(back(app).waitForExistence(timeout: 5))
         shot(app, "all-help-" + language)
-        app.swipeUp(); app.swipeUp(); app.swipeUp()
+        for (key, title) in [("training", english ? "Start a workout" : "开始训练"),
+                             ("siri", "Siri"), ("records", english ? "View records" : "查看记录"),
+                             ("health", english ? "Health sync" : "健康同步"),
+                             ("review", english ? "Check the count" : "计数核对")] {
+            let topic = app.buttons["help.topic." + key]
+            reveal(topic, app); topic.tap()
+            header(app, title: title)
+            shot(app, "all-help-topic-" + key + "-" + language)
+            app.swipeUp()
+            close(app, title: title)
+        }
         shot(app, "all-help-bottom-" + language)
         close(app, title: english ? "Help" : "使用帮助")
+        #if DEBUG
         let advanced = app.buttons["settings.advanced"]
         reveal(advanced, app); advanced.tap()
         XCTAssertTrue(back(app).waitForExistence(timeout: 5))
@@ -115,12 +192,23 @@ final class AllWatchPagesTests: XCTestCase {
         close(app, title: english ? "Notes" : "备注")
         close(app, title: english ? "Capture" : "采集")
         close(app, title: english ? "Advanced" : "高级")
+        #else
+        XCTAssertFalse(app.buttons["settings.advanced"].exists)
+        #endif
+        let version = app.descendants(matching: .any).matching(identifier: "settings.version").firstMatch
+        reveal(version, app)
+        shot(app, "all-settings-bottom-" + language)
+        let reminder = app.switches[english ? "Daily reminder" : "每日提醒"].firstMatch
+        reveal(reminder, app); reminder.tap()
         let save = app.buttons["settings.save"]
         XCTAssertTrue(save.waitForExistence(timeout: 5))
-        XCTAssertTrue(save.isHittable, "Save stays visible at the bottom of a long settings page")
+        XCTAssertTrue(save.isHittable, "Changed settings expose a reachable save action")
         XCTAssertGreaterThanOrEqual(save.frame.height, 44)
+        shot(app, "all-settings-edited-" + language)
         close(app, title: english ? "Settings" : "设置") // no settings or training data changes
-        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        XCTAssertTrue(settings.waitForExistence(timeout: 5)); settings.tap()
+        XCTAssertFalse(app.buttons["settings.save"].exists, "Cancel leaves settings unchanged")
+        close(app, title: english ? "Settings" : "设置")
     }
 
     @MainActor private func back(_ app: XCUIApplication) -> XCUIElement {
@@ -155,7 +243,7 @@ final class AllWatchPagesTests: XCTestCase {
     }
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         Thread.sleep(forTimeInterval: 0.6)
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)
         let tree = XCTAttachment(string: app.debugDescription)
         tree.name = name + "-AX"; tree.lifetime = .keepAlways; add(tree)

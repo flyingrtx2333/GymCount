@@ -178,17 +178,18 @@ struct WeightInputView: View {
         ScrollView {
             VStack(spacing: 8) {
 
-                TextField("0", text: $text)
+                HStack(spacing: 6) {
+                    TextField("0", text: $text)
                         .textFieldStyle(.plain).textInputAutocapitalization(.never)
                         .autocorrectionDisabled().submitLabel(.done)
                         .font(.system(size: 26, weight: .medium, design: .rounded)).monospacedDigit()
+                        .multilineTextAlignment(.leading)
                         .accessibilityLabel(String(localized: "重量(kg)"))
                         .accessibilityIdentifier("weight-input-value")
                         .frame(minHeight: 52)
-                        .overlay(alignment: .trailing) {
-                            Text(String(localized: "公斤")).font(GymStyle.caption).foregroundStyle(GymStyle.muted)
-                                .padding(.trailing, 12).allowsHitTesting(false).accessibilityHidden(true)
-                        }
+                    Text(String(localized: "公斤")).font(GymStyle.caption).foregroundStyle(GymStyle.muted)
+                        .fixedSize().accessibilityHidden(true)
+                }
 
                 if value == nil {
                     Text(maximum.isFinite

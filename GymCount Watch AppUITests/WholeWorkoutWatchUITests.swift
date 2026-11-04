@@ -22,7 +22,8 @@ final class WholeWorkoutWatchUITests: XCTestCase {
             let health = app.switches[language == "en" ? "Sync to Activity Rings" : "同步到运动圆环"].firstMatch
             reveal(health, in: app)
             if health.value as? String == "1" { health.tap() }
-            app.buttons[language == "en" ? "Save" : "保存"].tap()
+            if app.buttons["settings.save"].exists { app.buttons["settings.save"].tap() }
+            else { app.buttons.matching(NSPredicate(format: "identifier == %@ AND value == %@", "watch.back", language == "en" ? "Settings" : "设置")).firstMatch.tap() }
             let start = app.buttons["workout.start.overhead_press"]
             reveal(start, in: app); capture(app, "new-movements-watch-home-" + language); start.tap()
             XCTAssertTrue(app.staticTexts["whole.count"].waitForExistence(timeout: 8))
@@ -61,7 +62,8 @@ final class WholeWorkoutWatchUITests: XCTestCase {
             for _ in 0..<4 { if health.isHittable { break }; app.swipeUp() }
             XCTAssertTrue(health.exists)
             if health.value as? String == "1" { health.tap() }
-            app.buttons[language == "en" ? "Save" : "保存"].tap()
+            if app.buttons["settings.save"].exists { app.buttons["settings.save"].tap() }
+            else { app.buttons.matching(NSPredicate(format: "identifier == %@ AND value == %@", "watch.back", language == "en" ? "Settings" : "设置")).firstMatch.tap() }
             XCTAssertTrue(start.waitForExistence(timeout: 5))
             start.tap()
             XCTAssertTrue(app.staticTexts["whole.count"].waitForExistence(timeout: 8))
@@ -170,7 +172,7 @@ final class WholeWorkoutWatchUITests: XCTestCase {
         for _ in 0..<10 {
             let frame = element.frame
             if element.isHittable, frame.minY >= app.frame.minY + 28,
-               frame.maxY <= app.frame.maxY - 6 { return }
+               frame.maxY <= app.frame.maxY - 4 { return }
             let down = frame.minY < app.frame.minY + 28
             let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: down ? 0.40 : 0.72))
             let to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: down ? 0.66 : 0.46))

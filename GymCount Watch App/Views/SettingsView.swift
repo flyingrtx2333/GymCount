@@ -43,10 +43,16 @@ struct SettingsView: View {
         _reminderTime = State(initialValue: NotificationManager.shared.dailyReminderTime)
     }
 
+    private var hasChanges: Bool {
+        tempSettings != dataManager.settings || reminderEnabled != notificationManager.dailyReminderEnabled ||
+        Calendar.current.dateComponents([.hour, .minute], from: reminderTime) !=
+        Calendar.current.dateComponents([.hour, .minute], from: notificationManager.dailyReminderTime)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
-            VStack(spacing: GymStyle.spacing) {
+            VStack(alignment: .leading, spacing: GymStyle.spacing) {
                 // MARK: 器械重量
                 Section {
                     WeightRow(
@@ -69,23 +75,20 @@ struct SettingsView: View {
                 }
 
                 // MARK: 运动圆环
-                Section(header: Text(String(localized: "运动圆环"))) {
-                    Button { showingHealthGuide = true } label: {
-                        Label(String(localized: "健康权限怎么开"), systemImage: "questionmark.circle")
-                            .font(GymStyle.body)
-                            .frame(maxWidth: .infinity, minHeight: GymStyle.buttonHeight, alignment: .leading)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(GymStyle.accent)
-                    .accessibilityIdentifier("settings.healthGuide")
+                Section(header: sectionTitle(String(localized: "运动圆环"))) {
                     // 同步开关
-                    Toggle(NSLocalizedString("sync_to_activity_rings", comment: "同步到运动圆环"), isOn: $tempSettings.healthKitSyncEnabled)
+                    Toggle(String(localized: "同步训练"), isOn: $tempSettings.healthKitSyncEnabled)
                         .font(GymStyle.body)
+                        .toggleStyle(.switch)
+                        .frame(minHeight: 44)
+                        .accessibilityLabel(NSLocalizedString("sync_to_activity_rings", comment: "同步到运动圆环"))
 
                     if tempSettings.healthKitSyncEnabled {
                         // 自动同步
                         Toggle(NSLocalizedString("auto_sync", comment: "自动同步"), isOn: $tempSettings.autoSyncToHealthKit)
                             .font(GymStyle.body)
+                            .toggleStyle(.switch)
+                            .frame(minHeight: 44)
 
                         // 权限状态
                         StatusRow(
@@ -105,7 +108,9 @@ struct SettingsView: View {
                             )
                             .font(GymStyle.body)
                             .foregroundStyle(GymStyle.accent)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                         }
+                        .buttonStyle(.plain)
                         .disabled(healthKitManager.isSyncing || dataManager.workoutHistory.isEmpty)
                         if let message = healthKitManager.syncMessage {
                             Text(message).font(GymStyle.detail).foregroundStyle(GymStyle.muted)
@@ -114,27 +119,35 @@ struct SettingsView: View {
                         }
 
                         // 请求权限
-                        if healthKitStatus.rawValue != 2 {
+                        if healthKitStatus == .notDetermined {
                             Button(action: {
                                 Task {
-                                    if healthKitStatus == .sharingDenied { showingHealthGuide = true }
-                                    else { await dataManager.requestHealthKitPermission() }
+                                    await dataManager.requestHealthKitPermission()
                                     healthKitStatus = dataManager.getHealthKitAuthorizationStatus()
                                 }
                             }) {
                                 Label(
-                                    healthKitStatus == .sharingDenied ? String(localized: "健康权限怎么开") : NSLocalizedString("request_healthkit_permission", comment: "请求 HealthKit 权限"),
+                                    NSLocalizedString("request_healthkit_permission", comment: "请求 HealthKit 权限"),
                                     systemImage: "lock.open"
                                 )
                                 .font(GymStyle.body)
                                 .foregroundStyle(GymStyle.accent)
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             }
+                            .buttonStyle(.plain)
                         }
                     }
+                    Button { showingHealthGuide = true } label: {
+                        Label(String(localized: "健康权限怎么开"), systemImage: "questionmark.circle")
+                            .font(GymStyle.body)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                    .buttonStyle(.plain).foregroundStyle(GymStyle.accent)
+                    .accessibilityIdentifier("settings.healthGuide")
                 }
 
                 // MARK: 通知
-                Section(header: Text(NSLocalizedString("notification_section", comment: "通知设置"))) {
+                Section(header: sectionTitle(NSLocalizedString("notification_section", comment: "通知设置"))) {
                     StatusRow(
                         icon: notificationStatusIcon,
                         iconColor: notificationStatusColor,
@@ -144,6 +157,8 @@ struct SettingsView: View {
 
                     Toggle(String(localized: "每日提醒"), isOn: $reminderEnabled)
                         .font(GymStyle.body)
+                        .toggleStyle(.switch)
+                        .frame(minHeight: 44)
                     if reminderEnabled {
                         DatePicker(String(localized: "提醒时间"), selection: $reminderTime, displayedComponents: .hourAndMinute)
                         if let error = notificationManager.reminderError {
@@ -153,6 +168,7 @@ struct SettingsView: View {
                     if notificationManager.authorizationStatus == .denied {
                         Button(String(localized: "通知权限怎么开")) { showingNotificationGuide = true }
                             .font(GymStyle.body).foregroundStyle(GymStyle.accent)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).buttonStyle(.plain)
                     } else if !notificationManager.isAuthorized {
                         Button(action: {
                             Task { await notificationManager.requestNotificationPermission() }
@@ -163,7 +179,9 @@ struct SettingsView: View {
                             )
                             .font(GymStyle.body)
                             .foregroundStyle(GymStyle.accent)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
 
@@ -180,18 +198,14 @@ struct SettingsView: View {
                 }.buttonStyle(.plain).accessibilityIdentifier("settings.help")
 
                 // MARK: 应用信息
-                Section(header: Text(NSLocalizedString("app_info", comment: "应用信息"))) {
+                Section {
                     HStack {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundStyle(GymStyle.accent)
-                            .frame(width: 16)
                         Text(NSLocalizedString("version", comment: "版本"))
-                            .font(GymStyle.body)
                         Spacer()
                         Text("\(appVersion) (\(buildNumber))")
-                            .font(GymStyle.body)
-                            .foregroundColor(GymStyle.muted)
                     }
+                    .font(GymStyle.detail).foregroundStyle(GymStyle.muted).padding(.vertical, 6)
+                    .accessibilityIdentifier("settings.version")
                 }
             }
             .gymPageContent()
@@ -200,6 +214,7 @@ struct SettingsView: View {
             .gymPage()
             .gymNavigationTitle(String(localized: "设置"), back: { presentationMode.wrappedValue.dismiss() })
             .safeAreaInset(edge: .bottom, spacing: 0) {
+                if hasChanges {
                     Button(String(localized: "保存")) {
                         saving = true
                         Task { @MainActor in
@@ -224,6 +239,7 @@ struct SettingsView: View {
                     .padding(.horizontal, GymStyle.inset)
                     .padding(.bottom, 4)
                     .background(Color.black)
+                }
             }
             .ignoresSafeArea(.container, edges: .bottom)
 
@@ -266,6 +282,11 @@ struct SettingsView: View {
             .gymPage().gymNavigationTitle(String(localized: "健康权限"), back: { showingHealthGuide = false })
             }
         }
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title).font(GymStyle.caption).foregroundStyle(GymStyle.muted)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
     }
 
     // MARK: - HealthKit 状态
@@ -342,9 +363,11 @@ struct WeightRow: View {
                 Image(systemName: "chevron.right")
                     .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
             }
-            .padding(.horizontal, 10)
             .frame(minHeight: 44)
-            .background(GymStyle.surface, in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(GymStyle.line).frame(height: 0.5).accessibilityHidden(true)
+            }
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $editing) {
@@ -368,17 +391,10 @@ struct StatusRow: View {
     let value: String
 
     var body: some View {
-        HStack {
-            Image(systemName: icon)
-                .foregroundColor(iconColor)
-                .frame(width: 16)
-            Text(label)
-                .font(GymStyle.body)
-            Spacer()
-            Text(value)
-                .font(GymStyle.body)
-                .foregroundColor(GymStyle.muted)
-        }
+        Label(value, systemImage: icon)
+            .font(GymStyle.caption).foregroundStyle(iconColor)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(label).accessibilityValue(value)
     }
 }
 

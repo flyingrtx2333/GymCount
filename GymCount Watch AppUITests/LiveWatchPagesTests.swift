@@ -17,8 +17,14 @@ final class LiveWatchPagesTests: XCTestCase {
             XCTAssertTrue(done.waitForExistence(timeout: 10)); reveal(done, app); done.tap()
         }
         XCTAssertTrue(start.waitForExistence(timeout: 12)); start.tap()
+        acknowledge(app)
         XCTAssertTrue(app.staticTexts["whole.count"].waitForExistence(timeout: 8))
         XCTAssertEqual(app.staticTexts["whole.count"].label, "0")
+        let end = app.buttons["workout.end"]
+        XCTAssertTrue(end.isHittable)
+        XCTAssertLessThanOrEqual(end.frame.maxY, app.frame.maxY)
+        XCTAssertLessThanOrEqual(app.staticTexts["whole.count"].frame.maxY, end.frame.minY)
+        shot(app, "all-live")
         app.buttons["whole.exercise"].tap()
         let closePicker = app.buttons.matching(NSPredicate(format: "identifier == %@ AND value == %@", "watch.back", "切换动作")).firstMatch
         XCTAssertTrue(closePicker.waitForExistence(timeout: 5))
@@ -53,8 +59,8 @@ final class LiveWatchPagesTests: XCTestCase {
     }
     @MainActor private func reveal(_ element: XCUIElement, _ app: XCUIApplication) {
         for _ in 0..<14 {
-            if element.exists, element.isHittable, element.frame.minY >= 44, element.frame.maxY <= app.frame.maxY - 6 { return }
-            let down = element.exists && element.frame.minY < 44
+            if element.exists, element.isHittable, element.frame.minY >= 32, element.frame.maxY <= app.frame.maxY - 4 { return }
+            let down = element.exists && element.frame.minY < 32
             let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: down ? 0.35 : 0.65))
             let to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: down ? 0.65 : 0.35))
             from.press(forDuration: 0.1, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.1)

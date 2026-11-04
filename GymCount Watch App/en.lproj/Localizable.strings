@@ -326,7 +326,7 @@
 /* Synchronized capture review handoff */
 "同步采集的实际次数在手机调整，确认后再上传录像与采样。" = "Adjust the actual count on your iPhone, then confirm and upload the video and samples.";
 
-"运动传感器不可用，请手动计数" = "Motion sensor unavailable. Count manually.";
+"运动传感器不可用，请手动计数" = "Sensor unavailable. Count manually.";
 "融合运动不可用，请手动计数" = "Motion data unavailable. Count manually.";
 "运动采样中断，请手动核对" = "Motion interrupted. Check your count.";
 "训练记录读取失败，请重新打开 App" = "Could not read records. Reopen the app.";
@@ -515,3 +515,10 @@
 "traditional_strength_training_bicep_curl" = "Strength Training - Dumbbell Curl";
 "请更新 iPhone App 以同步新增动作" = "Update the iPhone app to sync new exercises";
 "请更新手机 App 以同步新增动作" = "Update the iPhone app to sync new exercises";
+"周统计" = "Weekly Summary";
+"选择动作，点「开始」。" = "Choose an exercise, then tap Start.";
+"同步训练" = "Sync workouts";
+"自动计数已暂停" = "Automatic counting paused.";
+"放弃" = "Discard";
+"%lld 条" = "%lld records";
+"本周" = "This Week";
