@@ -23,6 +23,6 @@
 - 实际执行生产 `WorkoutSyncActivity` 的时钟与 Task：连续进展延长截止时间、旧任务不触发、静默后只触发一次、完成取消、100 次连续自动调用合并为一次、手动重试和间隔后的重连均通过。测试使用真实时钟和取消，不构造蓝牙连接或运动数据，不将它当成设备传输验收。
 - `GymCountSync.xcodeproj` / `GymCount Capture`、`GymCount.xcodeproj` / `GymCount` Release 无签名构建均通过；244 个应用源码／资源从当前工作区生成隔离快照，用户安装与数据未被覆盖。
 - iPhone 与 Watch 当前均显示不可连接，未取得该次闪烁的设备日志，未执行真实双端同步复验。本轮没有新增模拟器或虚构接收数据来冒充实机通过。
-- 本修复尚未发布，现有 TestFlight 1.1.8 (55) 不包含这些修改。
+- 本修复已随 TestFlight 1.1.8 (56) 发布；55 版不包含这些修改。Apple `BUILD-STATUS: VALID`，内部组可用，中英文说明已回读，详见 [56 版发布记录](testflight-1.1.8-56.md)。真机同步复验仍待完成。
 
 本地验证：`/private/tmp/GymCount-SyncState-20261104/`。

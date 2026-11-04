@@ -46,12 +46,20 @@
 - `FlyingrtxFast` 已补齐推举／划船反馈输入和看板标签，提交 `bc294b567` 已上线；公网 API、运行容器源码摘要、前端版本凭证与实际页面资源已核验。推举／划船没有云端计数模型，返回待核对与空次数，不能用通用旧模型冒充已验证结果。
 - 开发采样支持六种动作，但仍仅 `DEBUG` 显示；正式版继续隐藏采集页面和远程入口。详细实现、原生验证与精度边界见 [新增动作](docs/additional-exercises-20261104.md)。用户随后授权提交、推送、TestFlight 与相关后台上线；已纳入双端 1.1.8 (55)。
 
-## 手表同步状态跳变：2026-11-04（待发布修复）
+## 手表同步状态跳变：2026-11-04（TestFlight 56）
 
 - 55 版收到记录列表图标与同步页“等待／接收”反复切换的报告。接收超时改为唯一可取消的空闲计时任务，每次进展续期；实时消息不可达不覆盖后台接收状态，自动请求在 20 秒窗口合并，手动重试保留。右上角入口固定手表图标，详情不因其他时间轴 revision 反复强制请求。
-- 真实时钟／Task 针对性验证和两个 iPhone 工程及配套 Watch Release 编译通过；设备不可连接，未完成用户真机同步复验。本段为未发布修复，不得与下方已发布 55 版混淆；详见 [同步状态修复](docs/watch-sync-flicker-20261104.md)。
+- 真实时钟／Task 针对性验证和两个 iPhone 工程及配套 Watch Release 编译通过；设备不可连接，未完成用户真机同步复验。已随 1.1.8 (56) 发布；55 版不包含此修复。详见 [同步状态修复](docs/watch-sync-flicker-20261104.md)。
 
-## 最新 TestFlight：2026-11-04（55）
+## 最新 TestFlight：2026-11-04（56）
+
+- iPhone 与 Watch：1.1.8 (56)，发布源码 `110f9e20320297b372ab96cfa687f133d2f6bcf6` 已推送 `codex/gymcount-cleanup-20261011`。同步状态跳变热修复，Watch 业务源码与 55 相同，仅随包更新构建号；本次不需要后台变更。
+- Delivery UUID / ASC Build ID：`04590ee6-ffc5-472e-9859-e846fccc1996`。Apple `BUILD-STATUS: VALID`、`INTERNAL_ONLY`、`IN_BETA_TESTING`；内部组 `flyingrtx` 与中英文测试说明均已写入并回读确认。
+- 506 个提交源文件摘要核验，244 个应用文件与刚完成的针对性验证副本一致；双端签名归档、导出、严格签名、版本／配套关系、HealthKit 与 Watch Siri 权限通过。实际 IPA 中存在同步修复模块，开发者采集 UI 与相机权限继续排除。
+- IPA SHA-256：`2949df5e7b3e674aa393580ac1f4e188894c8abb4030dd6da49b8e0f7fe74b79`。手机与手表当前不可连接，未完成本次真机同步复验；没有把时钟／Task 检查描述为真实双端传输。用户安装与训练数据保留，3 个临时发布任务已移除，正式商店保持 1.1.7。
+- 产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.8-56/`；详见 [56 版发布记录](docs/testflight-1.1.8-56.md)。
+
+## 历史 TestFlight：2026-11-04（55）
 
 - iPhone 与 Watch：1.1.8 (55)，发布源码 `a55cfa333326be1789dd86e3bb2f07bcaa747e71` 已推送 `codex/gymcount-cleanup-20261011`；后台／看板源码 `bc294b5679d9733d5f2fd88942c2f2ea5f9bb0e4` 已推送并上线。
 - Delivery UUID / ASC Build ID：`47b707b7-ef0b-4066-b4ad-a480eb39e14e`。Apple `BUILD-STATUS: VALID`、`INTERNAL_ONLY`、`IN_BETA_TESTING`；内部组 `flyingrtx` 与中英文测试说明已写入并回读确认。
