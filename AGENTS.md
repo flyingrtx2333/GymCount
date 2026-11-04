@@ -37,16 +37,24 @@
 
 详细证据见 [iPhone 多组训练完善记录](docs/phone-training-flow.md)。
 
-## 新增三个动作：2026-11-04（发布准备）
+## 新增三个动作：2026-11-04（TestFlight 55）
 
 - 新增肩上推举 `overhead_press`、杠铃划船 `barbell_row`、哑铃弯举 `bicep_curl`，共用既有线条图标、中英文本地化、手表首页／整场切换／Siri 和手机记录、补记、筛选、趋势及备份格式。
 - 自动计数使用独立的 `UpperBodyDetector`，不借用卧推／深蹲／硬拉检测器；只有合格完成事件进入统一 `RepCompletionFeedback`，停止后的核对保持静默。算法和反馈版本共用 `ExerciseType.countingAlgorithmVersion`／`completionFeedbackVersion`，正常训练与 Debug 采样一致。
 - 三个动作目前只有初版物理规则，尚无可用的对应实测标注来校准精度。旧文档中的两份弯举记录已不在当前云端；本轮读取的现存 9 条记录仅有卧推和深蹲。其他动作回放只能验证坐标／时间保护，不能当作这三个动作的准确率。
 - 手机同步请求新增 `supported_exercises`；未声明时仅发送旧三项。新动作及含新动作的整场报告保留在 Watch，待兼容手机接收，不混入旧批次阻塞其他历史；接收后仍按原有落盘与回执顺序处理。
-- `FlyingrtxFast` 已补齐推举／划船反馈输入和看板标签，提交 `bc294b567` 已推送并触发生产发布；发布结果按运行版本核验。推举／划船没有云端计数模型，返回待核对与空次数，不能用通用旧模型冒充已验证结果。
-- 开发采样支持六种动作，但仍仅 `DEBUG` 显示；正式版继续隐藏采集页面和远程入口。详细实现、原生验证与精度边界见 [新增动作](docs/additional-exercises-20261104.md)。用户随后授权提交、推送、TestFlight 与相关后台上线；本次双端准备使用 1.1.8 (55)，最终发布状态另行记录。
+- `FlyingrtxFast` 已补齐推举／划船反馈输入和看板标签，提交 `bc294b567` 已上线；公网 API、运行容器源码摘要、前端版本凭证与实际页面资源已核验。推举／划船没有云端计数模型，返回待核对与空次数，不能用通用旧模型冒充已验证结果。
+- 开发采样支持六种动作，但仍仅 `DEBUG` 显示；正式版继续隐藏采集页面和远程入口。详细实现、原生验证与精度边界见 [新增动作](docs/additional-exercises-20261104.md)。用户随后授权提交、推送、TestFlight 与相关后台上线；已纳入双端 1.1.8 (55)。
 
-## 最新 TestFlight：2026-11-03（54）
+## 最新 TestFlight：2026-11-04（55）
+
+- iPhone 与 Watch：1.1.8 (55)，发布源码 `a55cfa333326be1789dd86e3bb2f07bcaa747e71` 已推送 `codex/gymcount-cleanup-20261011`；后台／看板源码 `bc294b5679d9733d5f2fd88942c2f2ea5f9bb0e4` 已推送并上线。
+- Delivery UUID / ASC Build ID：`47b707b7-ef0b-4066-b4ad-a480eb39e14e`。Apple `BUILD-STATUS: VALID`、`INTERNAL_ONLY`、`IN_BETA_TESTING`；内部组 `flyingrtx` 与中英文测试说明已写入并回读确认。
+- 502 个提交源文件摘要核验，243 个应用文件与最终原生验证一致；双端签名归档、导出、严格签名、版本／配套关系、HealthKit 与 Watch Siri 权限通过。Duo 中文、SE 英文最大字号及 41mm Watch 中英文最终 3 项原生检查通过，82 条历史回归保持。新动作尚无对应实测标注，未新增真机精度、触感／声音或双端物理传输验收。
+- IPA SHA-256：`41103df1f3e5a51574a9f059e40faf63c33bf0d0b30d328fba86cbc8dd318ecd`。正式商店保持 1.1.7，3 个临时发布任务已移除，用户安装与资料保留。
+- 产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.8-55/`；详见 [55 版发布记录](docs/testflight-1.1.8-55.md)。
+
+## 历史 TestFlight：2026-11-03（54）
 
 - iPhone 与 Watch：1.1.8 (54)。代码提交 `82f02b30bcf84e4b739338399b395d0fedaef047`，已推送 `codex/gymcount-cleanup-20261011`；集中提交此前积累的 136 个源码、测试与文档文件。
 - Delivery UUID / ASC Build ID：`7eeaccd6-e3dc-47a3-9095-34b7e9a15e26`。Apple `BUILD-STATUS: VALID`、`INTERNAL_ONLY`、`IN_BETA_TESTING`；内部组 `flyingrtx` 已确认包含本构建，中英文测试说明已写入并回读。
