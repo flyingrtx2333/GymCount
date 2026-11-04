@@ -502,3 +502,16 @@
 
 "暂无记录，在 Apple Watch 上开始训练" = "暂无记录，在 Apple Watch 上开始训练";
 "暂无记录，设置 Apple Watch 后开始记录" = "暂无记录，设置 Apple Watch 后开始记录";
+
+/* Additional strength movements */
+"overhead_press" = "肩上推举";
+"肩上推举" = "肩上推举";
+"traditional_strength_training_overhead_press" = "传统力量训练 - 肩上推举";
+"barbell_row" = "杠铃划船";
+"杠铃划船" = "杠铃划船";
+"traditional_strength_training_barbell_row" = "传统力量训练 - 杠铃划船";
+"bicep_curl" = "哑铃弯举";
+"哑铃弯举" = "哑铃弯举";
+"traditional_strength_training_bicep_curl" = "传统力量训练 - 哑铃弯举";
+"请更新 iPhone App 以同步新增动作" = "请更新 iPhone App 以同步新增动作";
+"请更新手机 App 以同步新增动作" = "请更新手机 App 以同步新增动作";

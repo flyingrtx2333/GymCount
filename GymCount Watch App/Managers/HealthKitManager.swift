@@ -176,7 +176,7 @@ class HealthKitManager: ObservableObject {
 
     private func mapToHKWorkoutType(_ exercise: ExerciseType) -> HKWorkoutActivityType {
         switch exercise {
-        case .benchPress, .squat, .deadlift: return .traditionalStrengthTraining
+        case .benchPress, .squat, .deadlift, .overheadPress, .barbellRow, .bicepCurl: return .traditionalStrengthTraining
         }
     }
 }

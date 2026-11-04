@@ -111,6 +111,9 @@ struct RecordExerciseDistribution: View {
         case .benchPress: Studio.accent
         case .squat: Studio.adaptive(0xBEAC83, 0x92825C)
         case .deadlift: Studio.adaptive(0x73766B, 0xB6B9AB)
+        case .overheadPress: Studio.adaptive(0xA69169, 0xA4936C)
+        case .barbellRow: Studio.adaptive(0x8E8778, 0xC0BAAB)
+        case .bicepCurl: Studio.adaptive(0xB1A68D, 0x7F806D)
         }
     }
     private func frequency(_ row: RecordTrainingInsights.ExerciseBreakdown) -> some View {

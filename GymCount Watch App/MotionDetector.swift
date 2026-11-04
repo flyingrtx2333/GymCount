@@ -15,12 +15,14 @@ enum DetectedRepetition {
     case benchPress(BenchCycle)
     case squat(SquatCycle)
     case deadlift
+    case upperBody(ExerciseType, UpperBodyCycle)
 
     var exercise: ExerciseType {
         switch self {
         case .benchPress: return .benchPress
         case .squat: return .squat
         case .deadlift: return .deadlift
+        case .upperBody(let exercise, _): return exercise
         }
     }
 }
@@ -49,6 +51,7 @@ class MotionDetector: ObservableObject {
     private var benchPressDetector: BenchPressDetector?
     private var squatDetector: SquatDetector?
     private var deadliftDetector: DeadliftDetector?
+    private var upperBodyDetector: UpperBodyDetector?
     private var currentExerciseType: ExerciseType = .benchPress
     private var countsRepetitions = true
     private var isStopping = false
@@ -149,8 +152,12 @@ class MotionDetector: ObservableObject {
                 guard let self else { return }
                 guard let data else {
                     if error != nil {
-                        if self.currentExerciseType == .benchPress { self.benchPressDetector?.markInterrupted() }
-                        else { self.squatDetector?.markInterrupted() }
+                        switch self.currentExerciseType {
+                        case .benchPress: self.benchPressDetector?.markInterrupted()
+                        case .squat: self.squatDetector?.markInterrupted()
+                        case .overheadPress, .barbellRow, .bicepCurl: self.upperBodyDetector?.markInterrupted()
+                        case .deadlift: break
+                        }
                         let token = self.generation
                         DispatchQueue.main.async {
                             guard self.generation == token, self.isDetecting else { return }
@@ -160,8 +167,12 @@ class MotionDetector: ObservableObject {
                     return
                 }
                 self.onRawDeviceMotion?(data)
-                if self.currentExerciseType == .benchPress { self.benchPressDetector?.processMotion(data) }
-                else { self.squatDetector?.processMotion(data) }
+                switch self.currentExerciseType {
+                case .benchPress: self.benchPressDetector?.processMotion(data)
+                case .squat: self.squatDetector?.processMotion(data)
+                case .overheadPress, .barbellRow, .bicepCurl: self.processUpperBodyMotion(data)
+                case .deadlift: break
+                }
             }
         }
         print("🏃‍♂️ 运动检测已启动（后台模式）")
@@ -192,12 +203,12 @@ class MotionDetector: ObservableObject {
         } catch { onCountingError?(String(localized: "运动采样中断，请手动核对")) }
     }
 
-    private func finalAnalysis() -> (bench: BenchAnalysis?, squatCount: Int, deadliftCount: Int, cycles: [SquatCycle]) {
+    private func finalAnalysis() -> (bench: BenchAnalysis?, squatCount: Int, deadliftCount: Int, cycles: [SquatCycle], upperCycles: [UpperBodyCycle]) {
         (currentExerciseType == .benchPress && isDetecting && countsRepetitions ? benchPressDetector?.finish() : nil,
-         squatDetector?.repCount ?? 0, deadliftDetector?.repCount ?? 0, squatDetector?.cycles ?? [])
+         squatDetector?.repCount ?? 0, deadliftDetector?.repCount ?? 0, squatDetector?.cycles ?? [], upperBodyDetector?.cycles ?? [])
     }
 
-    private func applyStop(_ final: (bench: BenchAnalysis?, squatCount: Int, deadliftCount: Int, cycles: [SquatCycle])) {
+    private func applyStop(_ final: (bench: BenchAnalysis?, squatCount: Int, deadliftCount: Int, cycles: [SquatCycle], upperCycles: [UpperBodyCycle])) {
         let wasDetecting = isDetecting
         generation = UUID() // Discard queued UI updates from the previous run.
         if wasDetecting && countsRepetitions && currentExerciseType == .benchPress,
@@ -205,15 +216,25 @@ class MotionDetector: ObservableObject {
             onRawBenchAnalysis?(result)
             applyBenchAnalysis(result)
         } else if wasDetecting && countsRepetitions {
-            let finalCount = currentExerciseType == .squat ? final.squatCount : final.deadliftCount
+            let finalCount: Int
+            switch currentExerciseType {
+            case .squat: finalCount = final.squatCount
+            case .deadlift: finalCount = final.deadliftCount
+            case .overheadPress, .barbellRow, .bicepCurl: finalCount = final.upperCycles.count
+            case .benchPress: finalCount = repCount
+            }
             let pending = max(0, finalCount - repCount)
             repCount = finalCount
             if currentExerciseType == .squat {
                 for cycle in final.cycles.suffix(pending) {
                     onRepDetected?(.squat(cycle), false)
                 }
-            } else {
+            } else if currentExerciseType == .deadlift {
                 for _ in 0..<pending { onRepDetected?(.deadlift, false) }
+            } else {
+                for cycle in final.upperCycles.suffix(pending) {
+                    onRepDetected?(.upperBody(currentExerciseType, cycle), false)
+                }
             }
         }
         isDetecting = false
@@ -229,8 +250,30 @@ class MotionDetector: ObservableObject {
             break // Bench press uses fused motion, never raw X-axis stability.
         case .squat:
             break // Squat uses the same fused stream in training and collection.
+        case .overheadPress, .barbellRow, .bicepCurl:
+            break // Upper-body movements also require the fused stream.
         case .deadlift:
             deadliftDetector?.processAccelerometerData(data)
+        }
+    }
+
+    private func processUpperBodyMotion(_ data: CMDeviceMotion) {
+        guard let detector = upperBodyDetector else { return }
+        let wasInterrupted = detector.interrupted
+        let sample = BenchMotionSample(t: data.timestamp,
+            gravity: .init(x: data.gravity.x, y: data.gravity.y, z: data.gravity.z),
+            user_acceleration: .init(x: data.userAcceleration.x, y: data.userAcceleration.y, z: data.userAcceleration.z),
+            rotation_rate: .init(x: data.rotationRate.x, y: data.rotationRate.y, z: data.rotationRate.z))
+        if let cycle = detector.append(sample) {
+            onRawRepDetected?(cycle.end)
+            publishRepetition(.upperBody(currentExerciseType, cycle), sensorTime: cycle.end, count: detector.repCount)
+        }
+        if !wasInterrupted && detector.interrupted {
+            let token = generation
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.generation == token, self.isDetecting else { return }
+                self.onCountingError?(String(localized: "运动采样中断，请手动核对"))
+            }
         }
     }
     
@@ -290,6 +333,7 @@ class MotionDetector: ObservableObject {
         case .deadlift:
             guard let detector = deadliftDetector else { return }
             publishRepetition(.deadlift, sensorTime: sensorTime, count: detector.repCount, date: detector.lastRepTime)
+        case .overheadPress, .barbellRow, .bicepCurl: return
         }
     }
 
@@ -301,6 +345,8 @@ class MotionDetector: ObservableObject {
             squatDetector?.resetCount()
         case .deadlift:
             deadliftDetector?.resetCount()
+        case .overheadPress, .barbellRow, .bicepCurl:
+            upperBodyDetector?.resetCount()
         }
     }
     
@@ -316,6 +362,7 @@ class MotionDetector: ObservableObject {
     
     func configureForExercise(_ exerciseType: ExerciseType) {
         currentExerciseType = exerciseType
+        upperBodyDetector = UpperBodyDetector(exercise: exerciseType)
         print("🔄 切换到 \(exerciseType.displayName) 检测模式")
     }
 }

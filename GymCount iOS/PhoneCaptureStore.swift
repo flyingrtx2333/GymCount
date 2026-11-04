@@ -102,7 +102,8 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         guard session.isPaired else { workoutSyncState = .unpaired; workoutSyncMessage = workoutSyncState.title; return }
         guard session.isWatchAppInstalled else { workoutSyncState = .notInstalled; workoutSyncMessage = workoutSyncState.title; return }
         var payload: [String: Any] = ["kind": WorkoutSync.requestKind, "receiver_id": workoutReceiverID,
-                                      "timeline_version": 1, "workout_report_version": 1, WorkoutReportSensors.capabilityKey: 1, "force": force]
+                                      "timeline_version": 1, "workout_report_version": 1, WorkoutReportSensors.capabilityKey: 1,
+                                      WorkoutSync.exerciseCapabilityKey: ExerciseType.allCases.map(\.rawValue), "force": force]
         if let timelineID { payload["timeline_id"] = timelineID.uuidString; unavailableTimelineIDs.remove(timelineID) }
         let pending = session.outstandingUserInfoTransfers.filter { $0.userInfo["kind"] as? String == WorkoutSync.requestKind }
         if force { pending.forEach { $0.cancel() } }
@@ -115,6 +116,11 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
                 Task { @MainActor in
                     guard let self, self.workoutRequestGeneration == generation else { return }
                     if self.handleTimelineFailure(reply) { return }
+                    if reply["exercise_update_required"] as? Bool == true {
+                        self.workoutSyncState = .failed
+                        self.workoutSyncMessage = String(localized: "请更新手机 App 以同步新增动作")
+                        return
+                    }
                     if let timelineID, reply["workout_timeline_id"] as? String == timelineID.uuidString,
                        reply["workout_timeline_available"] as? Bool == false {
                         self.unavailableTimelineIDs.insert(timelineID)
@@ -871,7 +877,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             }
             #if DEBUG
             guard message["command"] as? String == "startFromWatch", let exercise = message["exercise"] as? String,
-                  ["squat", "bench_press", "deadlift", "bicep_curl", "rest", "walking", "other"].contains(exercise),
+                  (ExerciseType(rawValue: exercise) != nil || ["rest", "walking", "other"].contains(exercise)),
                   self.captureScreenToken != nil, self.cameraReady, UIApplication.shared.applicationState == .active, !self.busy, !self.recording else {
                 replyHandler(["error": String(localized: "请先在手机打开设置 → 开发者工具 → 同步录像与采样")]); return
             }

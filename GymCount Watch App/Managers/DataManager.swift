@@ -84,6 +84,8 @@ class DataManager: ObservableObject {
                 cycle = (value.start, value.end)
             case .deadlift:
                 cycle = nil
+            case .upperBody(_, let value):
+                cycle = (value.start, value.end)
             }
             var rep = RepRecord(id: id, timestamp: cycle.map { Date(timeIntervalSince1970: self.sensorWallAnchor + $0.end) } ?? Date(), weight: session.weight)
             rep.startedAt = cycle.map { Date(timeIntervalSince1970: self.sensorWallAnchor + $0.start) }
@@ -96,6 +98,8 @@ class DataManager: ObservableObject {
                 }) : nil
             case .squat: session.activeDuration = self.squatDuration(for: session)
             case .deadlift: session.activeDuration = nil
+            case .upperBody:
+                session.activeDuration = self.measuredDuration(for: session)
             }
             // Publish and give feedback before potentially slow checkpoint I/O.
             self.currentSession = session
@@ -416,6 +420,9 @@ class DataManager: ObservableObject {
         session.removeRep()
         session.activeDuration = nil
         if session.exerciseType == .squat { session.activeDuration = squatDuration(for: session) }
+        if [.overheadPress, .barbellRow, .bicepCurl].contains(session.exerciseType) {
+            session.activeDuration = measuredDuration(for: session)
+        }
         updateCurrentSession(session)
     }
 
@@ -423,6 +430,13 @@ class DataManager: ObservableObject {
         let cycles = session.repRecords.compactMap { automaticSquatCycles[$0.id] }
         guard !cycles.isEmpty, cycles.count == session.totalReps else { return nil }
         return ActionTiming.total(cycles.map { ActionTiming.Interval(start: $0.start, end: $0.end) })
+    }
+
+    private func measuredDuration(for session: WorkoutSession) -> TimeInterval? {
+        guard !session.repRecords.isEmpty, session.repRecords.allSatisfy({ $0.startedAt != nil }) else { return nil }
+        return ActionTiming.total(session.repRecords.map {
+            ActionTiming.Interval(start: $0.startedAt!.timeIntervalSince1970, end: $0.timestamp.timeIntervalSince1970)
+        })
     }
     
     @discardableResult

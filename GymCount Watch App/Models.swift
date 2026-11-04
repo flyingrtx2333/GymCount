@@ -15,6 +15,9 @@ enum ExerciseType: String, CaseIterable, Codable {
     case benchPress = "bench_press"
     case squat = "squat"
     case deadlift = "deadlift"
+    case overheadPress = "overhead_press"
+    case barbellRow = "barbell_row"
+    case bicepCurl = "bicep_curl"
     
     var displayName: String {
         switch self {
@@ -24,6 +27,12 @@ enum ExerciseType: String, CaseIterable, Codable {
             return NSLocalizedString("squat", comment: "深蹲")
         case .deadlift:
             return NSLocalizedString("deadlift", comment: "硬拉")
+        case .overheadPress:
+            return NSLocalizedString("overhead_press", comment: "肩上推举")
+        case .barbellRow:
+            return NSLocalizedString("barbell_row", comment: "杠铃划船")
+        case .bicepCurl:
+            return NSLocalizedString("bicep_curl", comment: "哑铃弯举")
         }
     }
     
@@ -35,6 +44,12 @@ enum ExerciseType: String, CaseIterable, Codable {
             return "Exercise-squat"
         case .deadlift:
             return "Exercise-deadlift"
+        case .overheadPress:
+            return "Exercise-overhead_press"
+        case .barbellRow:
+            return "Exercise-barbell_row"
+        case .bicepCurl:
+            return "Exercise-bicep_curl"
         }
     }
     
@@ -42,7 +57,7 @@ enum ExerciseType: String, CaseIterable, Codable {
     #if os(watchOS) || os(iOS)
     var hkWorkoutType: HKWorkoutActivityType {
         switch self {
-        case .benchPress, .squat, .deadlift:
+        case .benchPress, .squat, .deadlift, .overheadPress, .barbellRow, .bicepCurl:
             return .traditionalStrengthTraining
         }
     }
@@ -56,6 +71,12 @@ enum ExerciseType: String, CaseIterable, Codable {
             return NSLocalizedString("traditional_strength_training_squat", comment: "传统力量训练 - 深蹲")
         case .deadlift:
             return NSLocalizedString("traditional_strength_training_deadlift", comment: "传统力量训练 - 硬拉")
+        case .overheadPress:
+            return NSLocalizedString("traditional_strength_training_overhead_press", comment: "传统力量训练 - 肩上推举")
+        case .barbellRow:
+            return NSLocalizedString("traditional_strength_training_barbell_row", comment: "传统力量训练 - 杠铃划船")
+        case .bicepCurl:
+            return NSLocalizedString("traditional_strength_training_bicep_curl", comment: "传统力量训练 - 哑铃弯举")
         }
     }
 }

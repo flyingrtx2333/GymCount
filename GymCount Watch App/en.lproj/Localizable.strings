@@ -502,3 +502,16 @@
 "请更新 iPhone App 以同步训练报告" = "Update the iPhone app to sync workout reports.";
 
 "训练已放弃，采样清理失败" = "Workout discarded; sensor data could not be removed.";
+
+/* Additional strength movements */
+"overhead_press" = "Overhead Press";
+"肩上推举" = "Overhead Press";
+"traditional_strength_training_overhead_press" = "Strength Training - Overhead Press";
+"barbell_row" = "Barbell Row";
+"杠铃划船" = "Barbell Row";
+"traditional_strength_training_barbell_row" = "Strength Training - Barbell Row";
+"bicep_curl" = "Dumbbell Curl";
+"哑铃弯举" = "Dumbbell Curl";
+"traditional_strength_training_bicep_curl" = "Strength Training - Dumbbell Curl";
+"请更新 iPhone App 以同步新增动作" = "Update the iPhone app to sync new exercises";
+"请更新手机 App 以同步新增动作" = "Update the iPhone app to sync new exercises";

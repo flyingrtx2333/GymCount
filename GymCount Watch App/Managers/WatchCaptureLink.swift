@@ -206,6 +206,9 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
                               WorkoutReportSensors.capabilityKey: 1,
                               "workout_report_sensor_pending": self.pendingReportSensorCount,
                               "workout_report_sensor_failed": self.reportSensorReadFailed || !self.failedReportSensorTransfers.isEmpty]
+                if history.contains(where: { !acknowledged.contains($0.id) && !WorkoutSync.supports($0, exercises: self.receiverExercises) }) {
+                    response["exercise_update_required"] = true
+                }
                 if message["kind"] as? String == WorkoutSync.requestKind,
                    message["workout_report_version"] as? Int != 1,
                    history.contains(where: { $0.workoutReport != nil && !acknowledged.contains($0.id) }) {
@@ -257,7 +260,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             .compactMap { ($0.file.metadata?["id"] as? String).flatMap(UUID.init(uuidString:)) })
         let pending = DataManager.shared.workoutHistory.filter {
             !acknowledged.contains($0.id) && !queued.contains($0.id) && !submittedWorkouts.contains($0.id) &&
-                ($0.workoutReport == nil || acceptsWorkoutReports)
+                ($0.workoutReport == nil || acceptsWorkoutReports) && WorkoutSync.supports($0, exercises: receiverExercises)
         }
         let slots = max(0, 3 - transfers.count - reportTransfers.count)
         guard slots > 0 else { return }
@@ -298,6 +301,14 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             }
         }
         sendBatch()
+    }
+
+    private var receiverExercises: Set<String> {
+        let defaults = UserDefaults.standard
+        guard let receiver = defaults.string(forKey: "workoutSync.receiver"),
+              defaults.string(forKey: "workoutSync.exerciseReceiver") == receiver,
+              let exercises = defaults.stringArray(forKey: "workoutSync.supportedExercises") else { return WorkoutSync.legacyExercises }
+        return Set(exercises)
     }
 
     private var acceptsWorkoutReports: Bool {
@@ -351,6 +362,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
         var submitted = 0
         for workout in DataManager.shared.workoutHistory where !acknowledged.contains(workout.id) &&
             !queued.contains(workout.id) && !submittedTimelines.contains(workout.id) && (timelineAttempts[workout.id] ?? 0) < 3 {
+            guard WorkoutSync.supports(workout, exercises: receiverExercises) else { continue }
             guard submitted < slots else { break }
             do {
                 let url = DataManager.shared.timelineArchive.fileURL(workout.id)
@@ -445,7 +457,9 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             }
             await prepareReportSensorIndex()
             guard acceptsReportSensors, receiver == UserDefaults.standard.string(forKey: "workoutSync.receiver") else { return }
-            let known = Set(DataManager.shared.workoutHistory.filter { $0.workoutReport != nil }.map(\.id))
+            let known = Set(DataManager.shared.workoutHistory.filter {
+                $0.workoutReport != nil && WorkoutSync.supports($0, exercises: receiverExercises)
+            }.map(\.id))
             let parents = Set((UserDefaults.standard.stringArray(forKey: "workoutSync.received") ?? []).compactMap(UUID.init(uuidString:)))
             let received = Set(UserDefaults.standard.stringArray(forKey: "reportSensorSync.received") ?? [])
             let transfers = session.outstandingFileTransfers.filter { $0.file.metadata?["kind"] as? String == WorkoutReportSensors.fileKind }
@@ -594,7 +608,25 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             return true
         }
         if kind == WorkoutSync.requestKind {
+            let exercises = WorkoutSync.supportedExercises(in: payload)
+            defaults.set(receiver, forKey: "workoutSync.exerciseReceiver")
+            defaults.set(Array(exercises), forKey: "workoutSync.supportedExercises")
             submittedWorkouts = []; submittedTimelines = []
+            // Never let a new movement in a queued batch poison otherwise
+            // compatible old workouts after switching or downgrading the phone.
+            for transfer in WCSession.default.outstandingUserInfoTransfers where transfer.userInfo["kind"] as? String == WorkoutSync.batchKind {
+                if let records = try? WorkoutSync.decode(transfer.userInfo), records.contains(where: { !exercises.contains($0.exercise) }) {
+                    transfer.cancel()
+                }
+            }
+            let unsupported = Set(DataManager.shared.workoutHistory.filter { !WorkoutSync.supports($0, exercises: exercises) }.map(\.id))
+            for transfer in WCSession.default.outstandingFileTransfers {
+                let metadata = transfer.file.metadata ?? [:]
+                let kind = metadata["kind"] as? String
+                guard [WorkoutSync.reportFileKind, WorkoutTimeline.fileKind, WorkoutReportSensors.fileKind].contains(kind ?? "") else { continue }
+                let id = (metadata[kind == WorkoutReportSensors.fileKind ? "workout_id" : "id"] as? String).flatMap(UUID.init(uuidString:))
+                if let id, unsupported.contains(id) { transfer.cancel() }
+            }
             timelineAttempts = [:]
             timelineReadFailed = false; preparedLegacyTimelines = false
             timelineRetries.values.forEach { $0.cancel() }; timelineRetries = [:]
@@ -613,6 +645,10 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             if payload[WorkoutReportSensors.capabilityKey] as? Int == 1, payload["workout_report_version"] as? Int == 1 {
                 defaults.set(receiver, forKey: "reportSensorSync.receiver")
             } else { defaults.removeObject(forKey: "reportSensorSync.receiver") }
+            let received = Set((defaults.stringArray(forKey: "workoutSync.received") ?? []).compactMap(UUID.init(uuidString:)))
+            if !unsupported.subtracting(previous == receiver ? received : []).isEmpty {
+                message = String(localized: "请更新 iPhone App 以同步新增动作")
+            } else if message == String(localized: "请更新 iPhone App 以同步新增动作") { message = "" }
             for transfer in WCSession.default.outstandingFileTransfers where transfer.file.metadata?["kind"] as? String == WorkoutReportSensors.fileKind {
                 if transfer.file.metadata?["receiver_id"] as? String != receiver || payload[WorkoutReportSensors.capabilityKey] as? Int != 1 || payload["workout_report_version"] as? Int != 1 { transfer.cancel() }
             }
@@ -667,7 +703,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
         let store = CollectionStore.shared
         if let draft = store.draft { requestedExercise = draft.exercise }
         else if !store.recording, let exercise,
-                ["squat", "bench_press", "deadlift", "bicep_curl", "rest", "walking", "other"].contains(exercise) {
+                (ExerciseType(rawValue: exercise) != nil || ["rest", "walking", "other"].contains(exercise)) {
             requestedExercise = exercise
         }
         showingCapture = true
@@ -708,7 +744,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
             if activeID == id, store.recording { reply(["started": true]); return }
             guard activeID == nil, !startingCapture, workout == nil, !store.recording, store.draft == nil,
                   let exercise = message["exercise"] as? String,
-                  ["squat", "bench_press", "deadlift", "bicep_curl", "rest", "walking", "other"].contains(exercise) else {
+                  (ExerciseType(rawValue: exercise) != nil || ["rest", "walking", "other"].contains(exercise)) else {
                 reply(["error": String(localized: "手表未就绪或动作无效")]); return
             }
             showCapturePage(exercise: exercise)

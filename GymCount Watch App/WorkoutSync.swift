@@ -8,6 +8,18 @@ enum WorkoutSync {
     static let receiptKind = "gymcount.workouts.receipt.v1"
     static let maximumBatchSize = 40
     static let maximumPayloadBytes = 48 * 1024
+    static let exerciseCapabilityKey = "supported_exercises"
+    static let legacyExercises: Set<String> = ["bench_press", "squat", "deadlift"]
+
+    static func supportedExercises(in request: [String: Any]) -> Set<String> {
+        guard let names = request[exerciseCapabilityKey] as? [String], names.count <= 100 else { return legacyExercises }
+        return Set(names).intersection(ExerciseType.allCases.map(\.rawValue))
+    }
+
+    static func supports(_ workout: WorkoutHistory, exercises: Set<String>) -> Bool {
+        exercises.contains(workout.exerciseType.rawValue) &&
+            (workout.workoutReport?.sets.allSatisfy { exercises.contains($0.exercise.rawValue) } ?? true)
+    }
 
     struct Record: Codable, Equatable, Identifiable {
         let id: UUID
@@ -21,7 +33,7 @@ enum WorkoutSync {
         var workoutReport: WorkoutReport? = nil
 
         var valid: Bool {
-            ["bench_press", "squat", "deadlift"].contains(exercise) &&
+            ExerciseType(rawValue: exercise) != nil &&
             date.timeIntervalSinceReferenceDate.isFinite && duration.isFinite && duration >= 0 &&
             maxWeight.isFinite && maxWeight >= 0 && (0...1_000_000).contains(totalReps) &&
             (activeDuration.map { $0.isFinite && $0 >= 0 && $0 <= duration } ?? true) &&

@@ -83,7 +83,8 @@ struct PhoneCaptureView: View {
 
     private var exerciseOptions: [(id: String, title: String)] {
         [("squat", String(localized: "杠铃深蹲")), ("bench_press", String(localized: "卧推")),
-         ("deadlift", String(localized: "硬拉")), ("bicep_curl", String(localized: "弯举")),
+         ("deadlift", String(localized: "硬拉")), ("overhead_press", String(localized: "肩上推举")),
+         ("barbell_row", String(localized: "杠铃划船")), ("bicep_curl", String(localized: "哑铃弯举")),
          ("other", String(localized: "非训练动作"))]
     }
 

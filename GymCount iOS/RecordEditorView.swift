@@ -292,6 +292,7 @@ struct RecordEditorView: View {
             }.frame(maxWidth: .infinity, minHeight: Studio.controlHeight, alignment: .leading).contentShape(Rectangle())
         }.buttonStyle(.borderless).foregroundStyle(Studio.ink)
             .accessibilityLabel(String(localized: "动作")).accessibilityValue(set.wrappedValue.exercise.recordName)
+            .accessibilityIdentifier("record-set-exercise-\(draft.sets.firstIndex { $0.id == set.wrappedValue.id } ?? 0)")
     }
     private func removeButton(_ set: RecordSetDraft) -> some View {
         Button(role: .destructive) {

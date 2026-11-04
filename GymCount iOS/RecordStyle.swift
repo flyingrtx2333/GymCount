@@ -126,6 +126,9 @@ extension ExerciseType {
         case .benchPress: String(localized: "卧推")
         case .squat: String(localized: "深蹲")
         case .deadlift: String(localized: "硬拉")
+        case .overheadPress: String(localized: "肩上推举")
+        case .barbellRow: String(localized: "杠铃划船")
+        case .bicepCurl: String(localized: "哑铃弯举")
     } }
 }
 

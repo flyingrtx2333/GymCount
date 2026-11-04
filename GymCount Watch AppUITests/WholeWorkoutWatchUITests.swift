@@ -3,6 +3,49 @@ import XCTest
 /// Runs against the normal Watch app in the isolated preview installation.
 /// Does not inject samples, add repetitions, or save a generated workout.
 final class WholeWorkoutWatchUITests: XCTestCase {
+    @MainActor func testNewExerciseMenusAndSwitching() throws {
+        continueAfterFailure = false
+        for language in ["zh-Hans", "en"] {
+            let app = XCUIApplication()
+            app.launchArguments = ["-is_first_launch", "YES", "-AppleLanguages", "(" + language + ")", "-AppleLocale", language == "en" ? "en_US" : "zh_CN"]
+            app.launch()
+            let discardLabel = language == "en" ? "Discard workout" : "放弃训练"
+            let recovered = app.buttons["workout.recovery.discard"]
+            if recovered.waitForExistence(timeout: 2) {
+                recovered.tap()
+                let confirm = app.alerts.buttons[discardLabel]
+                if confirm.waitForExistence(timeout: 2) { confirm.tap() }
+                else { try tapSystemAction(discardLabel, in: app) }
+            }
+            let settings = app.buttons[language == "en" ? "Settings" : "设置"]
+            XCTAssertTrue(settings.waitForExistence(timeout: 10)); settings.tap()
+            let health = app.switches[language == "en" ? "Sync to Activity Rings" : "同步到运动圆环"].firstMatch
+            reveal(health, in: app)
+            if health.value as? String == "1" { health.tap() }
+            app.buttons[language == "en" ? "Save" : "保存"].tap()
+            let start = app.buttons["workout.start.overhead_press"]
+            reveal(start, in: app); capture(app, "new-movements-watch-home-" + language); start.tap()
+            XCTAssertTrue(app.staticTexts["whole.count"].waitForExistence(timeout: 8))
+            let exercise = app.buttons["whole.exercise"]
+            let choices = language == "en" ? ["Barbell Row", "Dumbbell Curl", "Overhead Press"] : ["杠铃划船", "哑铃弯举", "肩上推举"]
+            for (id, label) in zip(["barbell_row", "bicep_curl", "overhead_press"], choices) {
+                reveal(exercise, in: app); exercise.tap()
+                let option = app.buttons["whole.switch." + id]
+                reveal(option, in: app); option.tap()
+                let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", label), object: exercise)
+                XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 8), .completed)
+                XCTAssertEqual(app.staticTexts["whole.count"].label, "0")
+                capture(app, "new-movements-watch-" + id + "-" + language)
+            }
+            let actions = app.buttons["whole.actions"]
+            reveal(actions, in: app); actions.tap()
+            try tapSystemAction(language == "en" ? "Discard workout" : "放弃训练", in: app)
+            try tapSystemAction(language == "en" ? "Discard workout" : "放弃训练", in: app)
+            XCTAssertTrue(app.buttons["workout.start.bench_press"].waitForExistence(timeout: 8))
+            app.terminate()
+        }
+    }
+
     @MainActor func testNativeHeadersAndSummary() throws {
         continueAfterFailure = false
         for language in ["zh-Hans", "en"] {

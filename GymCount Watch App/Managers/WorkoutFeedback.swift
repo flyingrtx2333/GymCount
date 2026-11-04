@@ -29,7 +29,7 @@ final class WorkoutDiagnostics {
                     magneticField: $0.magnetic_field_accuracy >= 0 ? vector($0.magnetic_field) : nil)
             }, detectedEvents: snapshot.events,
             feedbackEvents: workout.exerciseType == .deadlift ? nil : raw.recordedFeedback,
-            algorithmVersion: workout.exerciseType == .benchPress ? BenchAnalysis.version : workout.exerciseType == .squat ? SquatStream.version : "rules-20261007",
+            algorithmVersion: workout.exerciseType.countingAlgorithmVersion,
             isPartial: snapshot.eventsTruncated)
     }
 
@@ -54,14 +54,14 @@ final class WorkoutDiagnostics {
             watch_crown: WKInterfaceDevice.current().crownOrientation == .left ? "left" : "right", pace: "normal",
             watch_model: WKInterfaceDevice.current().model, os_version: WKInterfaceDevice.current().systemVersion,
             app_version: "\(info["CFBundleShortVersionString"] ?? "unknown") (\(info["CFBundleVersion"] ?? "unknown"))",
-            algorithm_version: kind == .benchPress ? BenchAnalysis.version : kind == .squat ? SquatStream.version : "rules-20261007",
+            algorithm_version: kind.countingAlgorithmVersion,
             participant_id: participant,
             notes: "workout_feedback; workout_id=\(workout.id.uuidString); displayed_count=\(workout.totalReps); weight_kg=\(workout.maxWeight)",
             samples: snapshot.points, gyroscope_samples: [], motion_samples: motion, magnetometer_samples: [],
             sensor_availability: CaptureAvailability(gyroscope: false, device_motion: !motion.isEmpty, magnetometer: false),
             detected_events: snapshot.events,
             feedback_events: kind == .deadlift ? nil : raw.recordedFeedback,
-            feedback_algorithm_version: kind == .benchPress ? BenchPressFeedback.version : kind == .squat ? SquatStream.version : nil,
+            feedback_algorithm_version: kind.completionFeedbackVersion,
             reference_events_truncated: snapshot.eventsTruncated)
     }
 }

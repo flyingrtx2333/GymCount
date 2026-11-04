@@ -283,8 +283,9 @@ final class CollectionStore: ObservableObject {
         let raw = RawCapture(); capture = raw; exercise = kind; self.pace = pace; captureNotes = String(notes.prefix(1000)); start = Date(); detected = 0; message = ""
         self.sessionID = sessionID
         benchNeedsReview = false
-        let hasWatchCounter = ["squat", "bench_press", "deadlift"].contains(kind)
-        detector.configureForExercise(kind == "squat" ? .squat : kind == "deadlift" ? .deadlift : .benchPress)
+        let countedExercise = ExerciseType(rawValue: kind)
+        let hasWatchCounter = countedExercise != nil
+        if let countedExercise { detector.configureForExercise(countedExercise) }
         detector.onRawAcceleration = { raw.append($0) }
         detector.onRawDeviceMotion = { raw.appendMotion($0) }
         detector.onRawBenchAnalysis = { raw.setBenchAnalysis($0) }
@@ -301,7 +302,7 @@ final class CollectionStore: ObservableObject {
         }
         detector.onCountingError = { [weak self] in self?.message = $0 }
         // Bench counting and capture share the very same fused motion stream.
-        raw.start(includeDeviceMotion: !["bench_press", "squat"].contains(kind))
+        raw.start(includeDeviceMotion: countedExercise == nil || countedExercise == .deadlift)
         detector.startDetection(countRepetitions: hasWatchCounter); recording = detector.isDetecting
         if !recording { raw.stop(); capture = nil; message = String(localized: "加速度计不可用"); WKInterfaceDevice.current().play(.failure); return }
         // Both entry points have already started an active HealthKit workout.
@@ -358,9 +359,11 @@ final class CollectionStore: ObservableObject {
             watch_crown: WKInterfaceDevice.current().crownOrientation == .left ? "left" : "right", pace: pace,
             watch_model: hardwareModel(), os_version: WKInterfaceDevice.current().systemVersion,
             app_version: "\(info["CFBundleShortVersionString"] ?? "unknown") (\(info["CFBundleVersion"] ?? "unknown"))",
-            algorithm_version: exercise == "bench_press" ? BenchAnalysis.version : exercise == "squat" ? SquatStream.version : exercise == "deadlift" ? "rules-20261007" : "capture-only-20261009",
+            algorithm_version: ExerciseType(rawValue: exercise)?.countingAlgorithmVersion ?? "capture-only-20261009",
             participant_id: saved, notes: captureNotes, samples: points, gyroscope_samples: result.gyro,
-            motion_samples: result.motion, magnetometer_samples: result.magnetic, sensor_availability: raw.availability, detected_events: events, feedback_events: ["bench_press", "squat"].contains(exercise) ? raw.recordedFeedback : nil, feedback_algorithm_version: exercise == "bench_press" ? BenchPressFeedback.version : exercise == "squat" ? SquatStream.version : nil, reference_events_truncated: result.eventsTruncated)
+            motion_samples: result.motion, magnetometer_samples: result.magnetic, sensor_availability: raw.availability, detected_events: events,
+            feedback_events: ExerciseType(rawValue: exercise)?.completionFeedbackVersion != nil ? raw.recordedFeedback : nil,
+            feedback_algorithm_version: ExerciseType(rawValue: exercise)?.completionFeedbackVersion, reference_events_truncated: result.eventsTruncated)
         detected = events.count; capture = nil
     }
     func persist(_ actual: Int) async {
@@ -540,14 +543,12 @@ struct CollectionPanel: View {
     @State private var editingNotes = false
 
     private var exerciseName: String {
+        if let training = ExerciseType(rawValue: exercise) { return training.displayName }
         switch exercise {
-        case "bench_press": return String(localized: "卧推")
-        case "deadlift": return String(localized: "硬拉")
-        case "bicep_curl": return String(localized: "弯举")
         case "rest": return String(localized: "静止")
         case "walking": return String(localized: "走动")
         case "other": return String(localized: "其他非训练")
-        default: return String(localized: "深蹲")
+        default: return String(localized: "其他非训练")
         }
     }
 
@@ -681,7 +682,9 @@ struct CollectionPanel: View {
                     exerciseOption(String(localized: "深蹲"), value: "squat")
                     exerciseOption(String(localized: "卧推"), value: "bench_press")
                     exerciseOption(String(localized: "硬拉"), value: "deadlift")
-                    exerciseOption(String(localized: "弯举"), value: "bicep_curl")
+                    exerciseOption(String(localized: "肩上推举"), value: "overhead_press")
+                    exerciseOption(String(localized: "杠铃划船"), value: "barbell_row")
+                    exerciseOption(String(localized: "哑铃弯举"), value: "bicep_curl")
                     exerciseOption(String(localized: "静止"), value: "rest")
                     exerciseOption(String(localized: "走动"), value: "walking")
                     exerciseOption(String(localized: "其他非训练"), value: "other")
