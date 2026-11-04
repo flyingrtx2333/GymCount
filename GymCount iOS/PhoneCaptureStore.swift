@@ -56,13 +56,18 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
     @Published private(set) var sampleReceiveStates: [UUID: CaptureSampleReceiveState] = [:]
     @Published private(set) var actualCountErrors: [UUID: String] = [:]
     @Published private(set) var workoutSyncMessage = ""
-    @Published private(set) var workoutSyncState = WorkoutSyncState.idle
+    @Published private(set) var workoutSyncState = WorkoutSyncState.idle {
+        didSet {
+            if workoutSyncState != .receiving && workoutSyncState != .connecting { workoutActivity.cancelTimeout() }
+        }
+    }
     @Published private(set) var watchSetupState = WatchSetupState.checking
     @Published private(set) var unavailableTimelineIDs: Set<UUID> = []
     private let workoutStore: PhoneWorkoutStore?
     nonisolated private let workoutInbox: URL
     nonisolated private let workoutReceiverID: String
     private let connectivityEnabled: Bool
+    private let workoutActivity = WorkoutSyncActivity()
     private var workoutRequestGeneration = UUID()
     let camera = AVCaptureSession()
     private let health = HKHealthStore()
@@ -94,13 +99,15 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         refreshWatchSetup()
         if timelineID == nil && !force && (workoutSyncState == .receiving || workoutSyncState == .connecting) { return }
         let session = WCSession.default
-        let generation = UUID(); workoutRequestGeneration = generation
         guard session.activationState == .activated else {
+            let generation = UUID(); workoutRequestGeneration = generation
             workoutSyncState = .connecting; workoutSyncMessage = workoutSyncState.title
             session.activate(); scheduleWorkoutTimeout(generation); return
         }
         guard session.isPaired else { workoutSyncState = .unpaired; workoutSyncMessage = workoutSyncState.title; return }
         guard session.isWatchAppInstalled else { workoutSyncState = .notInstalled; workoutSyncMessage = workoutSyncState.title; return }
+        guard workoutActivity.beginRequest(force: force || timelineID != nil) else { return }
+        let generation = UUID(); workoutRequestGeneration = generation
         var payload: [String: Any] = ["kind": WorkoutSync.requestKind, "receiver_id": workoutReceiverID,
                                       "timeline_version": 1, "workout_report_version": 1, WorkoutReportSensors.capabilityKey: 1,
                                       WorkoutSync.exerciseCapabilityKey: ExerciseType.allCases.map(\.rawValue), "force": force]
@@ -108,7 +115,9 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         let pending = session.outstandingUserInfoTransfers.filter { $0.userInfo["kind"] as? String == WorkoutSync.requestKind }
         if force { pending.forEach { $0.cancel() } }
         if force || pending.isEmpty { session.transferUserInfo(payload) }
-        workoutSyncState = session.isReachable ? .receiving : .waiting
+        // Reachability is for live messages; background transfers can keep
+        // receiving while the Watch app is not reachable.
+        workoutSyncState = session.isReachable ? .connecting : .waiting
         workoutSyncMessage = workoutSyncState.title
         scheduleWorkoutTimeout(generation)
         if session.isReachable {
@@ -137,11 +146,9 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
                         } else { self.workoutSyncState = .failed; self.workoutSyncMessage = self.workoutStore?.storageError ?? String(localized: "记录未能保存，请重试") }
                     }
                 }
-            }, errorHandler: { [weak self] _ in
-                Task { @MainActor in
-                    guard let self, self.workoutRequestGeneration == generation else { return }
-                    self.workoutSyncState = .waiting; self.workoutSyncMessage = self.workoutSyncState.title
-                }
+            }, errorHandler: { _ in
+                // The background request is already queued. Only an inactivity
+                // deadline may move an active sync back to waiting.
             })
         }
     }
@@ -152,8 +159,8 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         watchSetupState = !session.isPaired ? .unpaired : !session.isWatchAppInstalled ? .notInstalled : .ready
     }
     private func scheduleWorkoutTimeout(_ generation: UUID) {
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(20))
+        guard workoutSyncState == .receiving || workoutSyncState == .connecting else { return }
+        workoutActivity.restartTimeout { [weak self] in
             guard let self, self.workoutRequestGeneration == generation,
                   self.workoutSyncState == .receiving || self.workoutSyncState == .connecting else { return }
             self.workoutSyncState = .waiting; self.workoutSyncMessage = self.workoutSyncState.title
@@ -216,7 +223,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
                     } else { self.workoutSyncState = .failed; self.workoutSyncMessage = self.workoutStore?.storageError ?? String(localized: "记录未能保存，请重试") }
                 }
             }, errorHandler: nil)
-        } else { workoutSyncState = .waiting }
+        }
     }
 
     private func receiveWorkoutTimeline(_ file: URL, metadata: [String: Any]) async -> Bool {
@@ -763,7 +770,6 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
         Task { @MainActor in
             if session.isReachable { self.requestWorkoutHistory() }
-            else if self.workoutSyncState == .receiving { self.workoutSyncState = .waiting; self.workoutSyncMessage = self.workoutSyncState.title }
         }
     }
     nonisolated func sessionWatchStateDidChange(_ session: WCSession) {

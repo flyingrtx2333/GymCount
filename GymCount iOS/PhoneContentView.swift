@@ -328,8 +328,9 @@ struct PhoneContentView: View {
         #if GYMCOUNT_SYNC
         if !editMode.isEditing {
             Button { showingSync = true } label: {
-                Image(systemName: capture.workoutSyncState.symbol).font(.system(size: 20)).frame(width: Studio.controlHeight, height: Studio.controlHeight)
-            }.accessibilityLabel(capture.workoutSyncState.title).accessibilityIdentifier("history-sync-workouts")
+                Image(systemName: "applewatch").font(.system(size: 20)).frame(width: Studio.controlHeight, height: Studio.controlHeight)
+            }.accessibilityLabel(String(localized: "手表同步")).accessibilityValue(capture.workoutSyncState.title)
+                .accessibilityIdentifier("history-sync-workouts")
         }
         #endif
     }
@@ -449,6 +450,7 @@ struct RecordDetailView: View {
     @State private var timelineFailed = false
     @State private var timelineLoading = true
     @State private var timelineLoadID = UUID()
+    @State private var requestedTimeline = false
     let id: UUID
     var edit: (PhoneTrainingSession) -> Void
     var delete: (PhoneTrainingSession) -> Void
@@ -566,8 +568,10 @@ struct RecordDetailView: View {
                 guard store.history.first(where: { $0.id == id })?.workoutReport == nil else { return }
                 await loadTimeline()
                 #if GYMCOUNT_SYNC
-                if timeline == nil, let item = store.history.first(where: { $0.id == id }), item.workoutReport == nil,
+                if !Task.isCancelled, !requestedTimeline, timeline == nil,
+                   let item = store.history.first(where: { $0.id == id }), item.workoutReport == nil,
                    item.watchSummary != nil || item.legacySummary != nil {
+                    requestedTimeline = true
                     capture.requestWorkoutHistory(force: true, timelineID: id)
                 }
                 #endif
