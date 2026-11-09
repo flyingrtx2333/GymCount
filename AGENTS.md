@@ -66,13 +66,21 @@
 - 55 版收到记录列表图标与同步页“等待／接收”反复切换的报告。接收超时改为唯一可取消的空闲计时任务，每次进展续期；实时消息不可达不覆盖后台接收状态，自动请求在 20 秒窗口合并，手动重试保留。右上角入口固定手表图标，详情不因其他时间轴 revision 反复强制请求。
 - 真实时钟／Task 针对性验证和两个 iPhone 工程及配套 Watch Release 编译通过；设备不可连接，未完成用户真机同步复验。已随 1.1.8 (56) 发布；55 版不包含此修复。详见 [同步状态修复](docs/watch-sync-flicker-20261104.md)。
 
-## 保存时采样中断误报：2026-11-09（未发布）
+## 保存时采样中断误报：2026-11-09（TestFlight 58）
 
 - MotionDetector 同步／异步停止均在入口捕获单调时钟，最终卧推分析使用这个截止时间；不得在文件队列等待后用执行分析的当前时间判断尾部断流。
 - CoreMotion 两路回调绑定启动代次，停止阶段的关闭错误不得污染检测器；真实运动中错误与实际采样缺口继续保留。共享代次与停止标记通过锁读写，诊断分类使用 `MotionLifecycle`。
-- 11 条真实卧推录制回放与配套 Release 构建通过；6 条迟收尾误报、2 条真实内部缺口及停止前尾部缺口分别验证。未取得用户本次 Watch 日志，不把检测器回放当作 CoreMotion 实机验收。见 [停止边界修复](docs/sampling-stop-fix-20261109.md)。尚未提交或发布，57 版不包含本修复。
+- 11 条真实卧推录制回放与配套 Release 构建通过；6 条迟收尾误报、2 条真实内部缺口及停止前尾部缺口分别验证。未取得用户本次 Watch 日志，不把检测器回放当作 CoreMotion 实机验收。见 [停止边界修复](docs/sampling-stop-fix-20261109.md)。已随双端 1.1.8 (58) 发布，57 版不包含本修复。
 
-## 最新 TestFlight：2026-11-04（57）
+## 最新 TestFlight：2026-11-09（58）
+
+- iPhone 与 Watch：1.1.8 (58)，发布源码 `5cf428004f3ca45589050280453010890bec5388` 已推送 `codex/gymcount-cleanup-20261011`。修复正常停止后收尾等待被误算成断流，以及关闭／旧代次回调污染当前采样状态的问题；动作识别门限、存储与同步协议及后台不变。
+- Delivery UUID / ASC Build ID：`25c24341-3504-442c-90e8-434d6819b921`。Apple `BUILD-STATUS: VALID`、`INTERNAL_ONLY`、`IN_BETA_TESTING`；内部组 `flyingrtx` 和中英文说明均已回读确认。
+- 514 个提交文件生成发布快照，244 个应用文件与刚完成的真实回放和配套构建副本逐文件一致。双端签名归档／导出、严格签名、版本／配套关系、HealthKit 与 Watch Siri 权限通过；实际手表包存在 `MotionLifecycle` 诊断代码，开发者采集 UI 与相机权限继续排除。独立 iPhone 58 Release 构建通过。
+- IPA SHA-256：`017df7d0dabb13ac0e0f471dcedc1a077235b3df84aba88e6c22f26f1b3ba6e3`。沿用 11 条真实录制回放与实际等待验证结果；未做 CoreMotion 实机停止回调验收，没有注入运动信号、上传反馈或操作用户正式安装。3 个临时桌面发布任务已移除，正式商店不作更新。
+- 产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.8-58/`；详见 [58 版发布记录](docs/testflight-1.1.8-58.md)。
+
+## 历史 TestFlight：2026-11-04（57）
 
 - iPhone 与 Watch：1.1.8 (57)，发布源码 `eef466cc52084808603a61d5e3104439f2e5a2f2` 已推送 `codex/gymcount-cleanup-20261011`。包含 iOS 六种动作圆环配色，以及 Watch 首页／历史／设置／帮助、重量输入、训练／恢复／报告和反馈布局整理；没有改计数算法、存储格式、通信协议或后台。
 - Delivery UUID / ASC Build ID：`06ea38b8-f862-4190-8403-a754629787cc`。Apple `BUILD-STATUS: VALID`、`INTERNAL_ONLY`、`IN_BETA_TESTING`；内部组 `flyingrtx` 与中英文测试说明均已写入并回读确认。
