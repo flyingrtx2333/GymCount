@@ -9,6 +9,7 @@ import Foundation
 import CoreMotion
 import Combine
 import WatchKit
+import os
 
 // Detection owns the movement decision; consumers own records and presentation.
 enum DetectedRepetition {
@@ -54,8 +55,18 @@ class MotionDetector: ObservableObject {
     private var upperBodyDetector: UpperBodyDetector?
     private var currentExerciseType: ExerciseType = .benchPress
     private var countsRepetitions = true
-    private var isStopping = false
-    private var generation = UUID()
+    private let lifecycleLock = NSLock()
+    private var stopping = false
+    private var runGeneration = UUID()
+    private var isStopping: Bool {
+        get { lifecycleLock.withLock { stopping } }
+        set { lifecycleLock.withLock { stopping = newValue } }
+    }
+    private var generation: UUID {
+        get { lifecycleLock.withLock { runGeneration } }
+        set { lifecycleLock.withLock { runGeneration = newValue } }
+    }
+    private let lifecycleLog = Logger(subsystem: "com.flyingrtx.GymCount.watchkitapp", category: "MotionLifecycle")
     private var lastDeliveredRepTime: Double?
     
     @Published var isDetecting = false
@@ -133,8 +144,9 @@ class MotionDetector: ObservableObject {
         let runID = generation
         // 使用后台队列来处理加速计数据，确保在屏幕变暗时仍能正常工作
         motionManager.startAccelerometerUpdates(to: motionQueue) { [weak self] data, error in
-            guard let self = self, let data = data else { 
-                if error != nil {
+            guard let self, self.generation == runID else { return }
+            guard let data else {
+                if let error, self.shouldReportMotionError(error, stream: "accelerometer", runID: runID) {
                     DispatchQueue.main.async { [weak self] in
                         guard let self, self.generation == runID, self.isDetecting else { return }
                         self.onCountingError?(String(localized: "运动采样中断，请手动核对"))
@@ -149,18 +161,17 @@ class MotionDetector: ObservableObject {
         
         if countRepetitions && currentExerciseType != .deadlift {
             motionManager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: motionQueue) { [weak self] data, error in
-                guard let self else { return }
+                guard let self, self.generation == runID else { return }
                 guard let data else {
-                    if error != nil {
+                    if let error, self.shouldReportMotionError(error, stream: "device_motion", runID: runID) {
                         switch self.currentExerciseType {
                         case .benchPress: self.benchPressDetector?.markInterrupted()
                         case .squat: self.squatDetector?.markInterrupted()
                         case .overheadPress, .barbellRow, .bicepCurl: self.upperBodyDetector?.markInterrupted()
                         case .deadlift: break
                         }
-                        let token = self.generation
                         DispatchQueue.main.async {
-                            guard self.generation == token, self.isDetecting else { return }
+                            guard self.generation == runID, self.isDetecting else { return }
                             self.onCountingError?(String(localized: "运动采样中断，请手动核对"))
                         }
                     }
@@ -179,6 +190,7 @@ class MotionDetector: ObservableObject {
     }
     
     func stopDetection() {
+        let stoppedAt = ProcessInfo.processInfo.systemUptime
         isStopping = true
         print("🛑 停止运动检测")
         motionManager.stopAccelerometerUpdates()
@@ -186,26 +198,36 @@ class MotionDetector: ObservableObject {
         if OperationQueue.current !== motionQueue {
             motionQueue.waitUntilAllOperationsAreFinished()
         }
-        applyStop(finalAnalysis())
+        applyStop(finalAnalysis(stoppedAt: stoppedAt))
     }
 
     @MainActor
     func stopDetectionAsync() async {
+        let stoppedAt = ProcessInfo.processInfo.systemUptime
         isStopping = true
         motionManager.stopAccelerometerUpdates()
         motionManager.stopDeviceMotionUpdates()
         do {
             let final = try await WorkoutFileIO.shared.perform {
                 self.motionQueue.waitUntilAllOperationsAreFinished()
-                return self.finalAnalysis()
+                return self.finalAnalysis(stoppedAt: stoppedAt)
             }
             applyStop(final)
         } catch { onCountingError?(String(localized: "运动采样中断，请手动核对")) }
     }
 
-    private func finalAnalysis() -> (bench: BenchAnalysis?, squatCount: Int, deadliftCount: Int, cycles: [SquatCycle], upperCycles: [UpperBodyCycle]) {
-        (currentExerciseType == .benchPress && isDetecting && countsRepetitions ? benchPressDetector?.finish() : nil,
+    // File I/O and queued analysis may finish later; coverage ends when stop was requested.
+    private func finalAnalysis(stoppedAt: Double) -> (bench: BenchAnalysis?, squatCount: Int, deadliftCount: Int, cycles: [SquatCycle], upperCycles: [UpperBodyCycle]) {
+        (currentExerciseType == .benchPress && isDetecting && countsRepetitions ? benchPressDetector?.finish(receivedAt: stoppedAt) : nil,
          squatDetector?.repCount ?? 0, deadliftDetector?.repCount ?? 0, squatDetector?.cycles ?? [], upperBodyDetector?.cycles ?? [])
+    }
+
+    private func shouldReportMotionError(_ error: Error, stream: String, runID: UUID) -> Bool {
+        guard generation == runID else { return false }
+        let stopping = isStopping
+        let failure = error as NSError
+        lifecycleLog.notice("motion_error stream=\(stream, privacy: .public) domain=\(failure.domain, privacy: .public) code=\(failure.code) stopping=\(stopping)")
+        return !stopping
     }
 
     private func applyStop(_ final: (bench: BenchAnalysis?, squatCount: Int, deadliftCount: Int, cycles: [SquatCycle], upperCycles: [UpperBodyCycle])) {
