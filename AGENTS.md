@@ -72,7 +72,15 @@
 - CoreMotion 两路回调绑定启动代次，停止阶段的关闭错误不得污染检测器；真实运动中错误与实际采样缺口继续保留。共享代次与停止标记通过锁读写，诊断分类使用 `MotionLifecycle`。
 - 11 条真实卧推录制回放与配套 Release 构建通过；6 条迟收尾误报、2 条真实内部缺口及停止前尾部缺口分别验证。未取得用户本次 Watch 日志，不把检测器回放当作 CoreMotion 实机验收。见 [停止边界修复](docs/sampling-stop-fix-20261109.md)。已随双端 1.1.8 (58) 发布，57 版不包含本修复。
 
-## 最新 TestFlight：2026-11-09（58）
+## 最新 TestFlight：2026-11-11（59）
+
+- iPhone 与 Watch：1.1.8 (59)，发布源码 `e1f2377aeb217cb099c707f7ee5ba78daa928168` 已推送。整场训练 5 分钟无新次数提醒、10 分钟自动保存，继续训练重新计时，手动暂停不触发；保留已完成组、裁掉末段空等及对应尾部采样，空训练不入历史。
+- Delivery UUID / ASC Build ID：`650f59f8-d7d2-4310-9903-8aa918413da0`。Apple `BUILD-STATUS: VALID`、`INTERNAL_ONLY`、`IN_BETA_TESTING`；内部组 `flyingrtx` 与中英文测试说明已回读确认。
+- 两项隔离原生生命周期测试通过，配套双端归档／导出、严格签名、版本／配套关系、HealthKit 与 Watch Siri 权限核验通过，独立 iPhone 59 Release 构建通过。516 个提交文件生成快照；244 个应用文件与验证源码对应，其中 3 个仅为 Git 的 CRLF/LF 规范化。
+- IPA SHA-256：`ed060d9398cf800a5cba8c1d69af2a3a65d2845e30554e68873a0be0f75cb774`。实际佩戴、熄屏超时与 HealthKit 写入仍待真表确认；此次未覆盖用户正式安装。
+- 产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.8-59/`；详见 [59 版发布记录](docs/testflight-1.1.8-59.md)。
+
+## 历史 TestFlight：2026-11-09（58）
 
 - iPhone 与 Watch：1.1.8 (58)，发布源码 `5cf428004f3ca45589050280453010890bec5388` 已推送 `codex/gymcount-cleanup-20261011`。修复正常停止后收尾等待被误算成断流，以及关闭／旧代次回调污染当前采样状态的问题；动作识别门限、存储与同步协议及后台不变。
 - Delivery UUID / ASC Build ID：`25c24341-3504-442c-90e8-434d6819b921`。Apple `BUILD-STATUS: VALID`、`INTERNAL_ONLY`、`IN_BETA_TESTING`；内部组 `flyingrtx` 和中英文说明均已回读确认。
