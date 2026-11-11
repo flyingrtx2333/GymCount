@@ -207,13 +207,13 @@ class MotionDetector: ObservableObject {
         isStopping = true
         motionManager.stopAccelerometerUpdates()
         motionManager.stopDeviceMotionUpdates()
-        do {
-            let final = try await WorkoutFileIO.shared.perform {
+        let final = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
                 self.motionQueue.waitUntilAllOperationsAreFinished()
-                return self.finalAnalysis(stoppedAt: stoppedAt)
+                continuation.resume(returning: self.finalAnalysis(stoppedAt: stoppedAt))
             }
-            applyStop(final)
-        } catch { onCountingError?(String(localized: "运动采样中断，请手动核对")) }
+        }
+        applyStop(final)
     }
 
     // File I/O and queued analysis may finish later; coverage ends when stop was requested.

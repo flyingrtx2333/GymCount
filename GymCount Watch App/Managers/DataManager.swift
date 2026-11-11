@@ -9,6 +9,7 @@ import Foundation
 import Combine
 import HealthKit
 import WatchKit
+import os
 
 class DataManager: ObservableObject {
     static let shared = DataManager()
@@ -41,6 +42,7 @@ class DataManager: ObservableObject {
     private var wholeIdleTask: Task<Void, Never>?
     private var idleAcknowledgedAt = Date.distantPast
     private var liveHealthObservation: AnyCancellable?
+    private let workoutSaveLog = Logger(subsystem: "com.flyingrtx.GymCount.watchkitapp", category: "WorkoutSave")
     @Published var saveError: String?
     @Published private(set) var isSavingWorkout = false
     @Published var countingFailed = false
@@ -1008,7 +1010,12 @@ extension DataManager {
     @MainActor @discardableResult
     func finishWholeWorkout() async -> Bool {
         guard isWholeWorkout, !isSavingWorkout, !historyReadFailed else { return false }
-        isSavingWorkout = true; defer { isSavingWorkout = false }
+        let saveStarted = ProcessInfo.processInfo.systemUptime
+        isSavingWorkout = true
+        defer {
+            isSavingWorkout = false
+            workoutSaveLog.notice("phase=workout_total seconds=\(ProcessInfo.processInfo.systemUptime - saveStarted) saved=\(self.currentSession == nil)")
+        }
         saveError = nil; wholeWorkoutIdlePrompt = false
         if currentSession?.wholeDraft?.pendingReport == nil {
             let endedAfterIdle = wholeWorkoutEndedAfterIdle
@@ -1017,6 +1024,7 @@ extension DataManager {
                 if endedAfterIdle { healthKitManager.liveWorkout.pause() }
                 return false
             }
+            workoutSaveLog.notice("phase=segment_save seconds=\(ProcessInfo.processInfo.systemUptime - saveStarted)")
             if endedAfterIdle && draft.completedSets.isEmpty {
                 let discarded = discardCurrentWorkout()
                 if !discarded { healthKitManager.liveWorkout.pause() }
@@ -1063,6 +1071,7 @@ extension DataManager {
             totalWeight: report.totalWeight, workoutReport: report)
         let next = [history] + workoutHistory.filter { $0.id != history.id }
         let url = historyURL
+        let historyStarted = ProcessInfo.processInfo.systemUptime
         do {
             try await WorkoutFileIO.shared.perform {
                 let data = try JSONEncoder().encode(next)
@@ -1070,6 +1079,7 @@ extension DataManager {
                 try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             }
         } catch { saveError = String(localized: "保存失败，训练仍在本页，请重试"); return false }
+        workoutSaveLog.notice("phase=history_save seconds=\(ProcessInfo.processInfo.systemUptime - historyStarted)")
         workoutHistory = next
         currentSession = nil; checkpointedSession = nil
         requiresWorkoutRecovery = false; canResumeRecoveredWorkout = false

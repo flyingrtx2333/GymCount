@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import HealthKit
+import os
 
 /// Owns one whole-training HealthKit session. Missing samples stay missing.
 @MainActor
@@ -44,6 +45,7 @@ final class LiveWorkoutMetrics: NSObject, ObservableObject {
     private let energyType = HKQuantityType(.activeEnergyBurned)
     private let heartRateUnit = HKUnit.count().unitDivided(by: .minute())
     private nonisolated static let maximumHeartRatePoints = 4_096
+    private let saveLog = Logger(subsystem: "com.flyingrtx.GymCount.watchkitapp", category: "WorkoutSave")
 
     init(healthStore: HKHealthStore) { self.healthStore = healthStore }
 
@@ -127,23 +129,32 @@ final class LiveWorkoutMetrics: NSObject, ObservableObject {
         endedAt = endDate
         isFinishing = true
         let task = Task { @MainActor in
+            let started = ProcessInfo.processInfo.systemUptime
+            var phase = "health_stop"
+            var phaseStarted = started
             do {
                 try await waitForSessionStop(session, at: endDate)
+                saveLog.notice("phase=health_stop seconds=\(ProcessInfo.processInfo.systemUptime - phaseStarted)")
+                phase = "health_collection"
+                phaseStarted = ProcessInfo.processInfo.systemUptime
                 try await builder.endCollection(at: endDate)
+                saveLog.notice("phase=health_collection seconds=\(ProcessInfo.processInfo.systemUptime - phaseStarted)")
                 collectStatistics(from: builder)
+                phase = "health_commit"
+                phaseStarted = ProcessInfo.processInfo.systemUptime
                 guard let workout = try await builder.finishWorkout() else {
                     throw failure("健康训练保存失败，请重试")
                 }
-                // Retrieve the actual associated samples where read permission permits it.
-                // Builder observations remain valid when HealthKit does not disclose reads.
-                if let points = try? await readHeartRate(for: workout), !points.isEmpty {
-                    heartRateSamples = compactedHeartRate(heartRateSamples + points)
-                }
+                saveLog.notice("phase=health_commit seconds=\(ProcessInfo.processInfo.systemUptime - phaseStarted)")
+                // The live builder already supplied measured statistics and chart points.
                 let result = snapshot(workoutUUID: workout.uuid)
                 finishedResult = result
                 releaseSession(discard: false)
+                saveLog.notice("phase=health_total seconds=\(ProcessInfo.processInfo.systemUptime - started)")
                 return result
             } catch {
+                let failure = error as NSError
+                saveLog.error("phase=\(phase, privacy: .public) seconds=\(ProcessInfo.processInfo.systemUptime - phaseStarted) error_domain=\(failure.domain, privacy: .public) error_code=\(failure.code)")
                 errorMessage = error.localizedDescription
                 releaseSession(discard: true)
                 throw error
@@ -253,24 +264,6 @@ final class LiveWorkoutMetrics: NSObject, ObservableObject {
         guard unique.count > limit else { return unique }
         return (0..<limit).map { index in
             unique[index * (unique.count - 1) / (limit - 1)]
-        }
-    }
-
-    private func readHeartRate(for workout: HKWorkout) async throws -> [HeartRatePoint] {
-        try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(sampleType: heartRateType,
-                predicate: HKQuery.predicateForObjects(from: workout), limit: 32_768,
-                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]) { _, samples, error in
-                if let error { continuation.resume(throwing: error); return }
-                let unit = HKUnit.count().unitDivided(by: .minute())
-                let points = (samples as? [HKQuantitySample] ?? []).compactMap { sample -> HeartRatePoint? in
-                    let value = sample.quantity.doubleValue(for: unit)
-                    guard value.isFinite, (1...300).contains(value) else { return nil }
-                    return HeartRatePoint(date: sample.endDate, beatsPerMinute: value)
-                }
-                continuation.resume(returning: points)
-            }
-            healthStore.execute(query)
         }
     }
 
