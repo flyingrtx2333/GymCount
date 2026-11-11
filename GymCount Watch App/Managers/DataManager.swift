@@ -13,7 +13,14 @@ import WatchKit
 class DataManager: ObservableObject {
     static let shared = DataManager()
     
-    @Published private(set) var currentSession: WorkoutSession?
+    @Published private(set) var currentSession: WorkoutSession? {
+        didSet {
+            if wholeWorkoutIdlePrompt, let last = currentSession?.repRecords.last?.timestamp,
+               Date().timeIntervalSince(last) < Self.wholeIdleWarning {
+                wholeWorkoutIdlePrompt = false
+            }
+        }
+    }
     @Published private(set) var requiresWorkoutRecovery = false
     @Published private(set) var canResumeRecoveredWorkout = false
     @Published private(set) var requiresDraftRecovery = false
@@ -27,7 +34,10 @@ class DataManager: ObservableObject {
     @Published var completedWorkout: WorkoutHistory?
     @Published var completedWholeWorkout: WorkoutReport?
     @Published var wholeWorkoutIdlePrompt = false
+    private(set) var wholeWorkoutEndedAfterIdle = false
     @Published var wholeWorkoutError: String?
+    private static let wholeIdleWarning: TimeInterval = 5 * 60
+    private static let wholeIdleLimit: TimeInterval = 10 * 60
     private var wholeIdleTask: Task<Void, Never>?
     private var idleAcknowledgedAt = Date.distantPast
     private var liveHealthObservation: AnyCancellable?
@@ -304,7 +314,8 @@ class DataManager: ObservableObject {
     }
 
     func updateCurrentWeight(_ weight: Double) {
-        guard !isSavingWorkout, !requiresWorkoutRecovery, weight.isFinite, weight >= 0, var session = currentSession, session.isActive else { return }
+        guard !isSavingWorkout, !wholeWorkoutEndedAfterIdle, !requiresWorkoutRecovery,
+              weight.isFinite, weight >= 0, var session = currentSession, session.isActive else { return }
         session.weight = weight
         updateCurrentSession(session)
     }
@@ -312,14 +323,15 @@ class DataManager: ObservableObject {
     func resumeRecoveredWorkout() {
         guard !isSavingWorkout else { return }
         guard requiresWorkoutRecovery, canResumeRecoveredWorkout, var session = currentSession else { return }
+        let resumedAt = Date()
         if var draft = session.wholeDraft {
             draft.completedSets += WorkoutReport.group(session.repRecords, exercise: session.exerciseType)
-            draft.pauses.append(.init(startedAt: draft.pausedAt ?? session.endTime ?? Date(), endedAt: Date()))
+            draft.pauses.append(.init(startedAt: draft.pausedAt ?? session.endTime ?? resumedAt, endedAt: resumedAt))
             draft.pausedAt = nil; draft.metricsInterrupted = true
-            draft.segmentStartedAt = Date(); draft.segmentID = UUID()
+            draft.segmentStartedAt = resumedAt; draft.segmentID = UUID()
             session.wholeDraft = draft; session.repRecords = []
         }
-        session.resume()
+        session.resume(at: resumedAt)
         guard checkpoint(session) else { return }
         currentSession = session
         requiresWorkoutRecovery = false
@@ -340,7 +352,7 @@ class DataManager: ObservableObject {
                 observeLiveHealth()
                 if settings.healthKitSyncEnabled {
                     do {
-                        try await healthKitManager.liveWorkout.begin(id: session.id, startDate: Date())
+                        try await healthKitManager.liveWorkout.begin(id: session.id, startDate: resumedAt)
                         if var active = currentSession, active.id == session.id {
                             active.wholeDraft?.healthSessionStarted = true; updateCurrentSession(active)
                         }
@@ -373,6 +385,7 @@ class DataManager: ObservableObject {
             return
         }
         guard weight.isFinite, weight >= 0 else { return }
+        wholeWorkoutEndedAfterIdle = false
         completedWorkout = nil; saveError = nil; countingFailed = false
         automaticBenchCycles = [:]; automaticSquatCycles = [:]; removedBenchIDs = []
         countingMessage = exerciseType == .benchPress ? String(localized: "估计中 · 结束时核准") : String(localized: "检测中")
@@ -403,7 +416,7 @@ class DataManager: ObservableObject {
     }
     
     func addRep() {
-        guard !isSavingWorkout, !isWholeWorkoutPaused else { return }
+        guard !isSavingWorkout, !isWholeWorkoutPaused, !wholeWorkoutEndedAfterIdle else { return }
         recordDetectedRep()
     }
 
@@ -415,7 +428,8 @@ class DataManager: ObservableObject {
     }
     
     func removeRep() {
-        guard !isSavingWorkout, !isWholeWorkoutPaused, !requiresWorkoutRecovery, var session = currentSession, session.isActive else { return }
+        guard !isSavingWorkout, !isWholeWorkoutPaused, !wholeWorkoutEndedAfterIdle,
+              !requiresWorkoutRecovery, var session = currentSession, session.isActive else { return }
         if let id = session.repRecords.last?.id, automaticBenchCycles[id] != nil { removedBenchIDs.insert(id) }
         session.removeRep()
         session.activeDuration = nil
@@ -504,13 +518,19 @@ class DataManager: ObservableObject {
     func resetCurrentWorkout() {
         guard !isSavingWorkout else { return }
         motionDetector.stopDetection()
+        _ = discardCurrentWorkout()
+    }
+
+    private func discardCurrentWorkout() -> Bool {
         do { try draftStore.clear() }
         catch {
             saveError = String(localized: "未能放弃训练，请重试")
-            return
+            return false
         }
         endHKWorkoutSession()
         wholeIdleTask?.cancel(); wholeIdleTask = nil
+        wholeWorkoutIdlePrompt = false
+        wholeWorkoutEndedAfterIdle = false
         let discardedID = currentSession?.id
         if isWholeWorkout, let discardedID {
             removeWholeWorkoutSamples([discardedID], failure: String(localized: "训练已放弃，采样清理失败"))
@@ -523,6 +543,7 @@ class DataManager: ObservableObject {
         checkpointedSession = nil
         requiresWorkoutRecovery = false
         canResumeRecoveredWorkout = false
+        return true
     }
     
     // MARK: - 历史记录管理
@@ -833,21 +854,35 @@ extension DataManager {
     }
 
     private var canChangeWholeWorkout: Bool {
-        isWholeWorkout && currentSession?.isActive == true && currentSession?.wholeDraft?.pendingReport == nil && !requiresWorkoutRecovery
+        isWholeWorkout && currentSession?.isActive == true && currentSession?.wholeDraft?.pendingReport == nil &&
+            !requiresWorkoutRecovery && !wholeWorkoutEndedAfterIdle
     }
 
     private func startWholeIdleMonitor() {
         wholeIdleTask?.cancel(); idleAcknowledgedAt = Date(); wholeWorkoutIdlePrompt = false
+        let workoutID = currentSession?.id
         wholeIdleTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 30_000_000_000)
-                guard !Task.isCancelled, let self, self.isWholeWorkout else { return }
-                let last = self.currentSession?.repRecords.last?.timestamp ?? self.currentSession?.wholeDraft?.completedSets.last?.endedAt ?? self.idleAcknowledgedAt
-                if !self.isWholeWorkoutPaused, Date().timeIntervalSince(max(last, self.idleAcknowledgedAt)) >= 300, !self.wholeWorkoutIdlePrompt {
-                    self.wholeWorkoutIdlePrompt = true
-                    WKInterfaceDevice.current().play(.notification)
-                }
+                do { try await Task.sleep(for: .seconds(15)) } catch { return }
+                guard let self, self.currentSession?.id == workoutID, self.isWholeWorkout else { return }
+                await self.checkWholeWorkoutIdle()
+                if self.wholeWorkoutEndedAfterIdle { return }
             }
+        }
+    }
+
+    @MainActor
+    func checkWholeWorkoutIdle(at now: Date = Date()) async {
+        guard canChangeWholeWorkout, !isWholeWorkoutPaused, !isSavingWorkout, !historyReadFailed,
+              let session = currentSession, let draft = session.wholeDraft else { return }
+        let lastRep = session.repRecords.last?.timestamp ?? draft.completedSets.last?.endedAt ?? draft.startedAt
+        let idle = now.timeIntervalSince(max(lastRep, idleAcknowledgedAt))
+        if idle >= Self.wholeIdleLimit {
+            wholeWorkoutEndedAfterIdle = true
+            await finishWholeWorkout()
+        } else if idle >= Self.wholeIdleWarning, !wholeWorkoutIdlePrompt {
+            wholeWorkoutIdlePrompt = true
+            WKInterfaceDevice.current().play(.notification)
         }
     }
 
@@ -855,28 +890,31 @@ extension DataManager {
 
     /// Persist the finalized segment before resetting the detector or changing exercise.
     @MainActor
-    private func closeWholeSegment() async -> Bool {
+    private func closeWholeSegment(trimIdleTail: Bool = false) async -> Date? {
         await motionDetector.stopDetectionAsync()
-        guard var session = currentSession, var draft = session.wholeDraft else { return false }
+        guard var session = currentSession, var draft = session.wholeDraft else { return nil }
         let sets = WorkoutReport.group(session.repRecords, exercise: session.exerciseType)
+        let start = draft.segmentStartedAt ?? session.startTime
+        let now = Date()
+        let lastRepEnd = sets.last?.endedAt.addingTimeInterval(0.25) ?? start
+        let end = trimIdleTail ? min(now, max(start, lastRepEnd)) : now
         // Keep each real sensor segment even though the combined report uses a
         // different multi-exercise timeline. Never label the final block as the full session.
-        if let diagnostics {
-            let start = draft.segmentStartedAt ?? session.startTime
+        if let diagnostics, !trimIdleTail || !sets.isEmpty {
             if draft.segmentID == nil {
                 draft.segmentID = UUID(); session.wholeDraft = draft
-                guard checkpoint(session) else { return false }
+                guard checkpoint(session) else { return nil }
                 currentSession = session
             }
             let segment = WorkoutHistory(id: draft.segmentID!, date: start,
                 exerciseType: session.exerciseType, totalReps: session.totalReps,
                 maxWeight: session.repRecords.map(\.weight).max() ?? session.weight,
-                duration: max(0, Date().timeIntervalSince(start)), activeDuration: session.activeDuration,
+                duration: max(0, end.timeIntervalSince(start)), activeDuration: session.activeDuration,
                 totalWeight: session.repRecords.reduce(0) { $0 + $1.weight })
             let url = reportSensorArchive.fileURL(workoutID: draft.id, segmentID: segment.id)
             do {
                 try await WorkoutFileIO.shared.perform {
-                    if let timeline = try diagnostics.timeline(for: segment) {
+                    if let timeline = try diagnostics.timeline(for: segment, trimToDuration: trimIdleTail) {
                         let data = try JSONEncoder().encode(timeline)
                         guard data.count <= WorkoutTimeline.maximumFileBytes else { throw WorkoutTimeline.Failure.invalid }
                         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -889,20 +927,20 @@ extension DataManager {
             } catch {
                 reportCountingFailure(String(localized: "保存失败，计数已暂停，请重试"))
                 saveError = String(localized: "采样保存失败，请重试")
-                return false
+                return nil
             }
         }
         draft.completedSets += sets
         draft.segmentStartedAt = Date()
         draft.segmentID = UUID()
         session.wholeDraft = draft; session.repRecords = []; session.activeDuration = nil
-        guard checkpoint(session) else { reportCountingFailure(String(localized: "保存失败，计数已暂停，请重试")); return false }
+        guard checkpoint(session) else { reportCountingFailure(String(localized: "保存失败，计数已暂停，请重试")); return nil }
         currentSession = session
         automaticBenchCycles = [:]; automaticSquatCycles = [:]; removedBenchIDs = []
         diagnostics = nil
         motionDetector.onRawAcceleration = nil; motionDetector.onRawDeviceMotion = nil
         motionDetector.onRawBenchAnalysis = nil; motionDetector.onRawRepDetected = nil
-        return true
+        return end
     }
 
     private func restartWholeDetection() {
@@ -924,7 +962,7 @@ extension DataManager {
     func nextWholeWorkoutSet() async -> Bool {
         guard canChangeWholeWorkout, !isWholeWorkoutPaused, !isSavingWorkout else { return false }
         isSavingWorkout = true; defer { isSavingWorkout = false }
-        guard await closeWholeSegment() else { return false }
+        guard await closeWholeSegment() != nil else { return false }
         restartWholeDetection()
         return true
     }
@@ -933,7 +971,7 @@ extension DataManager {
     func switchWholeWorkoutExercise(exerciseType: ExerciseType, weight: Double) async -> Bool {
         guard canChangeWholeWorkout, !isSavingWorkout, weight.isFinite, (0...500).contains(weight) else { return false }
         isSavingWorkout = true; defer { isSavingWorkout = false }
-        guard await closeWholeSegment(), var session = currentSession else { return false }
+        guard await closeWholeSegment() != nil, var session = currentSession else { return false }
         session.exerciseType = exerciseType; session.weight = weight
         guard checkpoint(session) else { reportCountingFailure(String(localized: "保存失败，计数已暂停，请重试")); return false }
         currentSession = session
@@ -945,10 +983,11 @@ extension DataManager {
     func pauseWholeWorkout() async {
         guard canChangeWholeWorkout, !isWholeWorkoutPaused, !isSavingWorkout else { return }
         isSavingWorkout = true; defer { isSavingWorkout = false }
-        guard await closeWholeSegment(), var session = currentSession else { return }
+        guard await closeWholeSegment() != nil, var session = currentSession else { return }
         session.wholeDraft?.pausedAt = Date()
         guard checkpoint(session) else { reportCountingFailure(String(localized: "保存失败，计数已暂停，请重试")); return }
         currentSession = session
+        wholeWorkoutIdlePrompt = false
         healthKitManager.liveWorkout.pause()
     }
 
@@ -972,8 +1011,24 @@ extension DataManager {
         isSavingWorkout = true; defer { isSavingWorkout = false }
         saveError = nil; wholeWorkoutIdlePrompt = false
         if currentSession?.wholeDraft?.pendingReport == nil {
-            guard await closeWholeSegment(), var session = currentSession, var draft = session.wholeDraft else { return false }
-            let end = requiresWorkoutRecovery ? (session.endTime ?? Date()) : Date()
+            let endedAfterIdle = wholeWorkoutEndedAfterIdle
+            guard let segmentEnd = await closeWholeSegment(trimIdleTail: endedAfterIdle),
+                  var session = currentSession, var draft = session.wholeDraft else {
+                if endedAfterIdle { healthKitManager.liveWorkout.pause() }
+                return false
+            }
+            if endedAfterIdle && draft.completedSets.isEmpty {
+                let discarded = discardCurrentWorkout()
+                if !discarded { healthKitManager.liveWorkout.pause() }
+                return discarded
+            }
+            let end: Date
+            if endedAfterIdle {
+                // Keep the earlier segments and explicit pauses within the saved report.
+                end = max(segmentEnd, draft.pauses.last?.endedAt ?? draft.startedAt)
+            } else {
+                end = requiresWorkoutRecovery ? (session.endTime ?? Date()) : Date()
+            }
             if let pausedAt = draft.pausedAt { draft.pauses.append(.init(startedAt: pausedAt, endedAt: end)); draft.pausedAt = nil }
             var report = WorkoutReport(startedAt: draft.startedAt, endedAt: end, sets: draft.completedSets, pauses: draft.pauses)
             if draft.healthSessionStarted == true && !requiresWorkoutRecovery {
@@ -987,6 +1042,7 @@ extension DataManager {
                     report.metricsComplete = !draft.metricsInterrupted
                 } catch {
                     let result = healthKitManager.liveWorkout.snapshot()
+                    healthKitManager.liveWorkout.discard(id: session.id)
                     report.activeEnergyKcal = result.activeEnergyKilocalories
                     report.measuredAverageHeartRate = result.averageHeartRate
                     report.measuredMaximumHeartRate = result.maximumHeartRate

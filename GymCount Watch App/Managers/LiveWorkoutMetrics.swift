@@ -38,8 +38,8 @@ final class LiveWorkoutMetrics: NSObject, ObservableObject {
     private var heartRateSamples: [HeartRatePoint] = []
     private var finishedResult: Result?
     private var finishTask: Task<Result, Error>?
-    private var endContinuation: CheckedContinuation<Void, Error>?
-    private var endTimeout: Task<Void, Never>?
+    private var stopContinuation: CheckedContinuation<Void, Error>?
+    private var stopTimeout: Task<Void, Never>?
     private let heartRateType = HKQuantityType(.heartRate)
     private let energyType = HKQuantityType(.activeEnergyBurned)
     private let heartRateUnit = HKUnit.count().unitDivided(by: .minute())
@@ -128,7 +128,7 @@ final class LiveWorkoutMetrics: NSObject, ObservableObject {
         isFinishing = true
         let task = Task { @MainActor in
             do {
-                try await waitForSessionEnd(session)
+                try await waitForSessionStop(session, at: endDate)
                 try await builder.endCollection(at: endDate)
                 collectStatistics(from: builder)
                 guard let workout = try await builder.finishWorkout() else {
@@ -184,23 +184,23 @@ final class LiveWorkoutMetrics: NSObject, ObservableObject {
             })
     }
 
-    private func waitForSessionEnd(_ session: HKWorkoutSession) async throws {
-        if session.state == .ended { return }
+    private func waitForSessionStop(_ session: HKWorkoutSession, at endDate: Date) async throws {
+        if session.state == .stopped || session.state == .ended { return }
         try await withCheckedThrowingContinuation { continuation in
-            endContinuation = continuation
-            endTimeout = Task { @MainActor [weak self] in
+            stopContinuation = continuation
+            stopTimeout = Task { @MainActor [weak self] in
                 do { try await Task.sleep(for: .seconds(15)) } catch { return }
-                self?.completeEndWait(throwing: self?.failure("健康训练结束超时，请重试"))
+                self?.completeStopWait(throwing: self?.failure("健康训练结束超时，请重试"))
             }
-            session.end()
+            session.stopActivity(with: endDate)
         }
     }
 
-    private func completeEndWait(throwing error: Error? = nil) {
-        endTimeout?.cancel()
-        endTimeout = nil
-        let continuation = endContinuation
-        endContinuation = nil
+    private func completeStopWait(throwing error: Error? = nil) {
+        stopTimeout?.cancel()
+        stopTimeout = nil
+        let continuation = stopContinuation
+        stopContinuation = nil
         if let error { continuation?.resume(throwing: error) }
         else { continuation?.resume() }
     }
@@ -292,8 +292,10 @@ extension LiveWorkoutMetrics: HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDele
             switch toState {
             case .running: isPaused = false
             case .paused: isPaused = true
+            case .stopped:
+                if isFinishing { completeStopWait() }
             case .ended:
-                if isFinishing { completeEndWait() }
+                if isFinishing { completeStopWait() }
                 else {
                     errorMessage = String(localized: "健康训练已中断")
                     releaseSession(discard: true)
@@ -307,7 +309,7 @@ extension LiveWorkoutMetrics: HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDele
         Task { @MainActor [weak self] in
             guard let self, self.session === workoutSession else { return }
             errorMessage = error.localizedDescription
-            completeEndWait(throwing: error)
+            completeStopWait(throwing: error)
             releaseSession(discard: true)
         }
     }

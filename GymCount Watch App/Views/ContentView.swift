@@ -114,7 +114,8 @@ struct ContentView: View {
                 WholeWorkoutSummaryView(report: report, close: {
                     dataManager.completedWholeWorkout = nil
                     dataManager.wholeWorkoutError = nil
-                }, warning: dataManager.saveError ?? dataManager.wholeWorkoutError)
+                }, warning: dataManager.saveError ?? dataManager.wholeWorkoutError,
+                   isAutomaticallySaved: dataManager.wholeWorkoutEndedAfterIdle)
             } else if dataManager.currentSession != nil {
                 if dataManager.requiresWorkoutRecovery {
                     WorkoutRecoveryView()

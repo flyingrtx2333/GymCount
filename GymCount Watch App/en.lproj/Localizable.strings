@@ -459,6 +459,8 @@
 "已暂停" = "Paused";
 "间隔" = "Interval";
 "还在训练吗？" = "Still Training?";
+"连续 10 分钟没有新次数将自动结束。" = "Ends after 10 minutes without a rep.";
+"已自动保存" = "Auto-Saved";
 "结束训练" = "End Workout";
 "%lld 组" = "%lld Sets";
 "组间间隔" = "Between Sets";

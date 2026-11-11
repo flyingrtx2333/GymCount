@@ -12,23 +12,27 @@ final class WorkoutDiagnostics {
         return data.count <= 16 * 1024 * 1024 ? data : nil
     }
 
-    func timeline(for workout: WorkoutHistory) throws -> WorkoutTimeline? {
+    func timeline(for workout: WorkoutHistory, trimToDuration: Bool = false) throws -> WorkoutTimeline? {
         let snapshot = raw.snapshot()
-        guard snapshot.points.count >= 2 else { return nil }
+        let origin = raw.originWallTime.map { Date(timeIntervalSince1970: $0) }
+        let offset = origin?.timeIntervalSince(workout.date) ?? 0
+        let cutoff = trimToDuration ? workout.duration - max(0, offset) : .infinity
+        let points = snapshot.points.prefix { $0.t <= cutoff }
+        guard points.count >= 2 else { return nil }
         let source = WorkoutSync.Record(id: workout.id, date: workout.date, exercise: workout.exerciseType.rawValue,
             totalReps: workout.totalReps, maxWeight: workout.maxWeight, duration: workout.duration,
             activeDuration: workout.activeDuration, totalWeight: workout.totalWeight)
         func vector(_ value: CaptureVector) -> WorkoutTimeline.Vector {
             WorkoutTimeline.Vector(x: value.x, y: value.y, z: value.z)
         }
-        return try WorkoutTimeline(source: source, origin: raw.originWallTime.map { Date(timeIntervalSince1970: $0) },
-            acceleration: snapshot.points.map { WorkoutTimeline.VectorSample(t: $0.t, x: $0.x, y: $0.y, z: $0.z) },
-            motion: snapshot.motion.map {
+        return try WorkoutTimeline(source: source, origin: origin,
+            acceleration: points.map { WorkoutTimeline.VectorSample(t: $0.t, x: $0.x, y: $0.y, z: $0.z) },
+            motion: snapshot.motion.prefix { $0.t <= cutoff }.map {
                 WorkoutTimeline.MotionSample(t: $0.t, gravity: vector($0.gravity), userAcceleration: vector($0.user_acceleration),
                     rotationRate: vector($0.rotation_rate), attitude: vector($0.attitude),
                     magneticField: $0.magnetic_field_accuracy >= 0 ? vector($0.magnetic_field) : nil)
-            }, detectedEvents: snapshot.events,
-            feedbackEvents: workout.exerciseType == .deadlift ? nil : raw.recordedFeedback,
+            }, detectedEvents: snapshot.events.filter { $0 <= cutoff },
+            feedbackEvents: workout.exerciseType == .deadlift ? nil : raw.recordedFeedback.filter { $0 <= cutoff },
             algorithmVersion: workout.exerciseType.countingAlgorithmVersion,
             isPartial: snapshot.eventsTruncated)
     }

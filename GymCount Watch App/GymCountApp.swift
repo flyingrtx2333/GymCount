@@ -54,7 +54,10 @@ struct GymCount_Watch_AppApp: App {
             #endif
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { notificationManager.scheduleDailyReminder() }
+                if phase == .active {
+                    notificationManager.scheduleDailyReminder()
+                    Task { await dataManager.checkWholeWorkoutIdle() }
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
                 notificationManager.scheduleDailyReminder()

@@ -11,7 +11,8 @@ struct WholeWorkoutView: View {
 
     private var session: WorkoutSession? { dataManager.currentSession }
     private var locked: Bool { dataManager.isSavingWorkout || changingSet }
-    private var canEditRepetitions: Bool { session?.isActive == true && !dataManager.isWholeWorkoutPaused }
+    private var canEditWorkout: Bool { session?.isActive == true && !dataManager.wholeWorkoutEndedAfterIdle }
+    private var canEditRepetitions: Bool { canEditWorkout && !dataManager.isWholeWorkoutPaused }
 
     var body: some View {
         ScrollView {
@@ -34,7 +35,7 @@ struct WholeWorkoutView: View {
                     .accessibilityLabel(String(localized: "切换动作"))
                     .accessibilityValue(session?.exerciseType.displayName ?? "")
                     .accessibilityIdentifier("whole.exercise")
-                    .disabled(session?.isActive != true)
+                    .disabled(!canEditWorkout)
                     Spacer(minLength: 0)
                     Button { showingWeight = true } label: {
                         VStack(alignment: .trailing, spacing: 2) {
@@ -47,7 +48,7 @@ struct WholeWorkoutView: View {
                     .accessibilityLabel(String(localized: "修改器械重量"))
                     .accessibilityValue(weightText)
                     .accessibilityIdentifier("whole.weight")
-                    .disabled(session?.isActive != true)
+                    .disabled(!canEditWorkout)
                 }
 
                 HStack(spacing: 2) {
@@ -107,6 +108,8 @@ struct WholeWorkoutView: View {
         .alert(String(localized: "还在训练吗？"), isPresented: $dataManager.wholeWorkoutIdlePrompt) {
             Button(String(localized: "继续训练"), role: .cancel) { dataManager.continueWholeWorkoutAfterIdle() }
             Button(String(localized: "结束训练")) { perform { await dataManager.finishWholeWorkout() } }
+        } message: {
+            Text(String(localized: "连续 10 分钟没有新次数将自动结束。"))
         }
     }
 
@@ -123,8 +126,8 @@ struct WholeWorkoutView: View {
         .lineLimit(1).minimumScaleFactor(0.75)
         .buttonStyle(GymActionStyle())
         .accessibilityIdentifier("whole.pause")
-        .disabled(session?.isActive != true)
-        Button(session?.endTime == nil ? String(localized: "结束") : String(localized: "重试保存")) {
+        .disabled(!canEditWorkout)
+        Button(canEditWorkout ? String(localized: "结束") : String(localized: "重试保存")) {
             perform { await dataManager.finishWholeWorkout() }
         }
         .lineLimit(1).minimumScaleFactor(0.75)
@@ -242,6 +245,7 @@ struct WholeWorkoutSummaryView: View {
     let close: () -> Void
     var warning: String? = nil
     var isNewlySaved = true
+    var isAutomaticallySaved = false
     @State private var showingSettings = false
 
     var body: some View {
@@ -291,10 +295,15 @@ struct WholeWorkoutSummaryView: View {
             }.gymPageContent()
         }
         .gymPage().navigationBarBackButtonHidden(true)
-        .gymNavigationTitle(isNewlySaved ? String(localized: "训练已保存") : String(localized: "训练报告"),
+        .gymNavigationTitle(reportTitle,
                             back: isNewlySaved ? nil : close)
         .accessibilityIdentifier("whole.summary")
         .sheet(isPresented: $showingSettings) { SettingsView() }
+    }
+
+    private var reportTitle: String {
+        if !isNewlySaved { return String(localized: "训练报告") }
+        return isAutomaticallySaved ? String(localized: "已自动保存") : String(localized: "训练已保存")
     }
 
     private func metric(_ title: String, value: String) -> some View {
