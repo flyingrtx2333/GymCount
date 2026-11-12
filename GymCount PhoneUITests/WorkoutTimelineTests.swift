@@ -142,7 +142,8 @@ final class WorkoutTimelinePhoneTests: XCTestCase {
     }
     @MainActor func testActionTimeDoesNotUseElapsedFallback() {
         let app = launch(storage: "timeline-summary-only")
-        XCTAssertTrue(app.staticTexts["训练总用时"].exists)
+        XCTAssertFalse(app.staticTexts["训练总用时"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["record-training-duration"].exists)
         XCTAssertFalse(app.staticTexts["动作时长（估计）"].exists)
         shot(app, "duration-summary-retains-total-only")
         app.navigationBars.buttons.firstMatch.tap()
@@ -152,7 +153,7 @@ final class WorkoutTimelinePhoneTests: XCTestCase {
         app.recordTab(3).tap()
         let metric = app.buttons["trend-metric"]
         for _ in 0..<5 { if metric.isHittable { break }; app.swipeUp() }
-        XCTAssertTrue(metric.label.contains("动作时长"))
+        XCTAssertTrue(metric.label.contains("训练时长"))
         shot(app, "duration-default-active-trend")
     }
 }

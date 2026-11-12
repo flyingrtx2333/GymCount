@@ -433,7 +433,7 @@ struct RecordRow: View {
         if item.hasKnownWeight { Text(String(localized: "\(filter.weight(item).formatted()) 公斤")) }
         if let duration = item.measuredActiveDuration(for: filter.exercise) {
             Text(Duration.seconds(duration).formatted(.time(pattern: .minuteSecond))).monospacedDigit()
-                .accessibilityLabel(String(localized: "动作时长（估计）"))
+                .accessibilityLabel(String(localized: "训练时长"))
                 .accessibilityValue(RecordTrendMetric.clock(duration)).accessibilityIdentifier("record-action-duration")
         }
         if !(item.note ?? "").isEmpty { Image(systemName: "text.alignleft").accessibilityLabel(String(localized: "有备注")) }
@@ -515,10 +515,12 @@ struct RecordDetailView: View {
                         }.listRowInsets(EdgeInsets(top: 8, leading: Studio.inset, bottom: 8, trailing: Studio.inset))
                             .listRowBackground(Color.clear).listRowSeparator(.hidden)
                     }
-                    if item.workoutReport == nil && (item.displayDuration != nil || item.activeDuration != nil || item.volume != nil) {
+                    if item.workoutReport == nil && (item.displayDuration != nil || item.volume != nil) {
                         Section {
-                            if let duration = item.displayDuration { LabeledContent(String(localized: "训练总用时"), value: Duration.seconds(duration).formatted(.time(pattern: .minuteSecond))) }
-                            if let duration = item.activeDuration { LabeledContent(String(localized: "动作时长（估计）"), value: Duration.seconds(duration).formatted(.time(pattern: .minuteSecond))) }
+                            if let duration = item.displayDuration {
+                                LabeledContent(String(localized: "训练时长"), value: RecordTrendMetric.clock(duration))
+                                    .accessibilityIdentifier("record-training-duration")
+                            }
                             if let volume = item.volume { LabeledContent(String(localized: "总训练量"), value: String(localized: "\(volume.formatted()) 公斤")) }
                         }.font(Studio.Fonts.body)
                             .listRowInsets(EdgeInsets(top: 12, leading: Studio.inset, bottom: 12, trailing: Studio.inset))

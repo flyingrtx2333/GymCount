@@ -83,19 +83,20 @@ enum VerifyWorkoutHistoryImport {
             precondition(imported.totalReps == original.totalReps && imported.startTime == original.date)
             precondition(imported.duration == original.duration && imported.exercises == [original.exerciseType])
             precondition(imported.activeDuration == original.activeDuration, "Invented or lost action duration")
+            precondition(imported.displayDuration == original.activeDuration, "Displayed elapsed time as training time")
             precondition(imported.volume == original.totalWeight && imported.sets.isEmpty, "Invented or lost measured training volume")
             let summary = imported.watchSummary ?? imported.legacySummary!
             precondition(summary.maxWeight == original.maxWeight)
         }
         let restored = PhoneWorkoutStore(defaults: defaults, reminderID: suite, watchArchiveURL: url)
         precondition(restored.history.count == histories.count, "Relaunch lost rows")
-        // Daily time totals must equal the original recorded durations, without
+        // Daily time totals must equal the original action durations, without
         // turning unavailable action times into zero-valued measurements.
         for metric in RecordTimeMetric.allCases {
             let days = RecordDurationDay.summarize(restored.history, metric: metric)
             var expected: [Date: [TimeInterval]] = [:]
             for history in histories {
-                if let value = metric == .elapsed ? history.duration : history.activeDuration {
+                if let value = history.activeDuration {
                     expected[Calendar.current.startOfDay(for: history.date), default: []].append(value)
                 }
             }
@@ -133,7 +134,7 @@ enum VerifyWorkoutHistoryImport {
             for metric in RecordTimeMetric.allCases {
                 let measured = RecordDurationDay.summarize(restored.history, metric: metric, granularity: granularity)
                 let expectedMeasured = expected.compactMapValues { originals -> [TimeInterval]? in
-                    let values = originals.compactMap { metric == .elapsed ? $0.duration : $0.activeDuration }
+                    let values = originals.compactMap(\.activeDuration)
                     return values.isEmpty ? nil : values
                 }
                 precondition(measured.count == expectedMeasured.count)
@@ -194,27 +195,26 @@ enum VerifyWorkoutHistoryImport {
         let afterInvalid = try Data(contentsOf: store.snapshotURL)
         precondition(afterInvalid == savedState)
         let original = histories.first { $0.totalReps > 0 && $0.totalReps <= 999 && $0.maxWeight <= 500 }!
+        let measuredCountBeforeManual = store.history.compactMap(\.displayDuration).count
         let sets = [PhoneTrainingSet(exercise: original.exerciseType, weight: original.maxWeight, reps: original.totalReps)]
         precondition(store.addRecord(date: original.date, sets: sets, duration: nil))
         let manual = store.history.first { $0.manualEntry == true }!
         precondition(manual.displayDuration == nil && manual.totalReps == original.totalReps)
-        precondition(RecordTimeMetric.elapsed.seconds(in: manual) == nil)
-        precondition(RecordDurationDay.summarize([manual], metric: .elapsed).isEmpty)
+        precondition(RecordTimeMetric.active.seconds(in: manual) == nil)
+        precondition(RecordDurationDay.summarize([manual], metric: .active).isEmpty)
         for granularity in [RecordChartGranularity.week, .month] {
-            precondition(RecordDurationDay.summarize([manual], metric: .elapsed, granularity: granularity).isEmpty)
-            let partial = RecordDurationDay.summarize(store.history, metric: .elapsed, granularity: granularity)
-            precondition(partial.reduce(0) { $0 + $1.measuredRecords } == histories.count)
-            precondition(partial.contains { $0.recordCount > $0.measuredRecords })
+            precondition(RecordDurationDay.summarize([manual], metric: .active, granularity: granularity).isEmpty)
+            let partial = RecordDurationDay.summarize(store.history, metric: .active, granularity: granularity)
+            precondition(partial.reduce(0) { $0 + $1.measuredRecords } == measuredCountBeforeManual)
         }
-        let measuredBeforeManualDuration = RecordDurationDay.summarize(store.history, metric: .elapsed)
-        precondition(measuredBeforeManualDuration.reduce(0) { $0 + $1.measuredRecords } == histories.count)
-        precondition(measuredBeforeManualDuration.contains { $0.recordCount > $0.measuredRecords })
+        let measuredBeforeManualDuration = RecordDurationDay.summarize(store.history, metric: .active)
+        precondition(measuredBeforeManualDuration.reduce(0) { $0 + $1.measuredRecords } == measuredCountBeforeManual)
         precondition(manual.sets.first?.id == sets.first?.id)
         precondition(store.updateRecord(id: manual.id, date: original.date, sets: sets, duration: original.duration,
             summaryReps: nil, summaryWeight: nil))
         let afterManual = PhoneWorkoutStore(defaults: defaults, reminderID: suite, watchArchiveURL: url)
         precondition(afterManual.history.first { $0.id == manual.id }?.displayDuration == original.duration)
-        precondition(RecordTimeMetric.elapsed.seconds(in: afterManual.history.first { $0.id == manual.id }!) == original.duration)
+        precondition(RecordTimeMetric.active.seconds(in: afterManual.history.first { $0.id == manual.id }!) == original.duration)
         store.deleteRecord(id: manual.id)
         precondition(store.history.count == histories.count)
         // Once migrated, stale UserDefaults must not replace the atomic snapshot.

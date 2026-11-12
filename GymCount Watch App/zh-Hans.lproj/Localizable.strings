@@ -322,6 +322,8 @@
 
 /* Watch action time and phone history viewer */
 "动作时长（估计）：%@" = "动作时长（估计）：%@";
+"训练时长" = "训练时长";
+"训练时长：%@" = "训练时长：%@";
 
 /* Synchronized capture review handoff */
 "同步采集的实际次数在手机调整，确认后再上传录像与采样。" = "同步采集的实际次数在手机调整，确认后再上传录像与采样。";

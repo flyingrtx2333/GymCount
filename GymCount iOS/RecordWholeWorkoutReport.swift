@@ -33,8 +33,7 @@ struct RecordWholeWorkoutReport: View {
     }
     private var selected: WorkoutReport.SetRecord? { report.sets.first { $0.id == selectedSet } }
     private var columns: [GridItem] {
-        let count = sourceMatches && report.activeDuration != nil ? 3 : 2
-        return Array(repeating: GridItem(.flexible(), alignment: .leading), count: typeSize.isAccessibilitySize ? 1 : count)
+        Array(repeating: GridItem(.flexible(), alignment: .leading), count: typeSize.isAccessibilitySize ? 1 : 2)
     }
     private var hasSecondarySummary: Bool {
         maximumWeight != nil || report.pauseDuration > 0 || report.activeEnergyKcal != nil ||
@@ -79,10 +78,9 @@ struct RecordWholeWorkoutReport: View {
             RecordMetric(title: reportText("Repetitions"), value: String(localized: "\(totalReps) 次"))
                 .accessibilityElement(children: .ignore).accessibilityLabel(String(localized: "总次数"))
                 .accessibilityValue(String(localized: "\(totalReps) 次")).accessibilityIdentifier("record-total-reps")
-            RecordMetric(title: reportText("Session"), value: reportTime(report.duration))
-            if sourceMatches, let active = report.activeDuration {
-                RecordMetric(title: reportText("Movement"), value: reportTime(active))
-            }
+            RecordMetric(title: String(localized: "训练时长"),
+                         value: sourceMatches ? report.activeDuration.map(reportTime) ?? "—" : "—")
+                .accessibilityIdentifier("report-training-duration")
         }
     }
 
@@ -294,7 +292,7 @@ struct RecordWholeWorkoutReport: View {
         if exercises.count > 1 { parts.append(setName(index)) }
         if report.hasKnownWeights { parts.append(weightText(set)) }
         if let active = set.activeDuration {
-            parts.append((accessible ? reportText("Movement") + " " : "") + reportTime(active))
+            parts.append((accessible ? String(localized: "训练时长") + " " : "") + reportTime(active))
         }
         return parts.joined(separator: " · ")
     }

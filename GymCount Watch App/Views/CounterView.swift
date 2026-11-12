@@ -106,7 +106,7 @@ struct CounterPanel: View {
                     .accessibilityElement(children: .combine)
                 }
                 if let activeDuration {
-                    Text(String(localized: "动作时长（估计）：\(Duration.seconds(activeDuration).formatted(.time(pattern: .minuteSecond)))"))
+                    Text(String(localized: "训练时长：\(Duration.seconds(activeDuration).formatted(.time(pattern: .minuteSecond)))"))
                         .font(GymStyle.detail).foregroundStyle(GymStyle.muted)
                 }
                 Button(finished ? String(localized: "重试保存") : String(localized: "结束"), action: onEnd).buttonStyle(GymActionStyle())

@@ -96,16 +96,12 @@ struct PhoneTrainingSession: Codable, Identifiable, Equatable {
     var totalReps: Int { correction?.reps ?? summary?.totalReps ?? sets.reduce(0) { $0 + $1.reps } }
     var maxWeight: Double { correction?.weight ?? summary?.maxWeight ?? sets.map(\.weight).max() ?? weight }
     var isSummary: Bool { summary != nil }
-    var displayDuration: TimeInterval? {
-        if manualEntry == true { return recordedDuration }
-        if let summary { return summary.duration }
-        return endTime.map { max(0, $0.timeIntervalSince(startTime)) }
-    }
+    var displayDuration: TimeInterval? { activeDuration }
     var duration: TimeInterval { summary?.duration ?? max(0, (endTime ?? Date()).timeIntervalSince(startTime)) }
     var activeDuration: TimeInterval? {
         if manualEntry == true { return recordedDuration }
         guard let summary, correction.map({ $0.reps == summary.totalReps }) ?? true else { return nil }
-        return summary.activeDuration
+        return summary.activeDuration ?? sourceWorkoutReport?.activeDuration
     }
     var exercises: [ExerciseType] {
         if let report = workoutReport { return ExerciseType.allCases.filter { exercise in report.sets.contains { $0.exercise == exercise } } }
@@ -180,15 +176,12 @@ struct RecordFilter: Equatable, Codable {
 }
 
 enum RecordTimeMetric: String, CaseIterable, Hashable {
-    case elapsed, active
+    case active
 
-    var title: String {
-        self == .elapsed ? String(localized: "训练总用时") : String(localized: "动作时长（估计）")
-    }
+    var title: String { String(localized: "训练时长") }
 
     func seconds(in record: PhoneTrainingSession, exercise: ExerciseType? = nil) -> TimeInterval? {
-        if self == .elapsed, exercise != nil, record.workoutReport != nil, record.exercises.count > 1 { return nil }
-        let value = self == .elapsed ? record.displayDuration : record.measuredActiveDuration(for: exercise)
+        let value = record.measuredActiveDuration(for: exercise)
         guard let value, value.isFinite, value >= 0 else { return nil }
         return value
     }
@@ -940,7 +933,7 @@ final class PhoneWorkoutStore: ObservableObject {
             } else {
                 let reps = item.repetitions(for: exercise)
                 let weight = item.maximumWeight(for: exercise)
-                rows.append(prefix + [(exercise.map { [$0] } ?? item.exercises).map(\.rawValue).joined(separator: ";"), String(reps), item.hasKnownWeight ? number(weight) : "", item.displayDuration.map(number) ?? "", item.note ?? ""])
+                rows.append(prefix + [(exercise.map { [$0] } ?? item.exercises).map(\.rawValue).joined(separator: ";"), String(reps), item.hasKnownWeight ? number(weight) : "", item.measuredActiveDuration(for: exercise).map(number) ?? "", item.note ?? ""])
             }
         }
         return "\u{FEFF}" + rows.map { $0.map(escaped).joined(separator: ",") }.joined(separator: "\r\n") + "\r\n"

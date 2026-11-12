@@ -13,7 +13,7 @@ struct RecordTrainingOverview: View {
             value(String(localized: "记录"), String(localized: "\(insights.sessionCount) 条"), displayValue: insights.sessionCount.formatted(), id: "insights-records")
             value(String(localized: "次数"), String(localized: "\(insights.totalReps) 次"), displayValue: insights.totalReps.formatted(), id: "insights-reps")
             value(String(localized: "天数"), String(localized: "\(insights.trainingDays) 天"), displayValue: insights.trainingDays.formatted(), id: "insights-days")
-            value(String(localized: "动作时长"), insights.knownDuration.map(RecordTrendMetric.clock) ?? "—", id: "insights-duration")
+            value(String(localized: "训练时长"), insights.knownDuration.map(RecordTrendMetric.clock) ?? "—", id: "insights-duration")
         }.foregroundStyle(Studio.ink).accessibilityElement(children: .contain).accessibilityIdentifier("training-overview")
     }
     private func value(_ title: String, _ value: String, displayValue: String? = nil, id: String) -> some View {

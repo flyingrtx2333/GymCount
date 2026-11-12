@@ -20,26 +20,20 @@ func recordChartAxisFormat(_ granularity: RecordChartGranularity, first: Date?, 
 
 // One metric model for the trends screen; workout storage remains unchanged.
 enum RecordTrendMetric: String, CaseIterable {
-    case elapsed, reps, weight, active
+    case active, reps, weight
 
     var title: String {
         switch self {
-        case .elapsed: RecordTimeMetric.elapsed.title
         case .reps: String(localized: "次数")
         case .weight: String(localized: "最高重量")
         case .active: RecordTimeMetric.active.title
         }
     }
     var compactTitle: String {
-        switch self {
-        case .elapsed: String(localized: "总用时")
-        case .active: String(localized: "动作时长")
-        default: title
-        }
+        title
     }
     var timeMetric: RecordTimeMetric? {
         switch self {
-        case .elapsed: .elapsed
         case .active: .active
         default: nil
         }
@@ -80,7 +74,7 @@ struct RecordTrendPoint: Identifiable, Equatable {
             let value: Double? = switch metric {
             case .reps: Double(bucket.reps)
             case .weight: knownWeights[bucket.id]?.map(filter.weight).max()
-            case .elapsed, .active: duration?.seconds
+            case .active: duration?.seconds
             }
             return Self(id: bucket.id, range: bucket.range, value: value,
                         measuredRecords: metric == .weight ? knownWeights[bucket.id]?.count ?? 0 : metric.timeMetric == nil ? bucket.sessions : duration?.measuredRecords ?? 0,

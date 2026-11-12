@@ -322,6 +322,8 @@
 
 /* Watch action time and phone history viewer */
 "动作时长（估计）：%@" = "Action time (estimated): %@";
+"训练时长" = "Training Time";
+"训练时长：%@" = "Training time: %@";
 
 /* Synchronized capture review handoff */
 "同步采集的实际次数在手机调整，确认后再上传录像与采样。" = "Adjust the actual count on your iPhone, then confirm and upload the video and samples.";

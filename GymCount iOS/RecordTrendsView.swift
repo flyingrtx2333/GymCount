@@ -10,7 +10,6 @@ struct RecordTrendsView: View {
     var openRange: (ExerciseType?, DateInterval) -> Void
     @AppStorage("records.trends") private var savedPreferences = Data()
     @AppStorage("records.time-chart") private var legacyTimePreferences = Data()
-    @AppStorage("records.active-duration-default.v1") private var migratedDurationDefault = false
     @State private var filter = RecordFilter(period: .all)
     @State private var insights = RecordTrainingInsights(records: [], filter: RecordFilter(period: .all))
     @State private var points: [RecordTrendPoint] = []
@@ -51,7 +50,7 @@ struct RecordTrendsView: View {
     private var scale: Double { metric.timeMetric != nil && (plotted.compactMap(\.value).max() ?? 0) >= 120 ? 60 : 1 }
     private var unit: String {
         switch metric {
-        case .elapsed, .active: scale == 60 ? String(localized: "分钟") : String(localized: "秒")
+        case .active: scale == 60 ? String(localized: "分钟") : String(localized: "秒")
         case .reps: String(localized: "次数")
         case .weight: String(localized: "公斤")
         }
@@ -252,7 +251,7 @@ struct RecordTrendsView: View {
                 .accessibilityIdentifier("trend-toggle-chart")
         } label: {
             HStack(spacing: 6) {
-                Text(metric == .elapsed ? String(localized: "用时") : metric.compactTitle).font(Studio.Fonts.body.weight(.medium)).foregroundStyle(Studio.muted)
+                Text(metric.compactTitle).font(Studio.Fonts.body.weight(.medium)).foregroundStyle(Studio.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(Studio.accent)
             }.frame(minHeight: Studio.controlHeight).contentShape(Rectangle())
@@ -434,10 +433,6 @@ struct RecordTrendsView: View {
         let saved = RecordViewPreferences.decode(savedPreferences, fallback: fallback)
         filter = RecordFilter(period: .all)
         metric = RecordTrendMetric(rawValue: saved.metric) ?? .active
-        if !migratedDurationDefault {
-            if metric == .elapsed { metric = .active }
-            migratedDurationDefault = true
-        }
         granularity = RecordChartGranularity(rawValue: saved.granularity) ?? .automatic
         collapsed = saved.collapsed
         restoredPreferences = true

@@ -113,7 +113,9 @@ final class WholeWorkoutReportPhoneTests: XCTestCase {
     @MainActor
     func testRealReportEnglishDark() {
         let app = launch(english: true, dark: true)
-        XCTAssertTrue(app.staticTexts["Session"].exists)
+        XCTAssertTrue(app.staticTexts["Training Time"].exists)
+        XCTAssertFalse(app.staticTexts["Session"].exists)
+        XCTAssertFalse(app.staticTexts["Movement"].exists)
         XCTAssertFalse(app.staticTexts["0 kg"].exists, "Capture has no recorded load")
         saveEvidence(app, "whole-report-real-english-dark")
         let row = app.buttons["report-set-1"]

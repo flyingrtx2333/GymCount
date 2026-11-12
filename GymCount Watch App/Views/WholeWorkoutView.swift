@@ -257,8 +257,10 @@ struct WholeWorkoutSummaryView: View {
                     Spacer(minLength: 0)
                     Text(String(localized: "\(report.sets.count) 组")).font(GymStyle.caption)
                 }.accessibilityIdentifier("whole.summary.reps")
-                metric(String(localized: "总用时"), value: time(report.duration))
-                if let active = report.activeDuration { metric(String(localized: "动作时长"), value: time(active)) }
+                if let active = report.activeDuration {
+                    metric(String(localized: "训练时长"), value: time(active))
+                        .accessibilityIdentifier("whole.summary.duration")
+                }
                 if let interval = report.intervalDuration { metric(String(localized: "组间间隔"), value: time(interval)) }
                 if report.pauseDuration > 0 { metric(String(localized: "暂停"), value: time(report.pauseDuration)) }
                 if let energy = report.activeEnergyKcal {

@@ -66,9 +66,18 @@ enum VerifyActionDuration {
             try phone.acceptWatchHistory([source])
             try phone.acceptWatchHistory([oldReceiverRecord])
             precondition(phone.history.count == 1 && phone.history[0].activeDuration == duration)
+            let item = phone.history[0]
+            precondition(item.displayDuration == duration && item.duration == input.duration_seconds)
+            precondition(RecordTimeMetric.allCases == [.active])
+            precondition(RecordTimeMetric.active.seconds(in: item) == duration)
+            let csv = phone.csv(records: [item], sets: false)
+            let fields = csv.components(separatedBy: "\r\n")[1].components(separatedBy: ",")
+            precondition(fields[5] == (duration.map { "\"\($0)\"" } ?? "\"\""),
+                         "CSV did not use the same measured training duration")
             proof.append(["id": row.id, "exercise": input.exercise,
                 "elapsedSeconds": input.duration_seconds, "actionSeconds": duration.map { $0 as Any } ?? NSNull(),
-                "syncRoundTripPassed": true, "mixedVersionEnrichmentPassed": true])
+                "syncRoundTripPassed": true, "mixedVersionEnrichmentPassed": true,
+                "singleTrainingDurationPassed": true, "csvUsesTrainingDuration": true])
         }
         let output: [String: Any] = ["records": proof, "independentVideoTimingValidated": false]
         try JSONSerialization.data(withJSONObject: output, options: [.prettyPrinted, .sortedKeys])
