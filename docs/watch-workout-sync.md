@@ -1,4 +1,32 @@
-# Watch 普通训练历史同步（2026-10-19）
+# Watch 训练历史同步
+
+## 接收积压与图表高度修复（2026-11-13，尚未发布）
+
+只读核对手机和手表均为 1.1.8 (61)。手机有 122 条、手表有 127 条记录；缺少今天 4 条和昨晚 1 条。手机 `IncomingWorkouts` 已收到这 5 条，但 1500 个待处理文件只对应 15 份不同报告。数据内容有效，重复重发造成接收积压；具体真机停顿调用仍待新版日志／同步复验确认，不能把隔离恢复当作用户手机已恢复。
+
+用户随后确认同步页显示“正在接收记录”。再次只读回查，待处理文件从 1500 降至 1075，手机仍为 122 条、仍缺 5 条：旧队列确实在处理，并非完全断连，但大量重复旧报告拖延了新记录入库。
+
+- `WorkoutMessageInbox` 按接收端、消息类型和排序后的记录内容生成文件标识，新重试原子覆盖同一文件。读取旧 UUID 文件时合并语义相同的 JSON，较新的记录先处理；不同内容、损坏文件保留重试。
+- 记录持久化成功后立即排队接收回执，再异步处理传感器时间轴；不再等待时间轴收件完成。只有成功保存的报告才移除其重复待收文件。手动同步同时重试本地收件箱。
+- 扫描与合并在已有文件队列执行，每批保留的不同文件限 16 MiB；单文件保留协议原有上限。
+- 趋势图固定绘图区高度，普通 iPhone 为 156 点，宽屏为 190 点；无障碍字号额外预留 44 点。同一筛选范围使用全范围纵轴，不随横向窗口重新缩放。
+
+验证结果：
+
+- `scripts/verify-workout-inbox.swift` 使用真实手机快照、7 份已有时间轴和 1500 份真实待收文件，在隔离存储合并为 127 条。去重、最新优先、保存后清理、重启恢复、手机修正／删除保留、错误文件隔离和保存失败保留均通过；原文件未改动。
+- 原生 `testStableChartHeightWithRealSyncedHistory` 已执行，1 项／0 失败；真实 127 条副本切换日／周／月、卧推／深蹲／全部以及横向滑动，图表高度均为 156 点（AX 像素取整为 156.3）。
+- 两个 iPhone 工程与配套 Watch 的 Release 无签名构建通过。用户设备仍为 61 版、手机仍有 122 条；本轮未覆盖用户安装、未改写设备记录、未发布 TestFlight。双端实际补齐仍需修复版真机复验。
+
+原生截图、AX 和汇总验证凭证：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/Sync-Chart-Repair-20261113/`。私有设备文件保存在 `/private/tmp/GymCount-SyncAudit-20261113/private/`，不提交原始记录和待收载荷。
+
+复现收件回归（私有输入只读，末项可选，用于保存隔离合并结果）：
+
+```sh
+rtk bypass xcrun swiftc -O 'GymCount Watch App/Models.swift' 'GymCount Watch App/WorkoutReport.swift' 'GymCount Watch App/WorkoutSync.swift' 'GymCount Watch App/ActionTiming.swift' 'GymCount Watch App/Detectors/BenchPressAnalysis.swift' 'GymCount Watch App/Detectors/SquatAnalysis.swift' 'GymCount Watch App/TrainingActivity.swift' 'GymCount iOS/PhoneTrainingReminder.swift' 'GymCount iOS/PhoneWorkoutStore.swift' 'GymCount iOS/WorkoutMessageInbox.swift' scripts/verify-workout-inbox.swift -o /tmp/gymcount-verify-inbox
+rtk bypass /tmp/gymcount-verify-inbox /path/to/private/records-v3.json /path/to/private/IncomingWorkouts /path/to/private/merged-records.json
+```
+
+## 首次同步实现（2026-10-19）
 
 ## 问题与修复
 

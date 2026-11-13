@@ -292,7 +292,7 @@ struct RecordEditorDraft: Codable, Identifiable, Hashable {
     var note = ""
 }
 
-struct RecordSnapshot: Codable {
+struct RecordSnapshot: Codable, Equatable {
     var version = 4
     var session: PhoneTrainingSession?
     var history: [PhoneTrainingSession] = []
@@ -343,7 +343,7 @@ final class PhoneWorkoutStore: ObservableObject {
     @Published private(set) var storageError: String?
     @Published private(set) var timelineRevision = 0
     @Published private(set) var historyRevision = 0
-    @Published private(set) var storageBusy = false
+    private(set) var storageBusy = false
     private var storageWaiters: [CheckedContinuation<Void, Never>] = []
     private var readable = true
     let snapshotURL: URL
@@ -373,11 +373,15 @@ final class PhoneWorkoutStore: ObservableObject {
     private func publish(_ snapshot: RecordSnapshot) {
         var next = snapshot
         next.version = 4
+        guard state != next else {
+            if storageError != nil { storageError = nil }
+            return
+        }
         let historyChanged = state.history != next.history
         let oldDates = historyChanged ? trainingDates : []
         if historyChanged { historyRevision &+= 1 }
         state = next
-        storageError = nil
+        if storageError != nil { storageError = nil }
         if historyChanged, trainingDates != oldDates { onTrainingDatesChanged?(trainingDates) }
     }
 
@@ -839,7 +843,11 @@ final class PhoneWorkoutStore: ObservableObject {
         let files = RecordFileWorkspace(snapshot: state, snapshotURL: snapshotURL)
         let next = try await WorkoutFileIO.shared.perform {
             let next = try files.acceptHistory(records)
-            try Self.validate(next); try Self.write(next, to: files.snapshotURL)
+            var isDirectory: ObjCBool = false
+            let persisted = FileManager.default.fileExists(atPath: files.snapshotURL.path, isDirectory: &isDirectory)
+            if next != files.snapshot || !persisted || isDirectory.boolValue {
+                try Self.validate(next); try Self.write(next, to: files.snapshotURL)
+            }
             return next
         }
         publish(next)

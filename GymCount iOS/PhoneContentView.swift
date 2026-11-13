@@ -64,10 +64,8 @@ struct PhoneContentView: View {
     @AppStorage("records.watch-setup-dismissed") private var watchSetupDismissed = false
     #endif
 
-    private var filtered: [PhoneTrainingSession] { store.history.filter(filter.includes) }
-    private var groups: [(Date, [PhoneTrainingSession])] {
-        Dictionary(grouping: filtered, by: { Calendar.current.startOfDay(for: $0.startTime) }).sorted { $0.key > $1.key }
-    }
+    @State private var filtered: [PhoneTrainingSession] = []
+    @State private var groups: [(Date, [PhoneTrainingSession])] = []
     var body: some View {
         TabView(selection: $tab) {
             history
@@ -91,18 +89,25 @@ struct PhoneContentView: View {
             rangeOrigin = saved.previousFilter
             rangeDestination = saved.previousFilter == nil ? nil : saved.filter
             restoredHistory = true
+            refreshHistory()
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .active { refreshHistory() }
             #if GYMCOUNT_SYNC
             if phase == .active { capture.requestWorkoutHistory() }
             #endif
         }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in refreshHistory() }
+        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in refreshHistory() }
         .onChange(of: filter) { _, _ in
+            refreshHistory()
             selected.formIntersection(filtered.map(\.id))
             if filter != rangeDestination { rangeOrigin = nil; rangeDestination = nil }
             if restoredHistory { savedHistory = RecordViewPreferences(filter: filter, previousFilter: rangeOrigin).data }
         }
-        .onChange(of: store.history.map(\.id)) { _, ids in
+        .onChange(of: store.historyRevision) { _, _ in
+            refreshHistory()
+            let ids = Set(store.history.map(\.id))
             selected.formIntersection(ids)
             if let id = selectedRecordID, !ids.contains(id) { selectedRecordID = nil; preferredHistoryColumn = .sidebar }
         }
@@ -129,6 +134,11 @@ struct PhoneContentView: View {
                 if store.deleteRecords(ids: deletionIDs) { selected.subtract(deletionIDs); editMode = .inactive }
             }
         } message: { Text(deletionDescription) }
+    }
+    private func refreshHistory() {
+        filtered = store.history.filter(filter.includes)
+        groups = Dictionary(grouping: filtered, by: { Calendar.current.startOfDay(for: $0.startTime) })
+            .sorted { $0.key > $1.key }
     }
     private var deletionDescription: String {
         let rows = store.history.filter { deletionIDs.contains($0.id) }.sorted { $0.startTime < $1.startTime }
@@ -280,11 +290,8 @@ struct PhoneContentView: View {
                         .scrollContentBackground(.hidden).background(Studio.background)
                         .listRowSeparatorTint(Studio.line)
                         .contentMargins(.top, 0, for: .scrollContent)
-                        .animation(RecordMotion.animation(reduced: reduceMotion), value: filter)
                         .onChange(of: filter) { _, _ in
-                            withAnimation(RecordMotion.animation(reduced: reduceMotion)) {
-                                proxy.scrollTo(typeSize.isAccessibilitySize ? "record-filters" : "record-overview", anchor: .top)
-                            }
+                            proxy.scrollTo(typeSize.isAccessibilitySize ? "record-filters" : "record-overview", anchor: .top)
                         }
                         #if GYMCOUNT_SYNC
                         .refreshable { capture.requestWorkoutHistory(force: true) }

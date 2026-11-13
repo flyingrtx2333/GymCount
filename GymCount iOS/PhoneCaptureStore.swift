@@ -96,6 +96,9 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
 
     func requestWorkoutHistory(force: Bool = false, timelineID: UUID? = nil) {
         guard connectivityEnabled, workoutStore != nil, WCSession.isSupported() else { return }
+        if force {
+            Task { @MainActor in await self.drainWorkoutInbox(); await self.drainTimelineInbox() }
+        }
         refreshWatchSetup()
         if timelineID == nil && !force && (workoutSyncState == .receiving || workoutSyncState == .connecting) { return }
         let session = WCSession.default
@@ -186,10 +189,10 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
             let records = try WorkoutSync.decode(payload)
             try await workoutStore.receiveWatchHistory(records)
             workoutRequestGeneration = UUID()
-            workoutSyncState = .receiving
+            if workoutSyncState != .receiving { workoutSyncState = .receiving }
             scheduleWorkoutTimeout(workoutRequestGeneration)
-            workoutSyncMessage = String(localized: "已接收 \(records.count) 条手表记录")
-            await drainTimelineInbox()
+            let progress = String(localized: "已接收 \(records.count) 条手表记录")
+            if workoutSyncMessage != progress { workoutSyncMessage = progress }
             return ["kind": WorkoutSync.receiptKind, "receiver_id": workoutReceiverID,
                     "workout_report_version": 1, "ids": records.map { $0.id.uuidString }]
         } catch {
@@ -224,6 +227,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
                 }
             }, errorHandler: nil)
         }
+        Task { @MainActor in await self.drainTimelineInbox() }
     }
 
     private func receiveWorkoutTimeline(_ file: URL, metadata: [String: Any]) async -> Bool {
@@ -788,12 +792,7 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         // WC removes a delivered item when this callback returns. Journal its
         // bounded payload first; heavy parsing/merging follows on the file lane.
         do {
-            _ = try WorkoutSync.decode(userInfo)
-            let data = try PropertyListSerialization.data(fromPropertyList: userInfo, format: .binary, options: 0)
-            guard data.count <= 128 * 1024 else { throw WorkoutSync.Failure.invalidPayload }
-            try FileManager.default.createDirectory(at: workoutInbox, withIntermediateDirectories: true)
-            let url = workoutInbox.appendingPathComponent(UUID().uuidString + ".plist")
-            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try WorkoutMessageInbox(directory: workoutInbox, receiverID: workoutReceiverID).stage(userInfo)
             Task { @MainActor in await self.drainWorkoutInbox() }
         } catch {
             Task { @MainActor in
@@ -808,27 +807,34 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
         workoutInboxRevision &+= 1
         guard !drainingInbox else { return }
         drainingInbox = true; defer { drainingInbox = false }
-        let directory = workoutInbox
+        let inbox = WorkoutMessageInbox(directory: workoutInbox, receiverID: workoutReceiverID)
         var attempted: Set<URL> = []
         while true {
             let revision = workoutInboxRevision
-            let files = (try? await WorkoutFileIO.shared.perform {
-                try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).filter { $0.pathExtension == "plist" }
-            }) ?? []
-            let pending = files.filter { !attempted.contains($0) }
-            if pending.isEmpty {
+            let excluded = attempted
+            let scan: WorkoutMessageInbox.Scan
+            do {
+                scan = try await WorkoutFileIO.shared.perform { try inbox.pending(excluding: excluded) }
+            } catch {
+                workoutSyncState = .failed
+                workoutSyncMessage = String(localized: "训练报告接收失败，请重试同步")
+                break
+            }
+            if scan.unreadableFiles > 0 {
+                workoutSyncState = .failed
+                workoutSyncMessage = String(localized: "训练报告接收失败，请重试同步")
+            }
+            if scan.entries.isEmpty {
                 if revision != workoutInboxRevision { continue }
                 break
             }
-            for url in pending {
-                attempted.insert(url)
+            for entry in scan.entries {
+                attempted.formUnion(entry.files)
                 do {
-                    let payload = try await WorkoutFileIO.shared.perform {
-                        try PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: Any]
-                    }
-                    guard let payload, let receipt = await receiveWorkoutHistory(payload), receipt["kind"] as? String == WorkoutSync.receiptKind else { continue }
+                    guard let receipt = await receiveWorkoutHistory(entry.payload),
+                          receipt["kind"] as? String == WorkoutSync.receiptKind else { continue }
                     queueWorkoutReceipt(receipt)
-                    try await WorkoutFileIO.shared.perform { try FileManager.default.removeItem(at: url) }
+                    try await WorkoutFileIO.shared.perform { try inbox.remove(entry) }
                 } catch { workoutSyncState = .failed }
             }
         }
@@ -918,12 +924,9 @@ final class PhoneCaptureStore: NSObject, ObservableObject, WCSessionDelegate, AV
                 let values = try file.fileURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
                 guard values.isRegularFile == true, values.isSymbolicLink != true,
                       let size = values.fileSize, size <= WorkoutSync.maximumReportFileBytes + 4096 else { throw WorkoutSync.Failure.invalidPayload }
-                try FileManager.default.createDirectory(at: workoutInbox, withIntermediateDirectories: true)
-                let url = workoutInbox.appendingPathComponent(UUID().uuidString + ".plist")
-                let staged = workoutInbox.appendingPathComponent(".incoming-" + UUID().uuidString)
-                defer { try? FileManager.default.removeItem(at: staged) }
-                try FileManager.default.copyItem(at: file.fileURL, to: staged)
-                try FileManager.default.moveItem(at: staged, to: url)
+                guard let payload = try PropertyListSerialization.propertyList(from: Data(contentsOf: file.fileURL),
+                    format: nil) as? [String: Any] else { throw WorkoutSync.Failure.invalidPayload }
+                try WorkoutMessageInbox(directory: workoutInbox, receiverID: workoutReceiverID).stage(payload)
                 Task { @MainActor in await self.drainWorkoutInbox() }
             } catch {
                 Task { @MainActor in

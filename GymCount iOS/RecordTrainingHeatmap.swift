@@ -178,22 +178,28 @@ struct RecordTrainingHeatmap: View {
     }
 
     private var grid: some View {
+        let first = firstDay, last = lastDay, monday = firstMonday, columns = weekCount
+        let pitch = self.pitch, side = cellSide
+        let highlightedDay = selectedDate == nil ? nil : selection
         let lookup = Dictionary(uniqueKeysWithValues: days.map { ($0.date, $0) })
-        let maximum = max(1, days.filter { $0.date >= firstDay && $0.date <= lastDay }.map(\.recordCount).max() ?? 1)
+        let maximum = max(1, days.filter { $0.date >= first && $0.date <= last }.map(\.recordCount).max() ?? 1)
         let visibleRange = max(0, -contentOriginX)..<(max(0, -contentOriginX) + viewportWidth)
+        let firstColumn = max(0, min(columns, Int(floor(visibleRange.lowerBound / pitch))))
+        let lastColumn = viewportWidth > 0 ? max(firstColumn, min(columns, Int(ceil(visibleRange.upperBound / pitch)))) : columns
+        let colors = (0...4).map { color(for: $0) }
         return Canvas { context, _ in
-            drawMonths(in: &context, visibleRange: visibleRange)
-            for column in 0..<weekCount {
+            drawMonths(in: &context, visibleRange: visibleRange, first: first, last: last, monday: monday, columns: columns, pitch: pitch)
+            for column in firstColumn..<lastColumn {
                 for row in 0..<7 {
-                    guard let day = calendar.date(byAdding: .day, value: column * 7 + row, to: firstMonday),
-                          day >= firstDay, day <= lastDay else { continue }
+                    guard let day = calendar.date(byAdding: .day, value: column * 7 + row, to: monday),
+                          day >= first, day <= last else { continue }
                     let count = lookup[day]?.recordCount ?? 0
                     let level = count == 0 ? 0 : max(1, min(4, Int(ceil(Double(count) / Double(maximum) * 4))))
                     let rect = CGRect(x: CGFloat(column) * pitch, y: monthHeight + CGFloat(row) * pitch,
-                                      width: cellSide, height: cellSide)
+                                      width: side, height: side)
                     let shape = Path(roundedRect: rect, cornerRadius: 3)
-                    context.fill(shape, with: .color(color(for: level)))
-                    if selectedDate != nil, calendar.isDate(day, inSameDayAs: selection) {
+                    context.fill(shape, with: .color(colors[level]))
+                    if day == highlightedDay {
                         context.stroke(Path(roundedRect: rect.insetBy(dx: 1, dy: 1), cornerRadius: 2),
                                        with: .color(Studio.ink), lineWidth: 1.5)
                     }
@@ -229,15 +235,16 @@ struct RecordTrainingHeatmap: View {
             .accessibilityIdentifier("trend-training-heatmap")
     }
 
-    private func drawMonths(in context: inout GraphicsContext, visibleRange: Range<CGFloat>) {
+    private func drawMonths(in context: inout GraphicsContext, visibleRange: Range<CGFloat>,
+                            first: Date, last: Date, monday: Date, columns: Int, pitch: CGFloat) {
         guard !visibleRange.isEmpty else { return }
         let visibleStart = visibleRange.lowerBound
         let visibleEnd = visibleRange.upperBound
         var nextLabelX: CGFloat = 0
         var previousMonth: Int?
-        for column in 0..<weekCount {
-            guard let week = calendar.date(byAdding: .day, value: column * 7, to: firstMonday) else { continue }
-            let day = max(firstDay, week)
+        for column in 0..<columns {
+            guard let week = calendar.date(byAdding: .day, value: column * 7, to: monday) else { continue }
+            let day = max(first, week)
             let month = calendar.component(.month, from: day)
             guard month != previousMonth else { continue }
             previousMonth = month
@@ -252,10 +259,10 @@ struct RecordTrainingHeatmap: View {
             // First/January labels carry the year. Suppress a preceding label
             // if it would collide; do not squeeze December and January together.
             let januaryNext = calendar.date(byAdding: .month, value: 1, to: day).map { calendar.component(.month, from: $0) == 1 } ?? false
-            let remaining = CGFloat(weekCount - column) * pitch
+            let remaining = CGFloat(columns - column) * pitch
             guard x >= nextLabelX, size.width <= remaining else { continue }
-            if januaryNext, let january = calendar.date(from: DateComponents(year: calendar.component(.year, from: day) + 1, month: 1, day: 1)), january <= lastDay {
-                let januaryColumn = CGFloat(calendar.dateComponents([.day], from: firstMonday, to: january).day ?? 0) / 7
+            if januaryNext, let january = calendar.date(from: DateComponents(year: calendar.component(.year, from: day) + 1, month: 1, day: 1)), january <= last {
+                let januaryColumn = CGFloat(calendar.dateComponents([.day], from: monday, to: january).day ?? 0) / 7
                 if x + size.width + 12 > floor(januaryColumn) * pitch { continue }
             }
             context.draw(label, at: CGPoint(x: x, y: 0), anchor: .topLeading)

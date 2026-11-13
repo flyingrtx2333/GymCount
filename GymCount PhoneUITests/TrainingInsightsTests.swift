@@ -404,4 +404,41 @@ final class TrainingInsightsTests: XCTestCase {
         XCTAssertTrue(app.recordTab(1).isSelected, "The oldest summary must open its actual records")
         shot(app, "repair-trends-oldest-day-opened")
     }
+
+    @MainActor func testStableChartHeightWithRealSyncedHistory() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--isolated-ui-test", "--ui-test-storage-id=sync-repair-real127",
+            "--reset-record-view-preferences", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN",
+            "-records.appearance", "dark"]
+        app.launch()
+        XCTAssertTrue(app.recordTab(3).waitForExistence(timeout: 15))
+        app.recordTab(3).tap()
+        let menu = app.buttons["trend-metric"]
+        reveal(menu, app)
+        menu.tap(); app.buttons["trend-metric-active"].tap()
+        let chart = element("trend-chart", app)
+        XCTAssertTrue(chart.waitForExistence(timeout: 5), "Install actual history with known training durations")
+        reveal(chart, app)
+        let expected = chart.frame.height
+        XCTAssertEqual(expected, 156, accuracy: 1)
+        for grouping in ["month", "week", "day"] {
+            reveal(menu, app); menu.tap(); app.buttons["trend-granularity-" + grouping].tap()
+            reveal(chart, app)
+            XCTAssertEqual(chart.frame.height, expected, accuracy: 1, "Data aggregation changed chart height")
+            shot(app, "stable-duration-chart-" + grouping)
+        }
+        for exercise in ["卧推", "深蹲", "全部动作"] {
+            app.buttons["trend-exercise-filter"].tap(); app.buttons[exercise].firstMatch.tap()
+            reveal(chart, app)
+            XCTAssertEqual(chart.frame.height, expected, accuracy: 1, "Exercise data changed chart height")
+        }
+        let range = chart.value as? String
+        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)).press(forDuration: 0.05,
+            thenDragTo: chart.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)),
+            withVelocity: .slow, thenHoldForDuration: 0.2)
+        XCTAssertNotEqual(chart.value as? String, range)
+        XCTAssertEqual(chart.frame.height, expected, accuracy: 1)
+        shot(app, "stable-duration-chart-panned")
+    }
 }
