@@ -37,7 +37,7 @@
 
 详细证据见 [iPhone 多组训练完善记录](docs/phone-training-flow.md)。
 
-## iOS 列表与图表刷新：2026-11-13（未发布）
+## iOS 列表与图表刷新：2026-11-13（TestFlight 62）
 
 - 重复同步仍须验证来源和持久化前提，但相同快照不重写、不广播；内部文件事务忙碌状态不用于驱动整页刷新。缺少磁盘快照时先重新保存，再允许回执。
 - 记录分组按历史版本／筛选刷新，保留前台、日期和时区变化刷新；不要回退到视图计算中反复过滤分组。图表滚动和选点由 `RecordTrendChartSection` 持有，避免带动日历及分布图重建。
@@ -78,7 +78,15 @@
 - CoreMotion 两路回调绑定启动代次，停止阶段的关闭错误不得污染检测器；真实运动中错误与实际采样缺口继续保留。共享代次与停止标记通过锁读写，诊断分类使用 `MotionLifecycle`。
 - 11 条真实卧推录制回放与配套 Release 构建通过；6 条迟收尾误报、2 条真实内部缺口及停止前尾部缺口分别验证。未取得用户本次 Watch 日志，不把检测器回放当作 CoreMotion 实机验收。见 [停止边界修复](docs/sampling-stop-fix-20261109.md)。已随双端 1.1.8 (58) 发布，57 版不包含本修复。
 
-## 最新 TestFlight：2026-11-12（61）
+## 最新 TestFlight：2026-11-13（62）
+
+- iPhone 与 Watch：1.1.8 (62)，发布源码 `f2b2ca4f482fc5dbbe3f9bf2ef1bf295e6f71708` 已推送。修复重复训练报告积压，保存后及时回执；优化记录／趋势刷新与日历绘制，保持时长图表高度和横向滑动纵轴稳定。Watch 业务代码未改，随配套包更新构建号；后台无需变更。
+- Delivery UUID / ASC Build ID：`d19a0561-9fa9-499f-8530-2bfec8e5ab6e`。Apple `BUILD-STATUS: VALID`、`INTERNAL_ONLY`、`IN_BETA_TESTING`；内部组 `flyingrtx` 和中英文说明已回读确认，正式商店版本／构建关系未改动。
+- 1500 份真实待收文件合并为 15 份报告，隔离恢复 122 → 127 条；重复收件无通知／不重写、手机修正／删除保留、缺失快照重建及保存失败保留通过。5 类原生检查通过；同数据图表滑动 CPU 均值降低约 38%，不当作真机帧率结论。
+- 525 个提交文件生成源码快照；257 个应用／测试文件与验证源码对应，3 个仅为 Git 换行规范化。双端签名归档／导出、严格签名、版本／配套关系、HealthKit／Watch Siri、资源本地化和独立 iPhone 62 Release 构建通过。IPA SHA-256：`5dedee31aff16a4ae803d1b51f8af6e43ad74e476e76c9be93c89df5bf2739d9`。
+- 未覆盖用户设备安装和数据，实际补齐与真机帧率待更新后复验。产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.8-62/`；详见 [62 版发布记录](docs/testflight-1.1.8-62.md)。
+
+## 历史 TestFlight：2026-11-12（61）
 
 - iPhone 与 Watch：1.1.8 (61)，发布源码 `9213147c137de567712bbc3db44b1a3c0794cb95` 已推送。记录、详情、整场报告、趋势、概览和 CSV 统一显示“训练时长”，采用动作时长数据；移除总用时选项，缺失值保持未知，手动补记沿用用户填写的时长。
 - Delivery UUID / ASC Build ID：`cced0ed3-eadf-4ddd-8af6-1fa2f4f26f05`。Apple `BUILD-STATUS: VALID`、`INTERNAL_ONLY`、`IN_BETA_TESTING`；内部组 `flyingrtx` 与中英文说明已回读确认。
