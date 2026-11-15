@@ -20,3 +20,5 @@
 `/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/Appearance-20261114/`
 
 原生颜色传递依据：[Apple 自定义 trait 文档](https://developer.apple.com/documentation/uikit/providing-data-to-the-view-hierarchy-with-custom-traits)。本轮未修改 Watch 外观，也未覆盖安装用户真机应用。
+
+2026-11-15 已随配套 iPhone／Watch 1.1.8 (63) 发布 TestFlight；Apple VALID，内部组可用，中英文说明回读通过。配色原生验证对应的 29 个 iOS 源码／本地化文件与发布快照逐文件 SHA-256 一致，发布记录见 `AGENTS.md`。

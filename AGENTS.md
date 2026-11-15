@@ -78,7 +78,14 @@
 - CoreMotion 两路回调绑定启动代次，停止阶段的关闭错误不得污染检测器；真实运动中错误与实际采样缺口继续保留。共享代次与停止标记通过锁读写，诊断分类使用 `MotionLifecycle`。
 - 11 条真实卧推录制回放与配套 Release 构建通过；6 条迟收尾误报、2 条真实内部缺口及停止前尾部缺口分别验证。未取得用户本次 Watch 日志，不把检测器回放当作 CoreMotion 实机验收。见 [停止边界修复](docs/sampling-stop-fix-20261109.md)。已随双端 1.1.8 (58) 发布，57 版不包含本修复。
 
-## 最新 TestFlight：2026-11-13（62）
+## 最新 TestFlight：2026-11-15（63）
+
+- iPhone 与 Watch：1.1.8 (63)，发布源码 `36e67c1323a825edcd401f7cc2b492707ef1b758` 已推送。iOS 新增白金、曜黑、雾蓝、松绿、暮紫、玫瑰六套成对日夜配色，设置 → 外观可选跟随系统／浅色／深色，选择保留；Watch 首页标题改为“选择动作”，历史／趋势与设置图标靠右，保留 44 点点击区域。计数、保存与同步逻辑未改。
+- Delivery UUID／ASC Build ID：`342f4ffa-0640-4abf-8356-d4d80d0b493a`。苹果 `BUILD-STATUS: VALID`，`INTERNAL_ONLY`，内部组 `flyingrtx` 已包含本构建，状态 `IN_BETA_TESTING`；中英文更新说明逐项回读一致，正式商店版本状态和选中构建未变。
+- 531 个提交文件生成发布快照并核对 SHA-256；29 个 iOS 源码／本地化文件与已执行的原生配色验证一致。12 个日夜方案、跨页面颜色、重启保留、跟随系统、英文最大辅助字号和 SE 3 选择操作通过；两套 iPhone 工程、配套 Watch 构建与签名归档／导出、IPA 严格签名、权限和配套关系检查通过。未重新执行 Watch 原生 UI 测试或真机佩戴验收，未覆盖安装用户应用和数据。
+- IPA SHA-256：`88455d2a04dc0f64372b6c2616bba814669ea9d4fa5a56b13079e8f60dbf97e9`。产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.8-63/`。实现与验证见 [iOS 日夜配色](docs/ios-appearance-20261114.md)、[Watch 首页](docs/watch-home-20261115.md)。
+
+## 历史 TestFlight：2026-11-13（62）
 
 - iPhone 与 Watch：1.1.8 (62)，发布源码 `f2b2ca4f482fc5dbbe3f9bf2ef1bf295e6f71708` 已推送。修复重复训练报告积压，保存后及时回执；优化记录／趋势刷新与日历绘制，保持时长图表高度和横向滑动纵轴稳定。Watch 业务代码未改，随配套包更新构建号；后台无需变更。
 - Delivery UUID / ASC Build ID：`d19a0561-9fa9-499f-8530-2bfec8e5ab6e`。Apple `BUILD-STATUS: VALID`、`INTERNAL_ONLY`、`IN_BETA_TESTING`；内部组 `flyingrtx` 和中英文说明已回读确认，正式商店版本／构建关系未改动。
