@@ -31,6 +31,7 @@ struct RecordSettingsView: View {
     @EnvironmentObject private var trainingReminder: PhoneTrainingReminder
     @Environment(\.openURL) private var openURL
     @AppStorage("records.appearance") private var appearance = RecordAppearance.system.rawValue
+    @AppStorage("records.palette") private var palette = RecordPalette.platinum.rawValue
     @AppStorage("records.last-backup-success") private var lastBackupSuccess: Double = 0
     let records: [PhoneTrainingSession]
     let filter: RecordFilter
@@ -54,9 +55,16 @@ struct RecordSettingsView: View {
             RecordPageHeader(title: String(localized: "设置"), identifier: "settings-heading") { EmptyView() }
             List {
                 Section {
-                    Picker(String(localized: "外观"), selection: $appearance) {
-                        ForEach(RecordAppearance.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
-                    }.pickerStyle(.menu)
+                    NavigationLink {
+                        RecordAppearanceView().toolbar(.visible, for: .navigationBar)
+                    } label: {
+                        HStack {
+                            Text(String(localized: "外观"))
+                            Spacer(minLength: 8)
+                            Text((RecordAppearance(rawValue: appearance) ?? .system).title + " · " + (RecordPalette(rawValue: palette) ?? .platinum).title)
+                                .font(Studio.Fonts.caption).foregroundStyle(Studio.muted)
+                        }
+                    }.accessibilityIdentifier("records-appearance")
                 }.recordSectionStyle()
                 Section {
                     Toggle(isOn: Binding(get: { trainingReminder.enabled }, set: { value in

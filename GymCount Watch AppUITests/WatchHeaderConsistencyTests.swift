@@ -7,7 +7,7 @@ final class WatchHeaderConsistencyTests: XCTestCase {
             let app = XCUIApplication()
             app.launchArguments = ["-AppleLanguages", english ? "(en)" : "(zh-Hans)", "-AppleLocale", english ? "en_US" : "zh_CN"]
             app.launch()
-            checkTitle(app, english ? "Training" : "训练")
+            checkTitle(app, english ? "Exercise" : "选择动作")
             app.buttons[english ? "Settings" : "设置"].tap()
             let back = app.buttons["watch.back"]
             XCTAssertTrue(back.waitForExistence(timeout: 5)); back.tap()

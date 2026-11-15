@@ -45,6 +45,7 @@ struct PhoneContentView: View {
     @Environment(\.horizontalSizeClass) private var widthClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("records.appearance") private var appearance = RecordAppearance.system.rawValue
+    @AppStorage("records.palette") private var palette = RecordPalette.platinum.rawValue
     @AppStorage("records.history") private var savedHistory = Data()
     @State private var tab = 1
     @State private var filter = RecordFilter()
@@ -82,6 +83,7 @@ struct PhoneContentView: View {
         .background(Studio.background)
         .tint(Studio.accent).foregroundStyle(Studio.ink)
         .preferredColorScheme(RecordAppearance(rawValue: appearance)?.scheme)
+        .environment(\.recordPalette, RecordPalette(rawValue: palette) ?? .platinum)
         .onAppear {
             guard !restoredHistory else { return }
             let saved = RecordViewPreferences.decode(savedHistory, fallback: .init(filter: RecordFilter()))

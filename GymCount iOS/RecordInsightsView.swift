@@ -108,7 +108,7 @@ struct RecordExerciseDistribution: View {
 
     private func color(for exercise: ExerciseType) -> Color {
         switch exercise {
-        case .benchPress: Studio.accent
+        case .benchPress: Studio.adaptive(0x806124, 0xD5BE86)
         case .squat: Studio.adaptive(0x1D7A72, 0x66C9BA)
         case .deadlift: Studio.adaptive(0x426BAE, 0x7AA8E5)
         case .overheadPress: Studio.adaptive(0xB35A36, 0xECA47F)

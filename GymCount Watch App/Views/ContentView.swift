@@ -282,16 +282,16 @@ struct MainMenuView: View {
                     Spacer(minLength: 0)
                     Button { showingHistory = true } label: {
                         Image(systemName: "chart.bar.fill")
-                            .frame(width: 44, height: 44).contentShape(Rectangle())
+                            .frame(width: 44, height: 44, alignment: .trailing).contentShape(Rectangle())
                     }.accessibilityLabel(String(localized: "历史"))
                     Button { showingSettings = true } label: {
                         Image(systemName: "gearshape")
-                            .frame(width: 44, height: 44).contentShape(Rectangle())
+                            .frame(width: 44, height: 44, alignment: .trailing).contentShape(Rectangle())
                     }.accessibilityLabel(String(localized: "设置"))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(GymStyle.ink)
-                .frame(height: 44)
+                .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
                 ForEach(ExerciseType.allCases, id: \.self) { exercise in
                     ExerciseCard(
                         exercise: exercise,
@@ -315,7 +315,7 @@ struct MainMenuView: View {
         }
         .navigationBarBackButtonHidden(true)
         .gymPage()
-        .gymNavigationTitle(String(localized: "训练"))
+        .gymNavigationTitle(String(localized: "选择动作"))
     }
 }
 

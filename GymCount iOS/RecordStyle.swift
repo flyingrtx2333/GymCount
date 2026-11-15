@@ -28,16 +28,24 @@ enum Studio {
     static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
         Color(uiColor: UIColor { trait in
             let hex = trait.userInterfaceStyle == .dark ? dark : light
-            return UIColor(red: CGFloat((hex >> 16) & 255) / 255, green: CGFloat((hex >> 8) & 255) / 255, blue: CGFloat(hex & 255) / 255, alpha: 1)
+            return uiColor(hex)
         })
     }
-    static let background = adaptive(0xF7F5EF, 0x161614)
-    static let surface = adaptive(0xFFFFFF, 0x232320)
-    static let ink = adaptive(0x252722, 0xF4F1E8)
-    static let muted = adaptive(0x6A6D65, 0xABA99F)
-    static let accent = adaptive(0x806124, 0xD5BE86)
-    static let line = adaptive(0xE4E1D7, 0x3B3B35)
-    static let onAccent = adaptive(0xFFFFFF, 0x222019)
+    static func uiColor(_ hex: UInt32) -> UIColor {
+        UIColor(red: CGFloat((hex >> 16) & 255) / 255, green: CGFloat((hex >> 8) & 255) / 255, blue: CGFloat(hex & 255) / 255, alpha: 1)
+    }
+    private static func themed(_ role: RecordPalette.Role) -> Color {
+        Color(uiColor: UIColor { traits in
+            uiColor(traits[RecordPaletteTrait.self].colors(dark: traits.userInterfaceStyle == .dark).value(role))
+        })
+    }
+    static let background = themed(.background)
+    static let surface = themed(.surface)
+    static let ink = themed(.ink)
+    static let muted = themed(.muted)
+    static let accent = themed(.accent)
+    static let line = themed(.line)
+    static let onAccent = themed(.onAccent)
 }
 
 // All three root pages share the same title metrics and action alignment.
