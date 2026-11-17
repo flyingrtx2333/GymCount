@@ -78,7 +78,15 @@
 - CoreMotion 两路回调绑定启动代次，停止阶段的关闭错误不得污染检测器；真实运动中错误与实际采样缺口继续保留。共享代次与停止标记通过锁读写，诊断分类使用 `MotionLifecycle`。
 - 11 条真实卧推录制回放与配套 Release 构建通过；6 条迟收尾误报、2 条真实内部缺口及停止前尾部缺口分别验证。未取得用户本次 Watch 日志，不把检测器回放当作 CoreMotion 实机验收。见 [停止边界修复](docs/sampling-stop-fix-20261109.md)。已随双端 1.1.8 (58) 发布，57 版不包含本修复。
 
-## 最新 TestFlight：2026-11-15（63）
+## 最新 TestFlight：2026-11-17（64）
+
+- iPhone 与 Watch：1.1.8 (64)，发布源码 `065fb245f94e89465e1e97fce6db6457ccb0406e` 已推送，535 个文件快照核验。仅增加 Watch 保存分步诊断，另包含此前授权移除的 iOS 图表“有时长”提示；计数算法、模型、分组、保存顺序、文件队列及 HealthKit 等待／超时策略保持，不修改保存中的状态文案。
+- Delivery UUID／ASC Build ID：`4ac4e95a-7828-42f5-8bba-a77ad574b30a`。苹果 `BUILD-STATUS: VALID`，`INTERNAL_ONLY`，内部组 `flyingrtx` 包含本构建且为 `IN_BETA_TESTING`；中英文说明逐项回读一致。正式商店版本状态及选中构建未变。
+- 4 项隔离 Watch 原生测试通过，覆盖队列等待区分、返回值／错误保持、有界轮换、不可写日志目录、实际整场保存与文件读取，以及停止采样不等待无关文件队列。两套 iPhone 工程、配套 Watch 签名归档／导出和包内版本、签名、权限及配套关系检查通过。9 份检测器／模型／时间计算文件与 63 版一致，保存相关异步调用和次序核对保持。
+- 诊断位于 Watch App 的 `Library/Application Support/Diagnostics/`，两份 JSONL 各限 256 KiB，独立队列最多积压 512 条；日志失败不改变保存结果。后续通过普通 App 文件复制读取，不再依赖系统日志导出；读取方法与解释边界见 [保存诊断](docs/workout-save-diagnostics-20261117.md)。本轮未覆盖用户安装／资料，尚未新增真机佩戴和 HealthKit 收尾验证，不将诊断发布描述为已修复慢保存或漏计。
+- IPA SHA-256：`6be99e1c019db197354129e74ebcf69abb3841112cc41f3e41c023b282ac9dfd`。产物：`/Users/xiangjunsheng/.codex/visualizations/2026/10/18/01a14cce-f633-7fe0-9fe0-30c6f25ab690/TestFlight-1.1.8-64/`，详见 [发布记录](docs/testflight-1.1.8-64.md)。
+
+## 历史 TestFlight：2026-11-15（63）
 
 - iPhone 与 Watch：1.1.8 (63)，发布源码 `36e67c1323a825edcd401f7cc2b492707ef1b758` 已推送。iOS 新增白金、曜黑、雾蓝、松绿、暮紫、玫瑰六套成对日夜配色，设置 → 外观可选跟随系统／浅色／深色，选择保留；Watch 首页标题改为“选择动作”，历史／趋势与设置图标靠右，保留 44 点点击区域。计数、保存与同步逻辑未改。
 - Delivery UUID／ASC Build ID：`342f4ffa-0640-4abf-8356-d4d80d0b493a`。苹果 `BUILD-STATUS: VALID`，`INTERNAL_ONLY`，内部组 `flyingrtx` 已包含本构建，状态 `IN_BETA_TESTING`；中英文更新说明逐项回读一致，正式商店版本状态和选中构建未变。
