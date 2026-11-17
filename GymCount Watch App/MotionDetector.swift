@@ -204,16 +204,21 @@ class MotionDetector: ObservableObject {
     @MainActor
     func stopDetectionAsync() async {
         let stoppedAt = ProcessInfo.processInfo.systemUptime
+        let trace = WorkoutSaveDiagnostics.shared.begin("motion.stop")
+        defer { trace.end() }
         isStopping = true
         motionManager.stopAccelerometerUpdates()
         motionManager.stopDeviceMotionUpdates()
         let final = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
+                let drain = WorkoutSaveDiagnostics.shared.begin("motion.drain")
                 self.motionQueue.waitUntilAllOperationsAreFinished()
-                continuation.resume(returning: self.finalAnalysis(stoppedAt: stoppedAt))
+                drain.end()
+                let final = WorkoutSaveDiagnostics.shared.measure("motion.final_analysis") { self.finalAnalysis(stoppedAt: stoppedAt) }
+                continuation.resume(returning: final)
             }
         }
-        applyStop(final)
+        WorkoutSaveDiagnostics.shared.measure("motion.apply_final") { applyStop(final) }
     }
 
     // File I/O and queued analysis may finish later; coverage ends when stop was requested.

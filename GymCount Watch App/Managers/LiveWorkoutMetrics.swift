@@ -130,21 +130,29 @@ final class LiveWorkoutMetrics: NSObject, ObservableObject {
         isFinishing = true
         let task = Task { @MainActor in
             let started = ProcessInfo.processInfo.systemUptime
+            let trace = WorkoutSaveDiagnostics.shared.begin("health.finish")
+            defer { trace.end(outcome: "returned") }
             var phase = "health_stop"
             var phaseStarted = started
+            var phaseTrace = WorkoutSaveDiagnostics.shared.begin("health.stop")
             do {
                 try await waitForSessionStop(session, at: endDate)
+                phaseTrace.end()
                 saveLog.notice("phase=health_stop seconds=\(ProcessInfo.processInfo.systemUptime - phaseStarted)")
                 phase = "health_collection"
                 phaseStarted = ProcessInfo.processInfo.systemUptime
+                phaseTrace = WorkoutSaveDiagnostics.shared.begin("health.collection")
                 try await builder.endCollection(at: endDate)
+                phaseTrace.end()
                 saveLog.notice("phase=health_collection seconds=\(ProcessInfo.processInfo.systemUptime - phaseStarted)")
                 collectStatistics(from: builder)
                 phase = "health_commit"
                 phaseStarted = ProcessInfo.processInfo.systemUptime
+                phaseTrace = WorkoutSaveDiagnostics.shared.begin("health.commit")
                 guard let workout = try await builder.finishWorkout() else {
                     throw failure("健康训练保存失败，请重试")
                 }
+                phaseTrace.end()
                 saveLog.notice("phase=health_commit seconds=\(ProcessInfo.processInfo.systemUptime - phaseStarted)")
                 // The live builder already supplied measured statistics and chart points.
                 let result = snapshot(workoutUUID: workout.uuid)
@@ -153,6 +161,7 @@ final class LiveWorkoutMetrics: NSObject, ObservableObject {
                 saveLog.notice("phase=health_total seconds=\(ProcessInfo.processInfo.systemUptime - started)")
                 return result
             } catch {
+                phaseTrace.end(outcome: "error", error: error)
                 let failure = error as NSError
                 saveLog.error("phase=\(phase, privacy: .public) seconds=\(ProcessInfo.processInfo.systemUptime - phaseStarted) error_domain=\(failure.domain, privacy: .public) error_code=\(failure.code)")
                 errorMessage = error.localizedDescription

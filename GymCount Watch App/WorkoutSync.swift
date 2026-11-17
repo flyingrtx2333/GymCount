@@ -461,11 +461,27 @@ final class WorkoutReportSensorArchive {
 final class WorkoutFileIO: @unchecked Sendable {
     static let shared = WorkoutFileIO()
     private let queue = DispatchQueue(label: "PowerReps.files", qos: .utility)
-    func perform<T>(_ operation: @escaping () throws -> T) async throws -> T {
-        try await withCheckedThrowingContinuation { continuation in
+    func perform<T>(diagnosticPhase: String = #function, _ operation: @escaping () throws -> T) async throws -> T {
+        #if os(watchOS)
+        let span = WorkoutSaveDiagnostics.shared.begin("file." + diagnosticPhase)
+        #endif
+        return try await withCheckedThrowingContinuation { continuation in
             queue.async {
-                do { continuation.resume(returning: try operation()) }
-                catch { continuation.resume(throwing: error) }
+                #if os(watchOS)
+                span.running()
+                #endif
+                do {
+                    let value = try operation()
+                    #if os(watchOS)
+                    span.end()
+                    #endif
+                    continuation.resume(returning: value)
+                } catch {
+                    #if os(watchOS)
+                    span.end(outcome: "error", error: error)
+                    #endif
+                    continuation.resume(throwing: error)
+                }
             }
         }
     }

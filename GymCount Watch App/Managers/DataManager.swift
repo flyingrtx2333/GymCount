@@ -292,12 +292,16 @@ class DataManager: ObservableObject {
     @discardableResult
     private func checkpoint(_ session: WorkoutSession) -> Bool {
         if matchesCheckpoint(session) { return true }
+        let trace = isSavingWorkout ? WorkoutSaveDiagnostics.shared.begin("draft.persist") : nil
+        var traceError: Error?
+        defer { trace?.end(outcome: traceError == nil ? "ok" : "error", error: traceError) }
         do {
             try draftStore.save(session)
             checkpointedSession = session
             draftWriteFailed = false
             return true
         } catch {
+            traceError = error
             if !draftWriteFailed {
                 saveError = String(localized: "训练备份失败，请保持 App 打开并重试保存")
                 WKInterfaceDevice.current().play(.failure)
@@ -461,7 +465,11 @@ class DataManager: ObservableObject {
         if isWholeWorkout { return await finishWholeWorkout() }
         guard !isSavingWorkout, !historyReadFailed else { return false }
         isSavingWorkout = true
-        defer { isSavingWorkout = false }
+        let trace = WorkoutSaveDiagnostics.shared.begin("workout.legacy_save")
+        defer {
+            isSavingWorkout = false
+            trace.end(outcome: currentSession == nil ? "saved" : "retained")
+        }
         saveError = nil
         // Stop first so the finalized count and diagnostic events describe the same set.
         await motionDetector.stopDetectionAsync()
@@ -479,7 +487,7 @@ class DataManager: ObservableObject {
         let feedbackArchive = self.feedbackArchive, historyURL = self.historyURL
         let oldHistory = workoutHistory
         do {
-            let warning = try await WorkoutFileIO.shared.perform { () -> String? in
+            let warning = try await WorkoutFileIO.shared.perform(diagnosticPhase: "save.legacy") { () -> String? in
                 if let timeline = try diagnostics?.timeline(for: history) { try timelineArchive.retain(timeline) }
                 let data = try JSONEncoder().encode(next)
                 try FileManager.default.createDirectory(at: historyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -893,6 +901,8 @@ extension DataManager {
     /// Persist the finalized segment before resetting the detector or changing exercise.
     @MainActor
     private func closeWholeSegment(trimIdleTail: Bool = false) async -> Date? {
+        let trace = WorkoutSaveDiagnostics.shared.begin("segment.close")
+        defer { trace.end(outcome: saveError == nil ? "returned" : "error") }
         await motionDetector.stopDetectionAsync()
         guard var session = currentSession, var draft = session.wholeDraft else { return nil }
         let sets = WorkoutReport.group(session.repRecords, exercise: session.exerciseType)
@@ -915,15 +925,19 @@ extension DataManager {
                 totalWeight: session.repRecords.reduce(0) { $0 + $1.weight })
             let url = reportSensorArchive.fileURL(workoutID: draft.id, segmentID: segment.id)
             do {
-                try await WorkoutFileIO.shared.perform {
-                    if let timeline = try diagnostics.timeline(for: segment, trimToDuration: trimIdleTail) {
-                        let data = try JSONEncoder().encode(timeline)
+                try await WorkoutFileIO.shared.perform(diagnosticPhase: "save.timeline") {
+                    if let timeline = try WorkoutSaveDiagnostics.shared.measure("timeline.build", {
+                        try diagnostics.timeline(for: segment, trimToDuration: trimIdleTail)
+                    }) {
+                        let data = try WorkoutSaveDiagnostics.shared.measure("timeline.encode") { try JSONEncoder().encode(timeline) }
                         guard data.count <= WorkoutTimeline.maximumFileBytes else { throw WorkoutTimeline.Failure.invalid }
                         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                         let count = try FileManager.default.contentsOfDirectory(at: url.deletingLastPathComponent(), includingPropertiesForKeys: nil)
                             .filter { $0.pathExtension == "json" }.count
                         guard count < WorkoutReportSensors.maximumSegments || FileManager.default.fileExists(atPath: url.path) else { throw WorkoutTimeline.Failure.invalid }
-                        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                        try WorkoutSaveDiagnostics.shared.measure("timeline.write") {
+                            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                        }
                     }
                 }
             } catch {
@@ -1012,8 +1026,10 @@ extension DataManager {
         guard isWholeWorkout, !isSavingWorkout, !historyReadFailed else { return false }
         let saveStarted = ProcessInfo.processInfo.systemUptime
         isSavingWorkout = true
+        let trace = WorkoutSaveDiagnostics.shared.begin("workout.save")
         defer {
             isSavingWorkout = false
+            trace.end(outcome: self.currentSession == nil ? "saved" : "retained")
             workoutSaveLog.notice("phase=workout_total seconds=\(ProcessInfo.processInfo.systemUptime - saveStarted) saved=\(self.currentSession == nil)")
         }
         saveError = nil; wholeWorkoutIdlePrompt = false
@@ -1058,7 +1074,7 @@ extension DataManager {
                 }
             }
             report.heartRates = report.heartRates.filter { $0.date >= report.startedAt && $0.date <= report.endedAt }
-            do { try report.validate() }
+            do { try WorkoutSaveDiagnostics.shared.measure("report.validate") { try report.validate() } }
             catch { saveError = String(localized: "训练数据校验失败，请重试"); return false }
             draft.pendingReport = report; session.wholeDraft = draft; session.endTime = end
             currentSession = session
@@ -1073,10 +1089,12 @@ extension DataManager {
         let url = historyURL
         let historyStarted = ProcessInfo.processInfo.systemUptime
         do {
-            try await WorkoutFileIO.shared.perform {
-                let data = try JSONEncoder().encode(next)
+            try await WorkoutFileIO.shared.perform(diagnosticPhase: "save.history") {
+                let data = try WorkoutSaveDiagnostics.shared.measure("history.encode") { try JSONEncoder().encode(next) }
                 try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                try WorkoutSaveDiagnostics.shared.measure("history.write") {
+                    try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                }
             }
         } catch { saveError = String(localized: "保存失败，训练仍在本页，请重试"); return false }
         workoutSaveLog.notice("phase=history_save seconds=\(ProcessInfo.processInfo.systemUptime - historyStarted)")

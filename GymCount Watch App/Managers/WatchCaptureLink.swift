@@ -422,7 +422,7 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
         let archive = DataManager.shared.reportSensorArchive, generation = reportSensorScanGeneration
         let task = Task { @MainActor [weak self] in
             do {
-                let result = try await WorkoutFileIO.shared.perform { () -> ([UUID: [UUID]], Bool) in
+                let result = try await WorkoutFileIO.shared.perform(diagnosticPhase: "sync.sensor_index") { () -> ([UUID: [UUID]], Bool) in
                     var index: [UUID: [UUID]] = [:], failed = false
                     for source in sources {
                         do { index[source.id] = try archive.index(for: source).map(\.id) }
