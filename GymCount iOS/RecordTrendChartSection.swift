@@ -6,7 +6,6 @@ import Charts
 struct RecordTrendChartSection: View {
     let points: [RecordTrendPoint]
     let grouping: RecordChartGranularity
-    let totalRecords: Int
     let filter: RecordFilter
     @Binding var metric: RecordTrendMetric
     @Binding var granularity: RecordChartGranularity
@@ -29,8 +28,6 @@ struct RecordTrendChartSection: View {
         guard !values.isEmpty else { return nil }
         return metric == .weight ? values.max() : values.reduce(0, +)
     }
-    private var measured: Int { selected?.measuredRecords ?? points.reduce(0) { $0 + $1.measuredRecords } }
-    private var recordCount: Int { selected?.recordCount ?? totalRecords }
     private var scale: Double { metric.timeMetric != nil && (plotted.compactMap(\.value).max() ?? 0) >= 120 ? 60 : 1 }
     private var unit: String {
         switch metric {
@@ -146,10 +143,6 @@ struct RecordTrendChartSection: View {
                         Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).frame(width: Studio.controlHeight, height: Studio.controlHeight)
                     }.accessibilityLabel(String(localized: "清除选择")).accessibilityIdentifier("trend-clear-selection")
                 }.buttonStyle(RecordPressStyle()).font(Studio.Fonts.caption).foregroundStyle(Studio.accent)
-            }
-            if metric.timeMetric != nil && measured > 0 && measured < recordCount {
-                Text(String(localized: "\(measured)/\(recordCount) 条有时长"))
-                    .font(Studio.Fonts.axis).foregroundStyle(Studio.muted).accessibilityIdentifier("trend-time-coverage")
             }
         }
     }

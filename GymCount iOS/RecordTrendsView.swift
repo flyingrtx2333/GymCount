@@ -51,7 +51,7 @@ struct RecordTrendsView: View {
                         } else {
                             RecordTrainingOverview(insights: insights)
                             sectionDivider
-                            RecordTrendChartSection(points: points, grouping: grouping, totalRecords: records.count, filter: filter,
+                            RecordTrendChartSection(points: points, grouping: grouping, filter: filter,
                                 metric: $metric, granularity: $granularity, collapsed: $collapsed, open: open)
                             LazyVGrid(columns: supportingColumns, alignment: .leading,
                                       spacing: widthClass == .regular ? Studio.wideInset : Studio.spacing) {
