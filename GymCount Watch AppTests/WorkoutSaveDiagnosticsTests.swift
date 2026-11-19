@@ -64,6 +64,27 @@ struct WorkoutSaveDiagnosticsTests {
         failing.flushForTesting()
     }
 
+    @Test func timelineEncodingPreservesCachedBlocksAndTrimmedTail() async throws {
+        let directory = FileManager.default.temporaryDirectory
+        let rawPoints = (0..<700).map { CaptureSample(t: Double($0) / 40, received_t: Double($0) / 40,
+            x: Double($0) / 7, y: -0.125, z: 0.1875) }
+        let points = rawPoints.map { WorkoutTimeline.VectorSample(t: $0.t, x: $0.x, y: $0.y, z: $0.z) }
+        let diagnostics = WorkoutDiagnostics(prepareTimeline: true)
+        for start in [0, 256] { diagnostics.raw.completedAccelerationBlock?(rawPoints[start..<start+256]) }
+        let date = Date(timeIntervalSinceReferenceDate: 816746641.9414942)
+        let source = WorkoutSync.Record(id: UUID(), date: date, exercise: "bench_press", totalReps: 1,
+            maxWeight: 70, duration: 18, activeDuration: 2, totalWeight: 70)
+        for count in [700, 400, 256, 128] {
+            let timeline = try WorkoutTimeline(source: source, origin: date, acceleration: Array(points.prefix(count)),
+                motion: [], detectedEvents: [2], feedbackEvents: [2.1], algorithmVersion: "bench")
+            let file = directory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: file) }
+            try diagnostics.encodedTimeline(timeline).write(to: file, options: .atomic)
+            let reloaded = try JSONDecoder().decode(WorkoutTimeline.self, from: Data(contentsOf: file))
+            #expect(reloaded == timeline)
+        }
+    }
+
     @Test func wholeSaveKeepsResultAndWritesRetrievableStageFile() async throws {
         let store = DataManager.shared
         try #require(store.currentSession == nil && !store.requiresDraftRecovery)
@@ -76,13 +97,36 @@ struct WorkoutSaveDiagnosticsTests {
         }
         try #require(await store.startWholeWorkout(exerciseType: .squat, weight: 50))
         let id = try #require(store.currentSession?.id)
+        let previousHistory = store.workoutHistory
         defer {
             if let saved = store.workoutHistory.first(where: { $0.id == id }) { store.deleteHistoryItem(saved) }
         }
         store.addRep()
+        let (entered, signal) = AsyncStream<Void>.makeStream()
+        let release = DispatchSemaphore(value: 0)
+        let scan = Task.detached {
+            try await WorkoutFileIO.shared.perform(diagnosticPhase: "test.historyScan") {
+                signal.yield()
+                _ = release.wait(timeout: .now() + 4)
+            }
+        }
+        var iterator = entered.makeAsyncIterator()
+        try #require(await iterator.next() != nil)
+        defer { release.signal() }
+        let started = ProcessInfo.processInfo.systemUptime
         try #require(await store.finishWholeWorkout())
+        let elapsed = ProcessInfo.processInfo.systemUptime - started
+        print("SAVE_WITH_BUSY_SYNC_SECONDS", elapsed)
+        #expect(elapsed < 1)
+        release.signal()
+        try await scan.value
         #expect(store.completedWholeWorkout?.totalReps == 1)
         #expect(store.workoutHistory.first(where: { $0.id == id })?.totalReps == 1)
+        let historyFile = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("WatchHistory/history-v1.json")
+        let reloaded = try JSONDecoder().decode([WorkoutHistory].self, from: Data(contentsOf: historyFile))
+        #expect(reloaded == store.workoutHistory)
+        #expect(Array(reloaded.dropFirst()) == previousHistory)
         let log = WorkoutSaveDiagnostics.shared
         log.flushForTesting()
         let data = try Data(contentsOf: log.directory.appendingPathComponent("workout-save-v1.jsonl"))

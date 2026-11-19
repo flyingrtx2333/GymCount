@@ -122,7 +122,7 @@ enum BenchPressAnalysis {
                 let up = velocity[turn...i].reduce(0) { $0 + max($1, 0) }/40
                 let duration = times[i] - times[start]
                 guard (1...10).contains(duration), min(times[turn] - times[start], times[i] - times[turn]) >= 0.25,
-                      min(down, up) >= 0.04, (0.35...2.5).contains(up/down),
+                      down >= 0.04, up >= 0.035, (0.35...2.5).contains(up/down),
                       posture[start...i].map({ angle($0, posture[start]) }).max()! <= 0.65,
                       quantile(Array(rates[start...i]), 0.9) <= 1.5 else { continue }
                 candidates.append((start, turn, i))
@@ -233,7 +233,7 @@ final class BenchPressStream {
 // Causal feedback only. Never called by finish(), count reconciliation or video
 // labels. A full lower/press/held return is required before emitting one event.
 final class BenchPressFeedback {
-    static let version = "bench-live-top-return-20261021-v1"
+    static let version = "bench-live-top-return-20261119-v2"
     private(set) var lastCycle: BenchCycle?
     private var last: Double?
     private var top: SIMD3<Double>?
@@ -241,13 +241,14 @@ final class BenchPressFeedback {
     private var state = 0
     private var acceleration = 0.0, velocity = 0.0
     private var start = 0.0, turn = 0.0, span = 0.0, down = 0.0, up = 0.0
+    private var strictTopSince: Double?
     private var heldSince: Double?
 
     private func dot(_ a: SIMD3<Double>, _ b: SIMD3<Double>) -> Double { a.x*b.x + a.y*b.y + a.z*b.z }
     private func norm(_ v: SIMD3<Double>) -> Double { sqrt(dot(v, v)) }
     private func angle(_ a: SIMD3<Double>, _ b: SIMD3<Double>) -> Double { acos(max(-1, min(1, dot(a, b)))) }
     private func clearPhase() {
-        top = nil; quiet = []; state = 0; velocity = 0; acceleration = 0; heldSince = nil; lastCycle = nil
+        top = nil; quiet = []; state = 0; velocity = 0; acceleration = 0; heldSince = nil; strictTopSince = nil; lastCycle = nil
     }
     func reset() { clearPhase(); last = nil }
 
@@ -287,21 +288,32 @@ final class BenchPressFeedback {
             guard sample.t - start <= 10 else { clearPhase(); return nil }
             if state == 1 {
                 down += max(0, -velocity)*dt
-                if velocity > 0.08, sample.t - start > 0.25 { state = 2; turn = sample.t }
+                // Integrated velocity can drift during a slow press. A substantial
+                // reversal of the measured wrist angle also identifies the ascent.
+                let rising = velocity > 0.08 || (span > 0.16 && distance < span * 0.7)
+                if rising, sample.t - start > 0.25 { state = 2; turn = sample.t }
             } else {
                 up += max(0, velocity)*dt
                 // Conservative face-plane gate excludes standing preparation in
                 // current recordings. Other wrist postures require device validation.
-                let returned = distance < 0.08 && abs(top.z) < 0.5 && rate < 1.5
+                let returned = distance < (heldSince == nil ? 0.10 : 0.15) && abs(top.z) < 0.5 && rate < 1.5
+                // On a slow press, integrated speed drifts toward zero before lockout.
+                // Require a deep descent, a sustained ascent, and a near-full return.
+                let slowPress = sample.t - turn >= 1 && span >= 0.25 &&
+                    distance < span * 0.30 && down >= 0.15 && up >= 0.02
                 if returned, sample.t - turn > 0.25, sample.t - start >= 1,
-                   span >= 0.15, min(down, up) >= 0.04 {
+                   span >= 0.15, down >= 0.04, up >= 0.035 || slowPress {
                     if heldSince == nil { heldSince = sample.t }
-                    if sample.t - heldSince! >= 0.25 {
+                    strictTopSince = distance < 0.08 ? (strictTopSince ?? sample.t) : nil
+                    let held = sample.t - (heldSince ?? sample.t)
+                    let centered = sample.t - (strictTopSince ?? sample.t) >= 0.25
+                    // A wrist may roll outward again while the arms stay extended.
+                    if centered || (held >= 0.25 && distance >= 0.105) || (held >= 0.42 && strictTopSince == nil) {
                         lastCycle = BenchCycle(start: start, turn: turn, end: sample.t)
-                        state = 0; velocity = 0; acceleration = 0; heldSince = nil
+                        state = 0; velocity = 0; acceleration = 0; heldSince = nil; strictTopSince = nil
                         return sample.t
                     }
-                } else { heldSince = nil }
+                } else { heldSince = nil; strictTopSince = nil }
             }
         }
         return nil

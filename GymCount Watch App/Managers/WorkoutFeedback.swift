@@ -5,6 +5,55 @@ import WatchKit
 final class WorkoutDiagnostics {
     let raw = RawCapture()
 
+    private let encodedPoints = SampleBlocks()
+    private let encodedMotion = SampleBlocks()
+
+    init(prepareTimeline: Bool = false) {
+        if prepareTimeline {
+            raw.completedAccelerationBlock = { [encodedPoints] block in
+                encodedPoints.prepare(block, convert: WorkoutDiagnostics.point)
+            }
+            raw.completedMotionBlock = { [encodedMotion] block in
+                encodedMotion.prepare(block, convert: WorkoutDiagnostics.motion)
+            }
+        }
+    }
+
+    private static func point(_ sample: CaptureSample) -> WorkoutTimeline.VectorSample {
+        .init(t: sample.t, x: sample.x, y: sample.y, z: sample.z)
+    }
+
+    private static func motion(_ sample: CaptureMotion) -> WorkoutTimeline.MotionSample {
+        func vector(_ value: CaptureVector) -> WorkoutTimeline.Vector {
+            .init(x: value.x, y: value.y, z: value.z)
+        }
+        return .init(t: sample.t, gravity: vector(sample.gravity),
+            userAcceleration: vector(sample.user_acceleration), rotationRate: vector(sample.rotation_rate),
+            attitude: vector(sample.attitude), magneticField: sample.magnetic_field_accuracy >= 0 ? vector(sample.magnetic_field) : nil)
+    }
+
+    func encodedTimeline(_ timeline: WorkoutTimeline) throws -> Data {
+        // The metadata still uses the shipping Codable schema. Splice the two
+        // numeric arrays as their original JSON bytes (no NSNumber conversion).
+        var header = timeline
+        header.motion = []
+        header.acceleration = []
+        let json = try JSONEncoder().encode(header)
+        guard var fields = try JSONSerialization.jsonObject(with: json) as? [String: Any] else {
+            throw WorkoutTimeline.Failure.invalid
+        }
+        fields.removeValue(forKey: "motion")
+        fields.removeValue(forKey: "acceleration")
+        var output = try JSONSerialization.data(withJSONObject: fields)
+        output.removeLast() // closing brace of the compact metadata object
+        output.append(contentsOf: #","motion":["#.utf8)
+        try encodedMotion.appendElements(timeline.motion, to: &output)
+        output.append(contentsOf: #"],"acceleration":["#.utf8)
+        try encodedPoints.appendElements(timeline.acceleration, to: &output)
+        output.append(contentsOf: "]}".utf8)
+        return output
+    }
+
     func recording(for workout: WorkoutHistory) throws -> Data? {
         guard let record = record(for: workout) else { return nil }
         let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
@@ -22,16 +71,10 @@ final class WorkoutDiagnostics {
         let source = WorkoutSync.Record(id: workout.id, date: workout.date, exercise: workout.exerciseType.rawValue,
             totalReps: workout.totalReps, maxWeight: workout.maxWeight, duration: workout.duration,
             activeDuration: workout.activeDuration, totalWeight: workout.totalWeight)
-        func vector(_ value: CaptureVector) -> WorkoutTimeline.Vector {
-            WorkoutTimeline.Vector(x: value.x, y: value.y, z: value.z)
-        }
         return try WorkoutTimeline(source: source, origin: origin,
-            acceleration: points.map { WorkoutTimeline.VectorSample(t: $0.t, x: $0.x, y: $0.y, z: $0.z) },
-            motion: snapshot.motion.prefix { $0.t <= cutoff }.map {
-                WorkoutTimeline.MotionSample(t: $0.t, gravity: vector($0.gravity), userAcceleration: vector($0.user_acceleration),
-                    rotationRate: vector($0.rotation_rate), attitude: vector($0.attitude),
-                    magneticField: $0.magnetic_field_accuracy >= 0 ? vector($0.magnetic_field) : nil)
-            }, detectedEvents: snapshot.events.filter { $0 <= cutoff },
+            acceleration: points.map(Self.point),
+            motion: snapshot.motion.prefix { $0.t <= cutoff }.map(Self.motion),
+            detectedEvents: snapshot.events.filter { $0 <= cutoff },
             feedbackEvents: workout.exerciseType == .deadlift ? nil : raw.recordedFeedback.filter { $0 <= cutoff },
             algorithmVersion: workout.exerciseType.countingAlgorithmVersion,
             isPartial: snapshot.eventsTruncated)
@@ -67,6 +110,34 @@ final class WorkoutDiagnostics {
             feedback_events: kind == .deadlift ? nil : raw.recordedFeedback,
             feedback_algorithm_version: kind.completionFeedbackVersion,
             reference_events_truncated: snapshot.eventsTruncated)
+    }
+}
+
+// Each instance belongs to one append-only sensor stream. Only completed
+// blocks are reused. A trimmed or unfinished block is encoded from the snapshot.
+private final class SampleBlocks: @unchecked Sendable {
+    private let worker = DispatchQueue(label: "PowerReps.sampleEncoding", qos: .utility)
+    private let lock = NSLock()
+    private var blocks: [Int: Data] = [:]
+
+    func prepare<Input, Output: Encodable>(_ slice: ArraySlice<Input>, convert: @escaping (Input) -> Output) {
+        let start = slice.startIndex
+        let samples = Array(slice)
+        worker.async { [weak self] in
+            guard let self, let data = try? JSONEncoder().encode(samples.map(convert)) else { return }
+            self.lock.withLock { self.blocks[start] = data }
+        }
+    }
+
+    func appendElements<T: Encodable>(_ samples: [T], to output: inout Data) throws {
+        let available = lock.withLock { blocks }
+        for start in stride(from: 0, to: samples.count, by: 256) {
+            let end = min(start + 256, samples.count)
+            let cached = end - start == 256 ? available[start] : nil
+            let data = try cached ?? JSONEncoder().encode(Array(samples[start..<end]))
+            if start > 0 { output.append(0x2c) }
+            output.append(data.dropFirst().dropLast())
+        }
     }
 }
 

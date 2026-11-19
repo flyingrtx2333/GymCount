@@ -87,6 +87,8 @@ final class RawCapture {
         queue.maxConcurrentOperationCount = 1
         return queue
     }()
+    var completedMotionBlock: ((ArraySlice<CaptureMotion>) -> Void)?
+    var completedAccelerationBlock: ((ArraySlice<CaptureSample>) -> Void)?
     private var origin: Double?
     private let wallAnchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
     var originWallTime: Double? {
@@ -156,6 +158,7 @@ final class RawCapture {
         accelerationContinuity.observe(timestamp: data.timestamp, received: received)
         points.append(CaptureSample(t: t, received_t: max(0, received - origin!),
                                     x: data.acceleration.x, y: data.acceleration.y, z: data.acceleration.z))
+        if points.count.isMultiple(of: 256) { completedAccelerationBlock?(points.suffix(256)) }
     }
     private func appendVector(_ timestamp: Double, x: Double, y: Double, z: Double, gyro isGyro: Bool) {
         let received = ProcessInfo.processInfo.systemUptime
@@ -185,6 +188,7 @@ final class RawCapture {
             quaternion: CaptureQuaternion(x: q.x, y: q.y, z: q.z, w: q.w),
             magnetic_field: CaptureVector(x: data.magneticField.field.x, y: data.magneticField.field.y, z: data.magneticField.field.z),
             magnetic_field_accuracy: Int(data.magneticField.accuracy.rawValue), heading: data.heading))
+        if deviceMotion.count.isMultiple(of: 256) { completedMotionBlock?(deviceMotion.suffix(256)) }
     }
     var elapsedDuration: Double? {
         lock.lock(); defer { lock.unlock() }

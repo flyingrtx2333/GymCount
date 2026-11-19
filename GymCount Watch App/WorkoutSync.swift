@@ -459,8 +459,15 @@ final class WorkoutReportSensorArchive {
 // One ordered file lane per process. Heavy JSON and atomic writes never need
 // the UI executor; app receipts are sent only after this lane completes.
 final class WorkoutFileIO: @unchecked Sendable {
-    static let shared = WorkoutFileIO()
-    private let queue = DispatchQueue(label: "PowerReps.files", qos: .utility)
+    static let shared = WorkoutFileIO(label: "PowerReps.files", qos: .utility)
+    #if os(watchOS)
+    static let workoutSave = WorkoutFileIO(label: "PowerReps.save", qos: .userInitiated)
+    #endif
+    private let queue: DispatchQueue
+
+    private init(label: String, qos: DispatchQoS) {
+        queue = DispatchQueue(label: label, qos: qos)
+    }
     func perform<T>(diagnosticPhase: String = #function, _ operation: @escaping () throws -> T) async throws -> T {
         #if os(watchOS)
         let span = WorkoutSaveDiagnostics.shared.begin("file." + diagnosticPhase)

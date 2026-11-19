@@ -25,7 +25,7 @@ class DataManager: ObservableObject {
     @Published private(set) var requiresWorkoutRecovery = false
     @Published private(set) var canResumeRecoveredWorkout = false
     @Published private(set) var requiresDraftRecovery = false
-    @Published var workoutHistory: [WorkoutHistory] = [] {
+    @Published private(set) var workoutHistory: [WorkoutHistory] = [] {
         didSet { NotificationManager.shared.scheduleDailyReminder() }
     }
     var trainingDates: [Date] { workoutHistory.filter { $0.totalReps > 0 }.map(\.date) }
@@ -49,6 +49,9 @@ class DataManager: ObservableObject {
     private var sensorWallAnchor = Date().timeIntervalSince1970 - ProcessInfo.processInfo.systemUptime
     private var diagnostics: WorkoutDiagnostics?
     private let historyURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("WatchHistory/history-v1.json")
+    // Known-good JSON from the last decode or atomic write. Reuse the old
+    // array elements when prepending a new record, including legacy fields.
+    private var encodedHistory: Data?
     private var historyReadFailed = false
     private let draftStore = WatchWorkoutDraftStore(url: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("WatchHistory/current-workout-v1.json"))
     private var draftWriteFailed = false
@@ -195,10 +198,10 @@ class DataManager: ObservableObject {
     // MARK: - 数据持久化
     private func loadData() {
         if FileManager.default.fileExists(atPath: historyURL.path) {
-            do { workoutHistory = try JSONDecoder().decode([WorkoutHistory].self, from: Data(contentsOf: historyURL)) }
+            do { try loadHistory(Data(contentsOf: historyURL)) }
             catch { historyReadFailed = true; saveError = String(localized: "训练记录读取失败，请重新打开 App") }
         } else if let historyData = userDefaults.data(forKey: historyKey) {
-            do { workoutHistory = try JSONDecoder().decode([WorkoutHistory].self, from: historyData) }
+            do { try loadHistory(historyData) }
             catch { historyReadFailed = true; saveError = String(localized: "训练记录读取失败，请重新打开 App") }
         }
 
@@ -209,6 +212,11 @@ class DataManager: ObservableObject {
         }
     }
     
+    private func loadHistory(_ data: Data) throws {
+        workoutHistory = try JSONDecoder().decode([WorkoutHistory].self, from: data)
+        encodedHistory = data
+    }
+
     @discardableResult
     private func persistHistory(_ history: [WorkoutHistory]) -> Bool {
         guard !historyReadFailed else {
@@ -219,6 +227,7 @@ class DataManager: ObservableObject {
             let data = try JSONEncoder().encode(history)
             try FileManager.default.createDirectory(at: historyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: historyURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            encodedHistory = data
             // Keep the original defaults snapshot as a migration fallback.
             return true
         } catch {
@@ -499,6 +508,7 @@ class DataManager: ObservableObject {
                 catch { return String(localized: "训练已保存，但反馈采样保存失败") }
                 return canPrune ? nil : String(localized: "部分时间轴读取失败，请重试同步")
             }
+            encodedHistory = nil
             workoutHistory = next
             saveError = warning
         } catch {
@@ -925,11 +935,11 @@ extension DataManager {
                 totalWeight: session.repRecords.reduce(0) { $0 + $1.weight })
             let url = reportSensorArchive.fileURL(workoutID: draft.id, segmentID: segment.id)
             do {
-                try await WorkoutFileIO.shared.perform(diagnosticPhase: "save.timeline") {
+                try await WorkoutFileIO.workoutSave.perform(diagnosticPhase: "save.timeline") {
                     if let timeline = try WorkoutSaveDiagnostics.shared.measure("timeline.build", {
                         try diagnostics.timeline(for: segment, trimToDuration: trimIdleTail)
                     }) {
-                        let data = try WorkoutSaveDiagnostics.shared.measure("timeline.encode") { try JSONEncoder().encode(timeline) }
+                        let data = try WorkoutSaveDiagnostics.shared.measure("timeline.encode") { try diagnostics.encodedTimeline(timeline) }
                         guard data.count <= WorkoutTimeline.maximumFileBytes else { throw WorkoutTimeline.Failure.invalid }
                         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                         let count = try FileManager.default.contentsOfDirectory(at: url.deletingLastPathComponent(), includingPropertiesForKeys: nil)
@@ -961,7 +971,7 @@ extension DataManager {
 
     private func restartWholeDetection() {
         guard let session = currentSession, !isWholeWorkoutPaused, !requiresWorkoutRecovery else { return }
-        let diagnostics = WorkoutDiagnostics(); self.diagnostics = diagnostics
+        let diagnostics = WorkoutDiagnostics(prepareTimeline: true); self.diagnostics = diagnostics
         motionDetector.onRawAcceleration = { diagnostics.raw.append($0) }
         motionDetector.onRawDeviceMotion = { diagnostics.raw.appendMotion($0) }
         motionDetector.onRawBenchAnalysis = { diagnostics.raw.setBenchAnalysis($0) }
@@ -1089,12 +1099,24 @@ extension DataManager {
         let url = historyURL
         let historyStarted = ProcessInfo.processInfo.systemUptime
         do {
-            try await WorkoutFileIO.shared.perform(diagnosticPhase: "save.history") {
-                let data = try WorkoutSaveDiagnostics.shared.measure("history.encode") { try JSONEncoder().encode(next) }
+            let prior = next.count == workoutHistory.count + 1 ? encodedHistory : nil
+            encodedHistory = try await WorkoutFileIO.workoutSave.perform(diagnosticPhase: "save.history") {
+                let data = try WorkoutSaveDiagnostics.shared.measure("history.encode") {
+                    // Noncompact legacy files and UUID replacements are normalized once.
+                    guard let prior, prior.first == 0x5b, prior.last == 0x5d, next.count > 1 else {
+                        return try JSONEncoder().encode(next)
+                    }
+                    var data = Data([0x5b])
+                    data.append(try JSONEncoder().encode(history))
+                    data.append(0x2c)
+                    data.append(prior.dropFirst())
+                    return data
+                }
                 try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try WorkoutSaveDiagnostics.shared.measure("history.write") {
                     try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
                 }
+                return data
             }
         } catch { saveError = String(localized: "保存失败，训练仍在本页，请重试"); return false }
         workoutSaveLog.notice("phase=history_save seconds=\(ProcessInfo.processInfo.systemUptime - historyStarted)")

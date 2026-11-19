@@ -419,12 +419,15 @@ final class WatchCaptureLink: NSObject, ObservableObject, WCSessionDelegate, HKW
         let ids = Set(sources.map(\.id))
         if indexedReportIDs == ids { return }
         if let task = reportSensorScanTask { await task.value; return }
+        // Completed reports are immutable on Watch. An added report only
+        // needs its own files indexed. Explicit retry and deletion invalidate the cache.
+        let existing = reportSensorIndex
         let archive = DataManager.shared.reportSensorArchive, generation = reportSensorScanGeneration
         let task = Task { @MainActor [weak self] in
             do {
                 let result = try await WorkoutFileIO.shared.perform(diagnosticPhase: "sync.sensor_index") { () -> ([UUID: [UUID]], Bool) in
-                    var index: [UUID: [UUID]] = [:], failed = false
-                    for source in sources {
+                    var index = existing.filter { ids.contains($0.key) }, failed = false
+                    for source in sources where index[source.id] == nil {
                         do { index[source.id] = try archive.index(for: source).map(\.id) }
                         catch { failed = true }
                     }
